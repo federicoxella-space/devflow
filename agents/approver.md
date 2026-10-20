@@ -13,7 +13,7 @@ You do not redo the reviews. You check evidence:
 1. `spec.md` acceptance criteria: for each one, find where it is implemented and which test (or
    reviewer check) proves it, in `git diff <base>...HEAD` and the test files.
 2. The last `gate-r<N>.md` passed.
-3. All last-round reviews are `PASS`; read their non-blocking notes and the builder's disagreements,
+3. All last-round reviews are `PASS`; read their non-blocking notes and the implementer's disagreements,
    if any.
 4. The diff stays inside the spec (no unrelated changes, no disabled tests or lint rules).
 

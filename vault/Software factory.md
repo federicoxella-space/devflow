@@ -19,11 +19,18 @@ flowchart TD
     feature[feature] --> specWriter["spec-writer<br>[opus]"]
     specWriter --> human_spec{"human approves spec"}
     human_spec --> |changes| specWriter
-    human_spec --> |approve| builder["builder<br>[opus]"]
-    builder --> gate{"gate<br>build · lint · test"}
-    gate --> |"FAIL (max 2 per round)"| builder
+    human_spec --> |approve| route{"complexity"}
+    subgraph impl [implementer]
+        coder["coder<br>[sonnet]"]
+        builder["builder<br>[opus]"]
+        coder --> |ESCALATE| builder
+    end
+    route --> |simple| coder
+    route --> |complex| builder
+    impl --> gate{"gate<br>build · lint · test"}
+    gate --> |"FAIL (max 2 per round)"| impl
     gate --> |PASS| committer["committer<br>[haiku]"]
-    committer --> |"hook FAIL"| builder
+    committer --> |"hook FAIL"| impl
     committer --> |OK| security["security<br>[opus]"]
     committer --> |OK| code["code<br>[sonnet]"]
     committer --> |"OK, if UI"| ux["ux<br>[sonnet]"]
@@ -32,7 +39,7 @@ flowchart TD
     code --> wait
     ux --> wait
     ui_design --> wait
-    wait --> |"any CHANGES<br>round ≤ 2"| builder
+    wait --> |"any CHANGES<br>round ≤ 2"| impl
     wait --> |"any CHANGES<br>round > 2"| need[needs-human]
     wait --> |"all PASS"| approver["approver<br>[opus]"]
     approver --> |APPROVE| pr[pull request]
@@ -43,8 +50,8 @@ flowchart TD
 
 | Step | Reads | Writes | Decides with |
 |---|---|---|---|
-| spec-writer | `feature.md`, codebase | `spec.md` | acceptance criteria + `reviewers` list |
-| builder | `spec.md`, reviews | code + tests (no commits) | — |
+| spec-writer | `feature.md`, codebase | `spec.md` | acceptance criteria, `complexity`, `reviewers` list |
+| coder / builder | `spec.md`, reviews | code + tests (no commits) | coder → `ESCALATE` to builder if not simple |
 | gate (orchestrator) | `config.md` commands | `gate-rN.md` | exit codes |
 | committer | working tree, commit rules | Conventional Commits on `factory/<id>` | forbidden files / hook fail → stop |
 | reviewers | diff + `spec.md` | `reviews/rN-<name>.md` | `verdict: PASS \| CHANGES` (CHANGES only for blocking items) |
@@ -60,5 +67,5 @@ plugin (this folder)                     target project
 .claude-plugin/marketplace.json          factory/board.md    one row per feature + log
 .mcp.json            (Playwright)        factory/features/<id>/
 skills/factory/SKILL.md (orchestrator)       feature.md, spec.md, gate-rN.md,
-agents/*.md          (8 agents)              reviews/rN-*.md, decision.md
+agents/*.md          (9 agents)              reviews/rN-*.md, decision.md
 ```

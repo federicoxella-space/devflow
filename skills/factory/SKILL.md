@@ -67,7 +67,7 @@ Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, `ui_rev
 Set state `spec-review`.
 
 ### 2. Human approval — state `spec-review`
-Show the user the spec (title, acceptance criteria, reviewers, out of scope) and ask with
+Show the user the spec (title, complexity, acceptance criteria, reviewers, out of scope) and ask with
 AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes → resume the spec-writer (SendMessage with its agent id, or a fresh spawn with the
   feedback) and ask again.
@@ -76,15 +76,19 @@ AskUserQuestion: **Approve / Request changes / Reject**.
   set state `build`, round `1`.
 
 ### 3. Build — state `build`
-Spawn `devflow:builder` (foreground) with: feature dir, spec path, config path. On rework, resume
-the same builder with SendMessage and the paths of the failing gate file or of the review files with
-`verdict: CHANGES`; if you no longer have its agent id (new session), spawn a fresh builder with the
-same paths and the instruction "rework".
+Pick the implementer from the spec frontmatter: `complexity: simple` → `devflow:coder` (sonnet),
+`complex` → `devflow:builder` (opus). Spawn it (foreground) with: feature dir, spec path, config path.
+If the coder replies `ESCALATE`, log the reason and spawn the builder on the same working tree with
+the coder's reply; from then on the builder is the implementer for this feature.
 
-### 4. Gate — you run it, never trust the builder's word
+On rework, resume the same implementer with SendMessage and the paths of the failing gate file or of the review files with
+`verdict: CHANGES`; if you no longer have its agent id (new session), spawn a fresh implementer of
+the same type with the same paths and the instruction "rework".
+
+### 4. Gate — you run it, never trust the implementer's word
 Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at first failure.
 Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the failing one.
-- Fail → resume the builder with the gate file. At most 2 gate retries per round, then
+- Fail → resume the implementer with the gate file. At most 2 gate retries per round, then
   `needs-human` ("gate keeps failing").
 - Pass → commit (4b).
 
@@ -92,7 +96,7 @@ Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the 
 Spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path.
 - `OK` → append the commit list to `gate-r<round>.md`, state `review`.
 - `FAILED` because of a commit hook → write the output to `gate-r<round>.md` and treat it as a gate
-  fail (resume the builder, same retry limit).
+  fail (resume the implementer, same retry limit).
 - `FAILED` for anything else (forbidden files, wrong branch) → `needs-human` with the reason.
 
 ### 5. Reviews — state `review`

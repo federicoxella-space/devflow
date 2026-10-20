@@ -1,6 +1,6 @@
 ---
 name: committer
-description: devflow factory - commits the builder's changes following the commit rules. Spawned by /devflow:factory, not for direct use.
+description: devflow factory - commits the implementer's changes following the commit rules. Spawned by /devflow:factory, not for direct use.
 tools: Read, Bash
 model: haiku
 ---
