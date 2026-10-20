@@ -22,10 +22,12 @@ flowchart TD
     human_spec --> |approve| builder["builder<br>[opus]"]
     builder --> gate{"gate<br>build · lint · test"}
     gate --> |"FAIL (max 2 per round)"| builder
-    gate --> |PASS| security["security<br>[opus]"]
-    gate --> |PASS| code["code<br>[sonnet]"]
-    gate --> |"PASS, if UI"| ux["ux<br>[sonnet]"]
-    gate --> |"PASS, if UI"| ui_design["ui design<br>[sonnet]"]
+    gate --> |PASS| committer["committer<br>[haiku]"]
+    committer --> |"hook FAIL"| builder
+    committer --> |OK| security["security<br>[opus]"]
+    committer --> |OK| code["code<br>[sonnet]"]
+    committer --> |"OK, if UI"| ux["ux<br>[sonnet]"]
+    committer --> |"OK, if UI"| ui_design["ui design<br>[sonnet]"]
     security --> wait{"WAIT FOR ALL<br>reviews in"}
     code --> wait
     ux --> wait
@@ -42,8 +44,9 @@ flowchart TD
 | Step | Reads | Writes | Decides with |
 |---|---|---|---|
 | spec-writer | `feature.md`, codebase | `spec.md` | acceptance criteria + `reviewers` list |
-| builder | `spec.md`, reviews | code + tests, commits | — |
+| builder | `spec.md`, reviews | code + tests (no commits) | — |
 | gate (orchestrator) | `config.md` commands | `gate-rN.md` | exit codes |
+| committer | working tree, commit rules | Conventional Commits on `factory/<id>` | forbidden files / hook fail → stop |
 | reviewers | diff + `spec.md` | `reviews/rN-<name>.md` | `verdict: PASS \| CHANGES` (CHANGES only for blocking items) |
 | approver | everything above | `decision.md` | every criterion has evidence → `APPROVE`, else `ESCALATE` |
 
@@ -57,5 +60,5 @@ plugin (this folder)                     target project
 .claude-plugin/marketplace.json          factory/board.md    one row per feature + log
 .mcp.json            (Playwright)        factory/features/<id>/
 skills/factory/SKILL.md (orchestrator)       feature.md, spec.md, gate-rN.md,
-agents/*.md          (7 agents)              reviews/rN-*.md, decision.md
+agents/*.md          (8 agents)              reviews/rN-*.md, decision.md
 ```

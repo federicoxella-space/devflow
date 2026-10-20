@@ -86,7 +86,14 @@ Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at fir
 Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the failing one.
 - Fail → resume the builder with the gate file. At most 2 gate retries per round, then
   `needs-human` ("gate keeps failing").
-- Pass → state `review`.
+- Pass → commit (4b).
+
+### 4b. Commit
+Spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path.
+- `OK` → append the commit list to `gate-r<round>.md`, state `review`.
+- `FAILED` because of a commit hook → write the output to `gate-r<round>.md` and treat it as a gate
+  fail (resume the builder, same retry limit).
+- `FAILED` for anything else (forbidden files, wrong branch) → `needs-human` with the reason.
 
 ### 5. Reviews — state `review`
 Reviewers = `reviewers` from the spec frontmatter, with `code` always included, and `ux`/`ui` dropped
@@ -156,6 +163,9 @@ board state (they can edit the state cell by hand to choose where to resume).
    max_rounds: 2          # rework rounds after the first review
    ---
    Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
+
+   ## Commit rules
+   Optional. Overrides the committer's defaults (e.g. subject in Italian, scope = ticket id).
    ```
 3. Create an empty `factory/board.md` and append to `.gitignore`:
    ```

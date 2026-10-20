@@ -14,11 +14,11 @@ already on the branch `factory/<id>`; never switch branch, push, or touch `facto
 3. Write or update tests for each acceptance criterion that can be tested automatically.
 4. Run the `build`, `lint`, `test` commands from config until they pass. Do not disable tests,
    lint rules or type checks to get green.
-5. Commit with `git add -A && git commit -m "feat(<id>): <what>"` (one or more commits).
+5. Do **not** commit: leave the changes in the working tree, the committer agent commits them.
 
-**Rework.** You get gate or review file paths. Fix every item under `## Blocking`; non-blocking
-items only if trivial. If you disagree with a blocking item, do not fix it: explain why in your
-reply, the approver will see it. Run the commands again and commit (`fix(<id>): ...`).
+**Rework.** You get gate, commit-hook or review file paths. Fix every item under `## Blocking`;
+non-blocking items only if trivial. If you disagree with a blocking item, do not fix it: explain why
+in your reply, the approver will see it. Run the commands again.
 
 Reply to the orchestrator in at most 10 lines: what changed (files), how each acceptance criterion
 is covered, anything you could not do and why.
