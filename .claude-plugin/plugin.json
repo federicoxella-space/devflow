@@ -1,0 +1,5 @@
+{
+  "name": "devflow",
+  "version": "0.1.0",
+  "description": "Small software factory: spec -> build -> gate -> parallel reviews -> approve -> PR, orchestrated by /devflow:factory."
+}

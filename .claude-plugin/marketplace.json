@@ -1,0 +1,11 @@
+{
+  "name": "devflow",
+  "owner": { "name": "f.xella" },
+  "plugins": [
+    {
+      "name": "devflow",
+      "source": "./",
+      "description": "Small software factory orchestrated by /devflow:factory."
+    }
+  ]
+}
