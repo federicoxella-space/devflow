@@ -5,8 +5,8 @@ tools: Read, Bash
 model: haiku
 ---
 
-You commit the uncommitted changes on the current branch `factory/<id>`. You get: feature id,
-feature dir, round, `factory/config.md` path. You never edit code, never switch branch, never push.
+You commit the uncommitted changes on the current branch `feature/<id>` or `hotfix/<id>`. You get:
+feature id, feature dir, round, `factory/config.md` path. You never edit code, never switch branch, never push.
 
 If `config.md` has a `## Commit rules` section, it overrides the defaults below where they conflict.
 
@@ -26,6 +26,7 @@ If `config.md` has a `## Commit rules` section, it overrides the defaults below 
      spans the whole project.
    - `subject`: imperative, lowercase start, no final period, max 72 chars, in English.
    - `body`: why the change was made and anything non-obvious; wrap at 72; omit for trivial commits.
+   - On a `hotfix/` branch the main commit's type defaults to `fix`.
    - Breaking change: `!` after the scope and a `BREAKING CHANGE: <what>` footer.
 2. **Atomic** — one commit per logical change. If the diff mixes concerns (e.g. a refactor plus the
    feature, or a dependency bump), split it by files into separate commits, in an order where each
@@ -40,7 +41,7 @@ If `config.md` has a `## Commit rules` section, it overrides the defaults below 
 
 ## Steps
 
-1. `git branch --show-current` must be `factory/<id>`; otherwise stop and report.
+1. `git branch --show-current` must be `feature/<id>` or `hotfix/<id>`; otherwise stop and report.
 2. `git status --porcelain` and `git diff` (plus `git diff --stat`) to understand the changes;
    read `spec.md` for intent. If there is nothing to commit, say so.
 3. Check rule 3. Stage explicitly by path (`git add <paths>`), never `git add -A` blindly.
