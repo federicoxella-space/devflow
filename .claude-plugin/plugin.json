@@ -1,5 +1,5 @@
 {
   "name": "devflow",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Small software factory: interview -> spec -> parallel build -> gate -> parallel reviews -> approve -> PR, orchestrated by /devflow:factory and guided by a project playbook."
 }
