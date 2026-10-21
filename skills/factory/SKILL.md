@@ -103,40 +103,59 @@ You run it (agents cannot talk to the user). Goal: nothing in the spec is guesse
 Set state `spec`.
 
 ### 1. Spec — state `spec`
-Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, `ui_review` value.
-Set state `spec-review`.
+Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, project playbook path,
+`ui_review` value. Append its `## Rule proposals` (from `spec.md`) to `rule-proposals.md`
+(see 6b). Set state `spec-review`.
 
 ### 2. Human approval — state `spec-review`
-Show the user the spec (title, complexity, acceptance criteria, reviewers, out of scope) and ask with
-AskUserQuestion: **Approve / Request changes / Reject**.
-- Request changes → resume the spec-writer (SendMessage with its agent id, or a fresh spawn with the
-  feedback) and ask again.
+If the spec has `## Open questions`, ask them **one at a time**, append the answers to
+`## Interview` in the feature playbook, and resume the spec-writer before going on.
+Show the user: title, `kind` and why, tasks, the `## Done checklist`, `## Agent decisions`,
+reviewers, out of scope. Ask with AskUserQuestion: **Approve / Request changes / Reject**.
+- Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
+  agent id, or a fresh spawn with the feedback) and ask again.
 - Reject → state `needs-human`, note "rejected", stop.
-- Approve → `git switch <base_branch> && git pull --ff-only && git switch -c factory/<id>`,
-  set state `build`, round `1`.
+- Approve → `git switch <base_branch> && git pull --ff-only && git switch -c <kind>/<id>`
+  (`feature/<id>` or `hotfix/<id>`), write the branch in the board, set state `build`, round `1`.
 
 ### 3. Build — state `build`
-Pick the implementer from the spec frontmatter: `complexity: simple` → `devflow:coder` (sonnet),
-`complex` → `devflow:builder` (opus). Spawn it (foreground) with: feature dir, spec path, config path.
-If the coder replies `ESCALATE`, log the reason and spawn the builder on the same working tree with
-the coder's reply; from then on the builder is the implementer for this feature.
+Each task in the spec's `## Tasks` has its own implementer: `complexity: simple` → `devflow:coder`
+(sonnet), `complex` → `devflow:builder` (opus). Each gets: feature dir, spec path, task id, its
+`files (owned)`, `parallel`, config path, project playbook path.
+- One task → spawn it (foreground) with `parallel: false`: the same flow as a single implementer.
+- Several tasks → spawn **in one message** (foreground) every task whose `depends on` tasks are
+  done, with `parallel: true`; when they finish, spawn the tasks they unblocked; repeat.
+- A coder that replies `ESCALATE` → log the reason and spawn the builder for that task on the same
+  working tree with the coder's reply; from then on the builder owns that task.
+- Keep each task's agent id. Append each reply's `## Rule proposals` to `rule-proposals.md`.
 
-On rework, resume the same implementer with SendMessage and the paths of the failing gate file or of the review files with
-`verdict: CHANGES`; if you no longer have its agent id (new session), spawn a fresh implementer of
-the same type with the same paths and the instruction "rework".
+When all tasks are done, run `git status --porcelain` and compare the changed files with the
+`files (owned)` columns: for each file outside any task, or changed by a task that does not own it,
+log `<id> · out-of-scope file <path> (T<n>)`. It does not block; the approver sees it.
+
+**Rework.** Resume implementers with SendMessage (if you no longer have an agent id, new session,
+spawn a fresh implementer of the same type with the same inputs and the instruction "rework").
+- Review items: group the `## Blocking` items of the reviews with `verdict: CHANGES` by `path` and
+  send each group to the implementer of the task that owns that file; several implementers at once
+  → in one message with `parallel: true`. Items with no path or on a file no task owns follow the
+  gate rule below.
+- Gate or commit-hook failure: send the gate file to one implementer, with the instruction that it
+  owns the whole rework and `parallel: false`: the task that owns a path named in the failing output,
+  else the builder of a `complex` task if any, else the coder of `T1`.
 
 ### 4. Gate — you run it, never trust the implementer's word
 Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at first failure.
 Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the failing one.
-- Fail → resume the implementer with the gate file. At most 2 gate retries per round, then
-  `needs-human` ("gate keeps failing").
-- Pass → commit (4b).
+- Fail → rework (step 3). At most 2 gate retries per round, then `needs-human` ("gate keeps
+  failing").
+- Pass → append to `gate-r<round>.md` one line `<id> ok` per checklist item with owner `gate`, then
+  commit (4b).
 
 ### 4b. Commit
 Spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path.
 - `OK` → append the commit list to `gate-r<round>.md`, state `review`.
 - `FAILED` because of a commit hook → write the output to `gate-r<round>.md` and treat it as a gate
-  fail (resume the implementer, same retry limit).
+  fail (rework, same retry limit).
 - `FAILED` for anything else (forbidden files, wrong branch) → `needs-human` with the reason.
 
 ### 5. Reviews — state `review`
