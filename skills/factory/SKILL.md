@@ -171,7 +171,9 @@ false`), so you wait for all of them. Exception: in `browser` mode ux and ui sha
 `ui` with the others and `ux` right after.
 
 Each reviewer gets: feature dir, round number, base branch, `ui_review` mode, output path
-`reviews/r<round>-<reviewer>.md`, and for round > 1 its own previous review path.
+`reviews/r<round>-<reviewer>.md`, and for round > 1 its own previous review path. It reads the
+project playbook and the feature playbook's `## Done checklist` itself.
+After the reviews, append their `## Rule proposals` to `rule-proposals.md`.
 Agent types: `devflow:review-security`, `devflow:review-code`, `devflow:review-ux`, `devflow:review-ui`.
 
 Read only the frontmatter `verdict` of each file:
@@ -183,14 +185,30 @@ Read only the frontmatter `verdict` of each file:
 Spawn `devflow:approver` (foreground) with feature dir, base branch, round. Read `decision.md`
 frontmatter:
 - `ESCALATE` → `needs-human` with the approver's reason.
-- `APPROVE` → open the PR:
+- `APPROVE` → rule proposals (6b), then open the PR:
   ```
-  git push -u origin factory/<id>
-  gh pr create --base <base_branch> --head factory/<id> --title "<spec title>" --body-file <tmp>
+  git push -u origin <kind>/<id>
+  gh pr create --base <base_branch> --head <kind>/<id> --title "<spec title>" --body-file <tmp>
   ```
-  Body = spec goal + acceptance criteria table from `decision.md` + non-blocking review notes +
+  Body = spec goal + done checklist table from `decision.md` + non-blocking review notes +
   footer `Built by devflow factory, <N> review round(s)`. Set state `pr-open` with the PR URL,
   then `git switch <base_branch>`.
+
+### 6b. Rule proposals — still state `approve`
+`rule-proposals.md` collects, in order, the `## Rule proposals` of spec-writer, implementers and
+reviewers, one line each with author and round:
+
+```markdown
+- [ ] Patterns: New REST endpoint follows `src/api/orders/OrdersController.cs` — review-code r1
+```
+
+Drop duplicates and rules the project playbook already has (mark them `- [dup]`). Show the
+remaining ones **one at a time** with AskUserQuestion: **Approve / Edit / Discard**. Mark each line
+`[x]` approved (with the final text if edited) or `[-]` discarded. Add the approved rules to their
+section of `factory/playbook.md` and commit it on the feature branch:
+`git add factory/playbook.md && git commit -m "docs(factory): update playbook"`. The rules reach the
+base branch with the PR. If the feature goes to `needs-human`, the file stays and its open lines are
+shown when the feature is back in `approve`.
 
 ### needs-human
 Update the board, leave the branch as it is, tell the user in 2-3 lines why and what to look at
