@@ -199,6 +199,24 @@ con due parti:
 All'approvazione della spec l'orchestratore mostra: titolo, task, checklist completa, decisioni
 dell'agente, out of scope.
 
+## 3b. Branch per tipo: feature o hotfix
+
+Ogni feature resta su un branch separato (decisione dell'utente), ma il prefisso dipende
+dall'analisi invece di essere sempre `factory/<id>`:
+
+- `feature/<id>`: nuovo comportamento o modifica di un comportamento esistente;
+- `hotfix/<id>`: correzione di un difetto in un comportamento che dovrebbe già funzionare.
+
+Lo spec-writer decide il tipo in base a richiesta e interview e lo scrive nel frontmatter di
+`spec.md` (`kind: feature | hotfix`, con una riga di motivo nella spec). L'utente lo vede e può
+cambiarlo all'approvazione della spec. Dopo l'approvazione l'orchestratore crea il branch
+`<kind>/<id>` da `base_branch`. La board ottiene una colonna `branch`.
+
+*Mia scelta:* entrambi i tipi partono da `base_branch` e la PR va verso `base_branch`. Non c'è un
+branch base separato per gli hotfix: si può aggiungere in futuro con una chiave in `config.md`.
+Il committer accetta solo `feature/<id>` o `hotfix/<id>`, e per gli hotfix usa di default il tipo
+`fix` nel primo commit.
+
 ## 4. Builder in parallelo dentro la feature
 
 `spec.md` ottiene una sezione `## Tasks`; la `complexity` passa dal frontmatter della spec al
@@ -286,12 +304,12 @@ test completi vedrebbero il codice a metà degli altri task e si contenderebbero
 
 | File | Modifica |
 |------|----------|
-| `skills/factory/SKILL.md` | stato `interview`; bozza playbook in Init ed entry point; build per task in parallelo e rework per proprietario; voci `gate` della checklist; raccolta e revisione regole prima della PR; `.gitignore` con `!factory/playbook.md` |
-| `agents/spec-writer.md` | legge i due playbook; scrive `## Done checklist` nel playbook di feature; sezione `## Tasks`; `complexity` per task; `## Rule proposals` |
-| `agents/coder.md`, `agents/builder.md` | leggono il playbook; lavorano su un task e sui soli file posseduti; `ESCALATE` per task; proposte di regole nella risposta |
+| `skills/factory/SKILL.md` | stato `interview`; branch `<kind>/<id>` e colonna `branch` nella board; bozza playbook in Init ed entry point; build per task in parallelo e rework per proprietario; voci `gate` della checklist; raccolta e revisione regole prima della PR; `.gitignore` con `!factory/playbook.md` |
+| `agents/spec-writer.md` | `kind: feature \| hotfix` nel frontmatter; legge i due playbook; scrive `## Done checklist` nel playbook di feature; sezione `## Tasks`; `complexity` per task; `## Rule proposals` |
+| `agents/coder.md`, `agents/builder.md` | branch `<kind>/<id>` invece di `factory/<id>`; leggono il playbook; lavorano su un task e sui soli file posseduti; `ESCALATE` per task; proposte di regole nella risposta |
 | `agents/review-*.md` (4) | leggono i playbook; tabella `## Checklist` per le proprie voci; `fail` = blocking; `## Rule proposals` |
 | `agents/approver.md` | evidenza per ogni voce della checklist; tabella checklist in `decision.md` |
-| `agents/committer.md` | nessuna modifica (il commit del playbook lo fa l'orchestratore) |
+| `agents/committer.md` | branch atteso `feature/<id>` o `hotfix/<id>`; tipo `fix` di default per gli hotfix (il commit del playbook lo fa l'orchestratore) |
 | `vault/Software factory.md` | diagramma, tabella Contracts e struttura file aggiornati |
 
 ## Lasciato al builder
