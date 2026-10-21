@@ -244,6 +244,18 @@ board state (they can edit the state cell by hand to choose where to resume).
 
    Prefer scripts that already exist in the project. Multiple apps (e.g. React + .NET): chain with `&&`.
    `ui_review`: `browser` for web frontends, `static` for CLIs, `none` for backend-only.
+
+   **No stack yet** (empty repo, or none of the files above): run a **stack interview** instead,
+   with the same rules as the feature interview (step 0): one question at a time, stop when you can
+   choose without guessing. Find out what the user wants to build (kind of product, users, scale),
+   constraints (languages and frameworks the team knows, hosting, company standards, integrations,
+   licences) and preferences. Then recommend one stack with a short reason and at most one
+   alternative, and ask with AskUserQuestion: **Approve / Choose the alternative / Change**. From
+   the approved stack, derive the commands and `ui_review` as in the table above. Write the
+   questions, the answers and the chosen stack with its reason in the notes of `config.md` and, as
+   the first rules, in `## Conventions` of the playbook draft. Init does not create the project:
+   add a `queued` feature "Scaffold the <stack> project" to the board, so the first factory run
+   builds it, with the build/lint/test commands working.
 2. Write `factory/config.md`:
 
    ```markdown
@@ -262,7 +274,7 @@ board state (they can edit the state cell by hand to choose where to resume).
    ## Commit rules
    Optional. Overrides the committer's defaults (e.g. subject in Italian, scope = ticket id).
    ```
-3. Create an empty `factory/board.md` and append to `.gitignore`:
+3. Create `factory/board.md` (empty, or with the scaffold feature) and append to `.gitignore`:
    ```
    factory/*
    !factory/config.md
