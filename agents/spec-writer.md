@@ -46,7 +46,8 @@ See `## Done checklist` in the feature playbook.
 
 ## Out of scope
 ## Open questions
-Only if a real decision is missing. Do not invent requirements to fill gaps: ask here.
+Only if a real decision is missing. Do not invent requirements to fill gaps: ask here. Remove a
+question once its answer is in the feature playbook; leave the section empty when none is open.
 ## Rule proposals
 - <playbook section>: <rule> — <why>
 ```
@@ -69,7 +70,8 @@ Rules:
   With `ui_review: none`, `ux` and `ui` items are `n/a`. Every owner that is not `n/a` or `gate`
   must be in `reviewers`.
 - **Tasks.** Split into several tasks only if at least two of them own disjoint files; otherwise one
-  task `T1`. Every file the feature changes belongs to exactly one task; shared files (DI
+  task `T1`. Every file the feature changes belongs to exactly one task, including its tests,
+  fixtures/snapshots, lockfiles, migrations and generated files; shared files (DI
   registration, routing, ...) go in one task the others depend on. `complexity: simple` = follows
   an existing pattern, few files, no design decision, no migration, no new dependency; else
   `complex`.

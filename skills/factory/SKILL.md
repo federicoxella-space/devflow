@@ -25,6 +25,7 @@ factory/
     ├── playbook.md            request, interview, agent decisions, done checklist
     ├── spec.md                spec-writer
     ├── rule-proposals.md      rules proposed by agents, collected by you
+    ├── out-of-scope.md        changed files outside the tasks' owned files, written by you
     ├── gate-r<N>.md           gate output (tail only)
     ├── reviews/r<N>-<reviewer>.md
     └── decision.md            approver
@@ -49,8 +50,9 @@ On every state change update the row **and** append one log line (local time, `Y
 ## Entry point
 
 1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` is missing, or the argument
-   is `init`, run **Init** and stop. If `factory/playbook.md` is missing, run **Playbook draft**,
-   add `!factory/playbook.md` to `.gitignore`, ask the user to commit both, and stop.
+   is `init`, run **Init** and stop (if `factory/playbook.md` already exists, ask before
+   overwriting it: it holds approved rules). If `factory/playbook.md` is missing, run **Playbook
+   draft**, add `!factory/playbook.md` to `.gitignore`, ask the user to commit both, and stop.
 2. Read `factory/board.md`. For each `pr-open` row, `gh pr view <PR> --json state -q .state`; mark
    `MERGED` as `merged`.
 3. Pick the feature to work on:
@@ -104,12 +106,14 @@ Set state `spec`.
 
 ### 1. Spec — state `spec`
 Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, project playbook path,
-`ui_review` value. Append its `## Rule proposals` (from `spec.md`) to `rule-proposals.md`
-(see 6b). Set state `spec-review`.
+`ui_review` value. After this and every later spec-writer run, append the new lines of its
+`## Rule proposals` (from `spec.md`) to `rule-proposals.md` (see 6b). Set state `spec-review`.
 
 ### 2. Human approval — state `spec-review`
-If the spec has `## Open questions`, ask them **one at a time**, append the answers to
-`## Interview` in the feature playbook, and resume the spec-writer before going on.
+If the spec's `## Open questions` is not empty, ask them **one at a time**, append the answers to
+`## Interview` in the feature playbook, and resume the spec-writer (it removes answered questions)
+before going on. Check that every checklist owner other than `n/a` and `gate` is in `reviewers`;
+if not, resume the spec-writer to fix it.
 Show the user: title, `kind` and why, tasks, the `## Done checklist`, `## Agent decisions`,
 reviewers, out of scope. Ask with AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
@@ -126,29 +130,36 @@ Each task in the spec's `## Tasks` has its own implementer: `complexity: simple`
 - Several tasks → spawn **in one message** (foreground) every task whose `depends on` tasks are
   done, with `parallel: true`; when they finish, spawn the tasks they unblocked; repeat.
 - A coder that replies `ESCALATE` → log the reason and spawn the builder for that task on the same
-  working tree with the coder's reply; from then on the builder owns that task.
+  working tree with the coder's reply; from then on the builder is the task's **current
+  implementer**.
+- An implementer that stops because it needs a file it does not own: if another task owns the
+  file, send that change to the other task's implementer once both are idle; if no task owns it,
+  resume the spec-writer to add the file to a task in `## Tasks`, then resume the implementer.
 - Keep each task's agent id. Append each reply's `## Rule proposals` to `rule-proposals.md`.
 
-When all tasks are done, run `git status --porcelain` and compare the changed files with the
-`files (owned)` columns: for each file outside any task, or changed by a task that does not own it,
-log `<id> · out-of-scope file <path> (T<n>)`. It does not block; the approver sees it.
+When all tasks are done, compare the changed files with the `files (owned)` columns: the files each
+implementer lists in its reply, and `git status --porcelain -uall` for the whole tree. Write
+`out-of-scope.md` in the feature dir with one line per file that no task owns or that a task
+changed without owning it (`<path> — <task or "unknown">`), and log one line per file. It does not
+block; the approver gets the file.
 
 **Rework.** Resume implementers with SendMessage (if you no longer have an agent id, new session,
 spawn a fresh implementer of the same type with the same inputs and the instruction "rework").
 - Review items: group the `## Blocking` items of the reviews with `verdict: CHANGES` by `path` and
-  send each group to the implementer of the task that owns that file; several implementers at once
-  → in one message with `parallel: true`. Items with no path or on a file no task owns follow the
-  gate rule below.
+  send each group to the current implementer of the task that owns that file; several
+  implementers at once → in one message with `parallel: true`. Items with no path (a page, a flow)
+  or on a file no task owns go, **after** that group has finished, to one implementer with
+  `parallel: false` (chosen as in the gate rule below), listed explicitly, not as "whole rework".
 - Gate or commit-hook failure: send the gate file to one implementer, with the instruction that it
   owns the whole rework and `parallel: false`: the task that owns a path named in the failing output,
-  else the builder of a `complex` task if any, else the coder of `T1`.
+  else the current implementer of a `complex` task if any, else the current implementer of `T1`.
 
 ### 4. Gate — you run it, never trust the implementer's word
 Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at first failure.
 Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the failing one.
 - Fail → rework (step 3). At most 2 gate retries per round, then `needs-human` ("gate keeps
   failing").
-- Pass → append to `gate-r<round>.md` one line `<id> ok` per checklist item with owner `gate`, then
+- Pass → append to `gate-r<round>.md` one line `<item id> ok` per checklist item with owner `gate`, then
   commit (4b).
 
 ### 4b. Commit
@@ -182,8 +193,9 @@ Read only the frontmatter `verdict` of each file:
 - all `PASS` → state `approve`.
 
 ### 6. Approval — state `approve`
-Spawn `devflow:approver` (foreground) with feature dir, base branch, round. Read `decision.md`
-frontmatter:
+If `decision.md` already says `APPROVE` for this round (resume after an interrupted 6b or PR step),
+skip the approver. Otherwise spawn `devflow:approver` (foreground) with feature dir, base branch,
+round. Read `decision.md` frontmatter:
 - `ESCALATE` → `needs-human` with the approver's reason.
 - `APPROVE` → rule proposals (6b), then open the PR:
   ```
@@ -199,15 +211,17 @@ frontmatter:
 reviewers, one line each with author and round:
 
 ```markdown
-- [ ] Patterns: New REST endpoint follows `src/api/orders/OrdersController.cs` — review-code r1
+- [ ] Patterns: New REST endpoint follows `src/api/orders/OrdersController.cs` — three endpoints already do — review-code r1
 ```
 
 Drop duplicates and rules the project playbook already has (mark them `- [dup]`). Show the
 remaining ones **one at a time** with AskUserQuestion: **Approve / Edit / Discard**. Mark each line
 `[x]` approved (with the final text if edited) or `[-]` discarded. Add the approved rules to their
-section of `factory/playbook.md` and commit it on the feature branch:
-`git add factory/playbook.md && git commit -m "docs(factory): update playbook"`. The rules reach the
-base branch with the PR. If the feature goes to `needs-human`, the file stays and its open lines are
+section of `factory/playbook.md` (Definition of Done items as `- [<owner>] <item>`, appended at the
+end so existing `DoD-<n>` ids do not move). Only if at least one rule was approved, commit it on the
+feature branch: `git add factory/playbook.md && git commit -m "docs(factory): update playbook"` with
+the footer `Factory: <id>`; if a commit hook rejects it, `needs-human` with the output. The rules
+reach the base branch with the PR. If the feature goes to `needs-human`, the file stays and its open lines are
 shown when the feature is back in `approve`.
 
 ### needs-human

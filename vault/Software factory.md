@@ -58,7 +58,7 @@ flowchart TD
 | spec-writer | both playbooks, codebase | `spec.md`, done checklist | `kind`, tasks with owned files and `complexity`, `reviewers` list |
 | coder / builder | `spec.md`, one task, reviews | code + tests for owned files (no commits) | coder → `ESCALATE` to builder if not simple |
 | gate (orchestrator) | `config.md` commands | `gate-rN.md` | exit codes |
-| committer | working tree, commit rules | Conventional Commits on `factory/<id>` | forbidden files / hook fail → stop |
+| committer | working tree, commit rules | Conventional Commits on `feature/<id>` or `hotfix/<id>` | forbidden files / hook fail → stop |
 | reviewers | diff, `spec.md`, playbooks | `reviews/rN-<name>.md` with checklist table | `verdict: PASS \| CHANGES` (CHANGES only for blocking items) |
 | approver | everything above | `decision.md` | every checklist item has evidence → `APPROVE`, else `ESCALATE` |
 | rule proposals (orchestrator + human) | proposals from all agents | `factory/playbook.md` on the feature branch | human approves, edits or discards each one |

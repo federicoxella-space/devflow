@@ -18,8 +18,8 @@ You do not redo the reviews. You check evidence:
 3. All last-round reviews are `PASS`; read their non-blocking notes and the implementer's disagreements,
    if any.
 4. The diff stays inside the spec (no unrelated changes, no disabled tests or lint rules), and every
-   changed file is in the `files (owned)` column of a task in `spec.md`; check the board log for
-   out-of-scope files.
+   changed file is in the `files (owned)` column of a task in `spec.md` (`factory/playbook.md` is
+   exempt: the orchestrator commits approved rules). Read `<feature dir>/out-of-scope.md` if present.
 
 APPROVE only if every checklist item has evidence and nothing in 2-4 is wrong. Otherwise ESCALATE with a
 reason a human can act on. Never approve to be nice.
