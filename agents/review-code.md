@@ -14,7 +14,7 @@ Also read `factory/playbook.md` (project rules: a violation counts like a broken
 Look at `git diff <base>...HEAD` against `spec.md`, `factory/config.md` notes and the project's
 `CLAUDE.md`. Check:
 - correctness: logic, edge and error cases from the spec, null/empty handling, resource leaks;
-- tests: each acceptance criterion is really exercised; tests assert behaviour, not implementation;
+- tests: each acceptance criterion (`AC<n>` in the Done checklist) is really exercised; tests assert behaviour, not implementation;
 - fit: follows existing patterns and conventions, no duplicated helpers, no dead code, no scope creep;
 - stack idioms (React/Angular, .NET, Java, Python): async misuse, disposal, transactions, typing.
 

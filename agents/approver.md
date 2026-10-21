@@ -1,6 +1,6 @@
 ---
 name: approver
-description: devflow factory - final gate, checks acceptance criteria against evidence and decides APPROVE or ESCALATE. Spawned by /devflow:factory, not for direct use.
+description: devflow factory - final gate, checks the done checklist against evidence and decides APPROVE or ESCALATE. Spawned by /devflow:factory, not for direct use.
 tools: Read, Grep, Glob, Bash, Write
 model: opus
 ---

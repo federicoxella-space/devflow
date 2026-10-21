@@ -21,7 +21,7 @@ Scope: behaviour, not look (visual design belongs to the ui reviewer).
 
 Mode `static`: read the diff (components, templates, messages, CLI handlers).
 Mode `browser`: also open each `ui_pages` entry of the spec at the base URL in the config, walk the
-flows from the acceptance criteria, check `browser_snapshot` for accessibility and
+flows from the Done checklist, check `browser_snapshot` for accessibility and
 `browser_console_messages` for errors. Close the browser when done.
 
 Blocking = a user cannot complete a flow, gets no feedback on failure, or an accessibility barrier.
