@@ -1,6 +1,6 @@
 ---
 name: factory
-description: Run the devflow software factory - spec, build, gate, parallel reviews, approval, pull request - one feature at a time.
+description: Run the devflow software factory - interview, spec, parallel build, gate, parallel reviews, approval, pull request - one feature at a time, guided by a project playbook.
 argument-hint: "[init | <feature description>]"
 disable-model-invocation: true
 ---
@@ -17,11 +17,14 @@ Talk to the user in their language. Artifacts are written in the language of `fe
 
 ```
 factory/
-├── config.md                  committed; everything else under factory/ is gitignored
-├── board.md
+├── config.md                  committed
+├── playbook.md                committed: project rules + Definition of Done (user-approved)
+├── board.md                   everything except config.md and playbook.md is gitignored
 └── features/<id>/             id = NNN-short-slug, e.g. 003-password-reset
     ├── feature.md             the request, as given by the user
+    ├── playbook.md            request, interview, agent decisions, done checklist
     ├── spec.md                spec-writer
+    ├── rule-proposals.md      rules proposed by agents, collected by you
     ├── gate-r<N>.md           gate output (tail only)
     ├── reviews/r<N>-<reviewer>.md
     └── decision.md            approver
@@ -32,28 +35,31 @@ factory/
 ```markdown
 # Factory board
 
-| id | feature | state | round | PR |
-|----|---------|-------|-------|----|
-| 003-password-reset | Password reset via email | review | 1 | |
+| id | feature | state | round | branch | PR |
+|----|---------|-------|-------|--------|----|
+| 003-password-reset | Password reset via email | review | 1 | feature/003-password-reset | |
 
 ## Log
 - 2026-10-20 14:02 · 003-password-reset · build → review
 ```
 
-States: `queued → spec → spec-review → build → review → approve → pr-open → merged`, plus `needs-human`.
+States: `queued → interview → spec → spec-review → build → review → approve → pr-open → merged`, plus `needs-human`.
 On every state change update the row **and** append one log line (local time, `YYYY-MM-DD HH:MM`).
 
 ## Entry point
 
 1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` is missing, or the argument
-   is `init`, run **Init** and stop.
+   is `init`, run **Init** and stop. If `factory/playbook.md` is missing, run **Playbook draft**,
+   add `!factory/playbook.md` to `.gitignore`, ask the user to commit both, and stop.
 2. Read `factory/board.md`. For each `pr-open` row, `gh pr view <PR> --json state -q .state`; mark
    `MERGED` as `merged`.
 3. Pick the feature to work on:
-   - a row in `spec`, `spec-review`, `build`, `review` or `approve` → **resume it** from that state.
-     If an argument was given too, add it as a `queued` feature and tell the user.
+   - a row in `interview`, `spec`, `spec-review`, `build`, `review` or `approve` → **resume it**
+     from that state. If it has no `features/<id>/playbook.md` (old format), set it back to
+     `interview` with the log note "restarted: old format". If an argument was given too, add it as
+     a `queued` feature and tell the user.
    - else, if an argument was given → create the feature (next free NNN, slug from the text, write
-     `feature.md`, add the row as `spec`).
+     `feature.md`, add the row as `interview`).
    - else the oldest `queued` row; if none, show the board and stop.
 4. Preconditions before `build`: `git status --porcelain` is empty, `gh auth status` succeeds.
    If not, tell the user what is wrong and stop.
@@ -61,6 +67,40 @@ On every state change update the row **and** append one log line (local time, `Y
 ## The loop
 
 Read `factory/config.md` once; its frontmatter drives the run.
+
+### 0. Interview — state `interview`
+You run it (agents cannot talk to the user). Goal: nothing in the spec is guessed.
+1. Read `feature.md`, `factory/playbook.md` and the code the request touches.
+2. List for yourself the gaps: everything that cannot be derived from the request, the playbook or
+   the code, plus missing details (error behaviour, edge cases, permissions, visible text, data,
+   compatibility).
+3. Ask **one question at a time** and wait for the answer: the answer shapes the next question.
+   Use AskUserQuestion when the question has natural options, otherwise ask in plain text.
+4. After every answer, append it to `features/<id>/playbook.md` (format below), so an interrupted
+   interview resumes from the first open gap. On resume, re-read the playbook and do not repeat
+   answered questions.
+5. If the user leaves a choice to you ("you decide"), decide, and write it under
+   `## Agent decisions` with the reason; the user sees it at spec approval.
+6. Stop when you could write every acceptance criterion without guessing. If the request is already
+   complete, write "No questions needed." under `## Interview`.
+
+```markdown
+# <id> — <short title>
+
+## Request
+<text of feature.md>
+
+## Interview
+**Q1.** ...
+**A1.** ...
+
+## Agent decisions
+- <decision> — <why>
+
+## Done checklist
+(written by the spec-writer)
+```
+Set state `spec`.
 
 ### 1. Spec — state `spec`
 Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, `ui_review` value.
@@ -175,4 +215,35 @@ board state (they can edit the state cell by hand to choose where to resume).
    ```
    factory/*
    !factory/config.md
+   !factory/playbook.md
    ```
+4. Run **Playbook draft**, then ask the user to commit `factory/config.md`, `factory/playbook.md`
+   and `.gitignore` (you do not commit on the base branch).
+
+## Playbook draft
+
+Read `CLAUDE.md`, the notes in `factory/config.md` and the codebase (structure, a few
+representative modules, tests). Draft `factory/playbook.md`, one rule per line, with a reference
+path when there is one. Keep it short: only rules an agent would otherwise have to rediscover.
+
+```markdown
+# Project playbook
+
+## Conventions
+- Services in `src/services/`, always behind an `I<Name>Service` interface.
+## Patterns
+- New REST endpoint: follow `src/api/orders/OrdersController.cs`.
+## Reusable code
+- Email validation: `src/shared/validation/email.ts` (do not rewrite it).
+## Don'ts
+- Do not touch `legacy/`.
+## Definition of Done
+- [gate] Build, lint and tests are green.
+- [code] Every acceptance criterion has an automated test or a precise manual step.
+- [security] No secrets in code or committed configuration.
+```
+
+Definition of Done items are `- [<owner>] <item>`, owner one of `gate`, `code`, `security`, `ux`,
+`ui`; `DoD-<n>` is the item's position. Always include the two first items above; add stack-specific
+ones. Show the draft, apply the user's edits, write the file. From then on it changes only through
+approved **rule proposals** (step 6b).
