@@ -8,7 +8,7 @@ The factory is one skill, `/devflow:factory`. Whichever Claude Code session runs
 
 - Setup is a separate skill, `/devflow:init`: it detects the stack (on an empty repo it interviews the human to choose one and queues a scaffold feature), writes `factory/config.md` and drafts the project playbook.
 - One feature at a time, on its own branch: `feature/<id>` or `hotfix/<id>`, chosen by the spec-writer.
-- Before the spec, the orchestrator interviews the human one question at a time until nothing is guessed; questions and answers go into the feature playbook.
+- Before the spec, the orchestrator interviews the human one question at a time until nothing is guessed; questions and answers go into the feature playbook. New logic that comes up is integrated if it fits the feature, otherwise deferred to a GitHub issue or, without one, to a queued feature recorded in `factory/backlog.md`.
 - Every agent reads the project playbook (`factory/playbook.md`) first: conventions, patterns, reusable code, Definition of Done. It grows only through rule proposals the human approves.
 - The human approves every spec and its done checklist (acceptance criteria + Definition of Done) before the build.
 - Output is a pull request, never a direct merge to main.
@@ -55,7 +55,7 @@ flowchart TD
 
 | Step | Reads | Writes | Decides with |
 |---|---|---|---|
-| interview (orchestrator) | `feature.md`, playbook, codebase | feature `playbook.md` | asks until every criterion can be written without guessing |
+| interview (orchestrator) | `feature.md`, playbook, codebase | feature `playbook.md`; deferred logic → issue or queued row + `factory/backlog.md` | asks until every criterion can be written without guessing; human chooses integrate or defer for new logic |
 | spec-writer | both playbooks, codebase | `spec.md`, done checklist | `kind`, tasks with owned files and `complexity`, `reviewers` list |
 | coder / builder | `spec.md`, one task, reviews | code + tests for owned files (no commits) | coder → `ESCALATE` to builder if not simple |
 | gate (orchestrator) | `config.md` commands | `gate-rN.md` | exit codes |
@@ -73,8 +73,8 @@ plugin (this folder)                     target project
 .claude-plugin/plugin.json               factory/config.md   commands, ui_review, max_rounds (committed)
 .claude-plugin/marketplace.json          factory/board.md    one row per feature + log
 .mcp.json            (Playwright)        factory/playbook.md project rules + DoD (committed)
-skills/factory/SKILL.md (orchestrator)   factory/features/<id>/
-skills/init/SKILL.md (setup)
+skills/factory/SKILL.md (orchestrator)   factory/backlog.md  deferred logic queued on the board (committed)
+skills/init/SKILL.md (setup)             factory/features/<id>/
 agents/*.md          (9 agents)              feature.md, playbook.md, spec.md, rule-proposals.md,
                                              gate-rN.md, reviews/rN-*.md, decision.md
 ```

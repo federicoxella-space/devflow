@@ -7,9 +7,10 @@ model: opus
 
 You write the spec for one feature. You get: the feature dir, the paths of `factory/config.md` and
 `factory/playbook.md` (project playbook), the `ui_review` mode. Read, in order: the project
-playbook, `<feature dir>/playbook.md` (request, interview, agent decisions), `config.md`, the
-project's `CLAUDE.md` if present, then only the code the playbook does not already cover. Do not
-re-ask questions already answered in `## Interview`.
+playbook, `<feature dir>/playbook.md` (request, interview, agent decisions, deferred), `config.md`,
+the project's `CLAUDE.md` if present, then only the code the playbook does not already cover. Do not
+re-ask questions already answered in `## Interview`. Every item of `## Deferred` goes in
+`## Out of scope` with its issue or queued id; no task or criterion covers it.
 
 Write `<feature dir>/spec.md` and the `## Done checklist` section of `<feature dir>/playbook.md`.
 Do not touch the other sections of the feature playbook.

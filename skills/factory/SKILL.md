@@ -19,7 +19,8 @@ Talk to the user in their language. Artifacts are written in the language of `fe
 factory/
 ├── config.md                  committed
 ├── playbook.md                committed: project rules + Definition of Done (user-approved)
-├── board.md                   everything except config.md and playbook.md is gitignored
+├── backlog.md                 committed: deferred logic queued on the board (see Deferring logic)
+├── board.md                   everything except config.md, playbook.md and backlog.md is gitignored
 └── features/<id>/             id = NNN-short-slug, e.g. 003-password-reset
     ├── feature.md             the request, as given by the user
     ├── playbook.md            request, interview, agent decisions, done checklist
@@ -81,7 +82,10 @@ You run it (agents cannot talk to the user). Goal: nothing in the spec is guesse
    answered questions.
 5. If the user leaves a choice to you ("you decide"), decide, and write it under
    `## Agent decisions` with the reason; the user sees it at spec approval.
-6. Stop when you could write every acceptance criterion without guessing. If the request is already
+6. If the user proposes a new piece of logic (a behaviour or requirement the request did not have),
+   or one emerges from an answer, handle it as in **Deferring logic** below before the next
+   question.
+7. Stop when you could write every acceptance criterion without guessing. If the request is already
    complete, write "No questions needed." under `## Interview`.
 
 ```markdown
@@ -97,10 +101,40 @@ You run it (agents cannot talk to the user). Goal: nothing in the spec is guesse
 ## Agent decisions
 - <decision> — <why>
 
+## Deferred
+- <logic> — <issue URL | queued <new id>>
+
 ## Done checklist
 (written by the spec-writer)
 ```
 Set state `spec`.
+
+#### Deferring logic
+Only behaviour and requirements; project conventions go through rule proposals (6b).
+1. Judge it against the request and the answers so far. Recommend **Integrate** when it is coherent
+   with them (contradicts no decision) and does not substantially widen the feature (no new page,
+   integration or data model). Recommend **Defer** otherwise, and always when the request fixes
+   something that should already work.
+2. Ask with AskUserQuestion: **Integrate / Defer**, recommended option first. Write the question and
+   the answer in `## Interview` as the next `Q<n>`/`A<n>`.
+3. Integrate → it is part of the feature from now on: keep asking about its gaps.
+4. Defer → if `gh repo view --json hasIssuesEnabled -q .hasIssuesEnabled` prints `true`, open one
+   issue per logic, in the language of `feature.md`:
+   ```
+   gh label create devflow --color 5319E7 --description "Created by devflow factory"
+   gh label create deferred --color FBCA04 --description "Logic deferred from a devflow interview"
+   gh issue create --title "<short title>" --body-file <tmp> --label devflow,deferred,enhancement
+   ```
+   Ignore "already exists" from `gh label create`; if a label still cannot be used, create the
+   issue without it. Body: what the logic does, what was said about it, footer
+   `Deferred from <id> — <feature title>`.
+   Otherwise (no `gh`, not authenticated, no GitHub remote, issues disabled) → queue it: next free
+   NNN, write `features/<new id>/feature.md` with the logic and the same footer, add the row as
+   `queued` with a log line, and append `- <new id> — <logic> — deferred from <id>` to
+   `factory/backlog.md` (create it with the heading `# Factory backlog`). The board is gitignored,
+   so the backlog is the committed record.
+5. Right after, append the line to `## Deferred` in the feature playbook, so a resume does not open
+   it twice. A deferred logic is out of scope for this feature.
 
 ### 1. Spec — state `spec`
 Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, project playbook path,
@@ -110,15 +144,21 @@ Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, project
 ### 2. Human approval — state `spec-review`
 If the spec's `## Open questions` is not empty, ask them **one at a time**, append the answers to
 `## Interview` in the feature playbook, and resume the spec-writer (it removes answered questions)
-before going on. Check that every checklist owner other than `n/a` and `gate` is in `reviewers`;
+before going on. New logic that comes up here or in a "Request changes" is handled as in
+**Deferring logic** (step 0). Check that every checklist owner other than `n/a` and `gate` is in `reviewers`;
 if not, resume the spec-writer to fix it.
 Show the user: title, `kind` and why, tasks, the `## Done checklist`, `## Agent decisions`,
 reviewers, out of scope. Ask with AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
   agent id, or a fresh spawn with the feedback) and ask again.
-- Reject → state `needs-human`, note "rejected", stop.
+- Reject → state `needs-human`, note "rejected", stop. If `factory/backlog.md` has uncommitted
+  changes, tell the user to commit it.
 - Approve → `git switch <base_branch> && git pull --ff-only && git switch -c <kind>/<id>`
-  (`feature/<id>` or `hotfix/<id>`), write the branch in the board, set state `build`, round `1`.
+  (`feature/<id>` or `hotfix/<id>`), write the branch in the board. If `factory/backlog.md` has
+  uncommitted changes, add `!factory/backlog.md` to `.gitignore` if missing, then
+  `git add factory/backlog.md .gitignore && git commit -m "docs(factory): update backlog"` with the
+  footer `Factory: <id>` (a hook rejection → `needs-human` with the output). Set state `build`,
+  round `1`.
 
 ### 3. Build — state `build`
 Each task in the spec's `## Tasks` has its own implementer: `complexity: simple` → `devflow:coder`
