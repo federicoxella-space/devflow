@@ -5,7 +5,7 @@
     {
       "name": "devflow",
       "source": "./",
-      "description": "Small software factory orchestrated by /devflow:factory."
+      "description": "Small software factory: interview -> spec -> parallel build -> gate -> parallel reviews -> approve -> PR. Set up with /devflow:init, run with /devflow:factory, guided by a project playbook."
     }
   ]
 }
