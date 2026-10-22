@@ -19,7 +19,7 @@ otherwise ask in plain text.
 `git rev-parse --show-toplevel` must succeed. Then:
 - no `factory/config.md` → run every step below;
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
-  `!factory/playbook.md` line to `.gitignore` if missing);
+  `!factory/playbook.md` and `!factory/backlog.md` lines to `.gitignore` if missing);
 - both present → ask what to redo: **Config / Playbook / Both / Nothing**. Before redoing the
   playbook, warn that it holds rules the user approved and offer to keep them in the new draft.
   Never touch an existing `factory/board.md`.
@@ -123,6 +123,7 @@ Append to `.gitignore` the lines that are missing:
 factory/*
 !factory/config.md
 !factory/playbook.md
+!factory/backlog.md
 ```
 
 ## 5. Hand-over

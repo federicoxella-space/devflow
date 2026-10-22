@@ -46,7 +46,10 @@ git commit -m "chore: set up devflow factory"
 
 ### 2. Build a feature: `/devflow:factory <feature description>`
 
-1. **Interview**: questions one at a time until nothing has to be guessed.
+1. **Interview**: questions one at a time until nothing has to be guessed. New logic that comes up
+   (here or at spec approval) is either integrated, if it fits the feature, or deferred: a GitHub
+   issue (labels `devflow`, `deferred`, `enhancement`) when the repo accepts issues, otherwise a
+   queued feature on the board, recorded in `factory/backlog.md`.
 2. **Spec**: you approve the spec, the done checklist (acceptance criteria + Definition of Done)
    and whether it is a `feature/` or a `hotfix/` branch.
 3. **Build**: independent tasks are implemented in parallel (sonnet for simple tasks, opus for
@@ -67,6 +70,7 @@ When something needs a human, it stops and tells you which files to look at.
 factory/
 ├── config.md          commands, ui_review mode, max review rounds      (committed)
 ├── playbook.md        project rules + Definition of Done                (committed)
+├── backlog.md         deferred logic queued on the board                (committed)
 ├── board.md           one row per feature + log                         (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, decision    (gitignored)
 ```
