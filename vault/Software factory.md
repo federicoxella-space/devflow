@@ -6,7 +6,7 @@ Packaged as the Claude Code plugin `devflow` (this folder). Install once, use in
 
 The factory is one skill, `/devflow:factory`. Whichever Claude Code session runs it becomes the orchestrator: it runs the loop below, spawns every agent, runs the gate, and is the only writer of `factory/board.md`.
 
-- `init` detects the stack; on an empty repo it interviews the human to choose one and queues a scaffold feature.
+- Setup is a separate skill, `/devflow:init`: it detects the stack (on an empty repo it interviews the human to choose one and queues a scaffold feature), writes `factory/config.md` and drafts the project playbook.
 - One feature at a time, on its own branch: `feature/<id>` or `hotfix/<id>`, chosen by the spec-writer.
 - Before the spec, the orchestrator interviews the human one question at a time until nothing is guessed; questions and answers go into the feature playbook.
 - Every agent reads the project playbook (`factory/playbook.md`) first: conventions, patterns, reusable code, Definition of Done. It grows only through rule proposals the human approves.
@@ -74,6 +74,7 @@ plugin (this folder)                     target project
 .claude-plugin/marketplace.json          factory/board.md    one row per feature + log
 .mcp.json            (Playwright)        factory/playbook.md project rules + DoD (committed)
 skills/factory/SKILL.md (orchestrator)   factory/features/<id>/
+skills/init/SKILL.md (setup)
 agents/*.md          (9 agents)              feature.md, playbook.md, spec.md, rule-proposals.md,
                                              gate-rN.md, reviews/rN-*.md, decision.md
 ```

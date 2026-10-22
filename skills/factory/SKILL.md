@@ -1,7 +1,7 @@
 ---
 name: factory
 description: Run the devflow software factory - interview, spec, parallel build, gate, parallel reviews, approval, pull request - one feature at a time, guided by a project playbook.
-argument-hint: "[init | <feature description>]"
+argument-hint: "[<feature description>]"
 disable-model-invocation: true
 ---
 
@@ -49,10 +49,8 @@ On every state change update the row **and** append one log line (local time, `Y
 
 ## Entry point
 
-1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` is missing, or the argument
-   is `init`, run **Init** and stop (if `factory/playbook.md` already exists, ask before
-   overwriting it: it holds approved rules). If `factory/playbook.md` is missing, run **Playbook
-   draft**, add `!factory/playbook.md` to `.gitignore`, ask the user to commit both, and stop.
+1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` or `factory/playbook.md`
+   is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
 2. Read `factory/board.md`. For each `pr-open` row, `gh pr view <PR> --json state -q .state`; mark
    `MERGED` as `merged`.
 3. Pick the feature to work on:
@@ -228,85 +226,3 @@ shown when the feature is back in `approve`.
 Update the board, leave the branch as it is, tell the user in 2-3 lines why and what to look at
 (file paths), stop. The user fixes things and re-runs `/devflow:factory`, which resumes from the
 board state (they can edit the state cell by hand to choose where to resume).
-
-## Init
-
-1. Detect the stack and propose commands; ask the user to confirm or edit them:
-
-   | Found | build | lint | test |
-   |---|---|---|---|
-   | `package.json` + react | `npm run build` | `npm run lint` | `npm test -- --run` (vitest) / `npm test -- --watchAll=false` (jest) |
-   | `angular.json` | `npx ng build` | `npx ng lint` | `npx ng test --watch=false --browsers=ChromeHeadless` |
-   | `*.sln` / `*.csproj` | `dotnet build` | `dotnet format --verify-no-changes` | `dotnet test` |
-   | `pom.xml` | | | `mvn -q verify` |
-   | `build.gradle*` | | | `./gradlew build` |
-   | `pyproject.toml` | | `ruff check .` | `pytest -q` |
-
-   Prefer scripts that already exist in the project. Multiple apps (e.g. React + .NET): chain with `&&`.
-   `ui_review`: `browser` for web frontends, `static` for CLIs, `none` for backend-only.
-
-   **No stack yet** (empty repo, or none of the files above): run a **stack interview** instead,
-   with the same rules as the feature interview (step 0): one question at a time, stop when you can
-   choose without guessing. Find out what the user wants to build (kind of product, users, scale),
-   constraints (languages and frameworks the team knows, hosting, company standards, integrations,
-   licences) and preferences. Then recommend one stack with a short reason and at most one
-   alternative, and ask with AskUserQuestion: **Approve / Choose the alternative / Change**. From
-   the approved stack, derive the commands and `ui_review` as in the table above. Write the
-   questions, the answers and the chosen stack with its reason in the notes of `config.md` and, as
-   the first rules, in `## Conventions` of the playbook draft. Init does not create the project:
-   add a `queued` feature "Scaffold the <stack> project" to the board, so the first factory run
-   builds it, with the build/lint/test commands working.
-2. Write `factory/config.md`:
-
-   ```markdown
-   ---
-   base_branch: main
-   build: dotnet build
-   lint: dotnet format --verify-no-changes
-   test: dotnet test
-   ui_review: none        # none | static | browser
-   dev_server: ""         # browser only, e.g. npm run dev
-   base_url: ""           # browser only, e.g. http://localhost:5173
-   max_rounds: 2          # rework rounds after the first review
-   ---
-   Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
-
-   ## Commit rules
-   Optional. Overrides the committer's defaults (e.g. subject in Italian, scope = ticket id).
-   ```
-3. Create `factory/board.md` (empty, or with the scaffold feature) and append to `.gitignore`:
-   ```
-   factory/*
-   !factory/config.md
-   !factory/playbook.md
-   ```
-4. Run **Playbook draft**, then ask the user to commit `factory/config.md`, `factory/playbook.md`
-   and `.gitignore` (you do not commit on the base branch).
-
-## Playbook draft
-
-Read `CLAUDE.md`, the notes in `factory/config.md` and the codebase (structure, a few
-representative modules, tests). Draft `factory/playbook.md`, one rule per line, with a reference
-path when there is one. Keep it short: only rules an agent would otherwise have to rediscover.
-
-```markdown
-# Project playbook
-
-## Conventions
-- Services in `src/services/`, always behind an `I<Name>Service` interface.
-## Patterns
-- New REST endpoint: follow `src/api/orders/OrdersController.cs`.
-## Reusable code
-- Email validation: `src/shared/validation/email.ts` (do not rewrite it).
-## Don'ts
-- Do not touch `legacy/`.
-## Definition of Done
-- [gate] Build, lint and tests are green.
-- [code] Every acceptance criterion has an automated test or a precise manual step.
-- [security] No secrets in code or committed configuration.
-```
-
-Definition of Done items are `- [<owner>] <item>`, owner one of `gate`, `code`, `security`, `ux`,
-`ui`; `DoD-<n>` is the item's position. Always include the two first items above; add stack-specific
-ones. Show the draft, apply the user's edits, write the file. From then on it changes only through
-approved **rule proposals** (step 6b).
