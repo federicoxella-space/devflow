@@ -12,6 +12,7 @@ The factory is one skill, `/devflow:factory`. Whichever Claude Code session runs
 - Every agent reads the project playbook (`factory/playbook.md`) first: conventions, patterns, reusable code, Definition of Done. It grows only through rule proposals the human approves.
 - The human approves every spec and its done checklist (acceptance criteria + Definition of Done) before the build.
 - Output is a pull request, never a direct merge to main. The forge (`github`, `gitlab`, `azure` or `git` only) is set in `factory/config.md`; the orchestrator reads only `forges/<forge>.md`, which maps five operations (auth, open-pr, pr-state, issues-enabled, create-issue) to that platform's CLI. In git-only mode merges are detected from git (`scripts/git-merged.sh`).
+- Optional automatic releases (`release: auto`, GitHub and GitLab): `/devflow:init` installs a CI job that tags every merged PR `vX.Y.Z` from its Conventional Commits title and creates a release with it, through the API only (`.devflow/release.sh`).
 - Re-running `/devflow:factory` resumes from the state in the board.
 
 ## The loop

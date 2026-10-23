@@ -81,7 +81,22 @@ factory/
 ├── backlog.md         deferred logic queued on the board                (committed)
 ├── board.md           one row per feature + log                         (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, decision    (gitignored)
+.devflow/              release scripts, only with automatic releases      (committed)
 ```
+
+## Automatic releases
+
+On GitHub and GitLab, `/devflow:init` can install a CI job (step **Release**) that turns every pull
+request merged into the base branch into a release: tag `vX.Y.Z` and an entry on the Releases page
+with the PR title. The version comes from the title: `feat` → minor, `!` or `BREAKING CHANGE` →
+major (minor while `0.x`), anything else → patch. The job only calls the API (no commits), so a
+protected base branch is fine; on GitLab the job token is enough.
+
+- GitHub: `.github/workflows/devflow-release.yml`, needs `contents: write` (granted in the file).
+- GitLab: `.devflow/gitlab-release.yml`, included from `.gitlab-ci.yml`. MRs must be merged with a
+  merge commit (title and number are read from it). If the runner cannot pull `alpine`, set the
+  CI/CD variable `DEVFLOW_RELEASE_IMAGE` to an image with bash, git and curl.
+- After a plugin update, re-run `/devflow:init` → **Release** to refresh the files.
 
 ## More
 
