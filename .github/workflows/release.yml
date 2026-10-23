@@ -1,5 +1,5 @@
 # Every pull request merged into main becomes a release: version bump in plugin.json (from the
-# PR title, see .github/scripts/next-version.sh and release.sh), CHANGELOG.md entry, tag and GitHub Release.
+# PR title, see skills/init/release/next-version.sh and .github/scripts/release.sh), CHANGELOG.md entry, tag and GitHub Release.
 name: release
 
 on:

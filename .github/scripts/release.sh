@@ -32,7 +32,7 @@ for attempt in 1 2 3 4 5; do
 
   current=$(sed -n 's/^ *"version": *"\([^"]*\)".*/\1/p' "$plugin")
   last_tag=$(git tag -l 'v*' --sort=-v:refname | head -1)
-  next=$(bash "$dir/next-version.sh" "$PR_TITLE" "$body_file" "$current" "${last_tag#v}")
+  next=$(bash "$dir/../../skills/init/release/next-version.sh" "$PR_TITLE" "$body_file" "$current" "${last_tag#v}")
   if git rev-parse -q --verify "refs/tags/v$next" > /dev/null; then
     echo "v$next already exists, nothing to release"
     exit 0
