@@ -60,5 +60,15 @@ check open     f-open
 check open     missing
 if [ -s "$tmp/err" ]; then echo "PASS  missing -> message on stderr"; else echo "FAIL  missing: no message on stderr"; fails=$((fails + 1)); fi
 
+# base not on origin: must not claim a merge
+got=$(bash "$src/git-merged.sh" f-open nope 2> "$tmp/err"); code=$?
+if [ $code -ne 0 ] && [ -z "$got" ] && [ -s "$tmp/err" ]; then echo "PASS  missing origin/<base> -> error, no verdict"
+else echo "FAIL  missing origin/<base>: exit $code, got '$got'"; fails=$((fails + 1)); fi
+
+# commit signing configured with a failing signer: squash detection still works
+git config commit.gpgSign true; git config gpg.program false
+check squashed f-squash
+git config --unset commit.gpgSign; git config --unset gpg.program
+
 [ "$fails" -eq 0 ] || { echo "$fails failed"; exit 1; }
 echo "all passed"

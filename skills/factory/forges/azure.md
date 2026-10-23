@@ -3,9 +3,12 @@
 Azure DevOps Services (cloud). **Azure DevOps Server: prepared, not verified** — `az devops` supports
 Server only partly; tell the user once per run when `azure_org` is set.
 
-Every `az repos` / `az boards` command below takes the scope flags:
-- `azure_org` and `azure_project` set (Server, or an explicit cloud org) → `--org <azure_org> --project <azure_project>`;
-- otherwise → `--detect true` (organization and project from the `origin` remote).
+Scope flags, used by the commands below:
+- `<scope flags>`: `azure_org` and `azure_project` set (Server, or an explicit cloud org) →
+  `--org <azure_org> --project <azure_project>`; otherwise → `--detect true` (organization and
+  project from the `origin` remote).
+- `<org flag>` (commands without a project, like `az repos pr show`): `--org <azure_org>` if set,
+  otherwise `--detect true`.
 
 "PR" means pull request; the board's PR column holds its web URL; its id is the number after
 `/pullrequest/`.
@@ -23,7 +26,7 @@ az repos pr create --source-branch <head> --target-branch <base> --title "<title
 Reference = `<repository.webUrl>/pullrequest/<pullRequestId>` from the JSON output.
 
 ## pr-state
-`az repos pr show --id <id> --output json <scope flags>`, field `status`: `completed` → `MERGED`,
+`az repos pr show --id <id> --output json <org flag>`, field `status`: `completed` → `MERGED`,
 `abandoned` → `CLOSED`, `active` → `OPEN`. Command fails → `UNKNOWN`.
 
 ## issues-enabled

@@ -62,15 +62,18 @@ The platform where the factory opens pull requests. From the host in `git remote
 | `gitlab.com` | `gitlab` |
 | `dev.azure.com`, `ssh.dev.azure.com`, `*.visualstudio.com` | `azure` |
 | any other host | ask: **GitLab / Azure DevOps Server / GitHub Enterprise / Git only**; save the host in `forge_host` |
-| no `origin` remote | ask the same question; tell the user the factory needs an `origin` remote before the first build |
+| no `origin` remote | ask **GitHub / GitLab / Azure DevOps / Git only**, then whether it is the cloud service or a company instance (then ask its host for `forge_host`); tell the user the factory needs an `origin` remote before the first build |
+
+`forge_host` is the web/API host (e.g. `gitlab.company.com`), not an SSH alias from `~/.ssh/config`:
+if the remote uses one, ask for the real host.
 
 For Azure DevOps Server also ask the collection URL (`azure_org`, e.g.
 `https://tfs.company.com/tfs/DefaultCollection`) and the project (`azure_project`), and say that
 Server support is prepared but not verified. Git only = any other platform: the factory pushes
 the branch and the user opens the pull request by hand.
 
-Then run the **auth** operation of `skills/factory/forges/<forge>.md` (in the plugin, next to this
-skill). If it fails, show how to fix it — `gh auth login`, `glab auth login --hostname <host>`,
+Then run the **auth** operation of `../factory/forges/<forge>.md`, relative to this skill's base
+directory. If it fails, show how to fix it — `gh auth login`, `glab auth login --hostname <host>`,
 `az login` + `az extension add --name azure-devops` — and go on: it only blocks the first build.
 
 ## 2. Config

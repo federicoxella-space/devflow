@@ -29,7 +29,8 @@ factory/
     ├── out-of-scope.md        changed files outside the tasks' owned files, written by you
     ├── gate-r<N>.md           gate output (tail only)
     ├── reviews/r<N>-<reviewer>.md
-    └── decision.md            approver
+    ├── decision.md            approver
+    └── pr.md                  PR title (first line) and body, written by you
 ```
 
 `board.md`:
@@ -261,8 +262,9 @@ If `decision.md` already says `APPROVE` for this round (resume after an interrup
 skip the approver. Otherwise spawn `devflow:approver` (foreground) with feature dir, base branch,
 round. Read `decision.md` frontmatter:
 - `ESCALATE` → `needs-human` with the approver's reason.
-- `APPROVE` → rule proposals (6b), then open the PR with **open-pr** (base `<base_branch>`, head
-  `<kind>/<id>`, title, body in a temp file). PR title = the `PR title:` line in `gate-r1.md` (Conventional Commits, so a squash merge leaves a
+- `APPROVE` → rule proposals (6b), then write the title (first line) and the body to
+  `features/<id>/pr.md` and open the PR with **open-pr** (base `<base_branch>`, head `<kind>/<id>`,
+  title, body file). PR title = the `PR title:` line in `gate-r1.md` (Conventional Commits, so a squash merge leaves a
   conventional commit on the base branch); if missing, build it the same way from the spec title:
   `fix` for a hotfix, else `feat`, scope = the main area touched. Body = spec title as heading +
   spec goal + done checklist table from `decision.md` + non-blocking review notes + footer
