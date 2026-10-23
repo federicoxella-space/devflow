@@ -79,7 +79,9 @@ Passi, ripetuti fino a 5 volte:
 - GitHub: `on: pull_request: types: [closed], branches: [<base_branch>]`, job se `merged`;
   `permissions: contents: write`; checkout `fetch-depth: 0`; `RELEASE_SHA` =
   `github.event.pull_request.merge_commit_sha`; titolo/body via `env`; nessun gruppo `concurrency`.
-- GitLab: job `devflow-release`, `stage: .post` (esiste sempre), `image: $DEVFLOW_RELEASE_IMAGE`
+- GitLab: job `devflow-release`, `stage: .post` (esiste sempre, ma GitLab non crea pipeline con
+  soli job `.pre`/`.post`: un `.gitlab-ci.yml` creato da init dichiara `stages: [release]` e sposta
+  lì il job), `when: always`, `image: $DEVFLOW_RELEASE_IMAGE`
   con `variables: DEVFLOW_RELEASE_IMAGE: "alpine:3"` (sovrascrivibile dalle CI/CD settings per un
   registry interno; ignorata da un executor shell); `before_script` installa bash, git e curl con
   `apk` solo se mancano e `apk` esiste; `release.sh` verifica bash, git e curl all'avvio e, se ne

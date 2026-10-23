@@ -105,5 +105,16 @@ run_gl "$c6" 'fix: plain'
 ok "gitlab: plain commit v0.3.1, note without number" '[ "$(tag_at "$c6")" = v0.3.1 ] && python -c "
 import json,sys; assert json.load(open(sys.argv[1]))[\"description\"]==\"- fix: plain\"" "$STUB/gitlab-v0.3.1.json"'
 
+# 7. BusyBox-like `sort` without -V (alpine): tag ordering must not depend on it
+printf '#!/usr/bin/env bash
+for a in "$@"; do [ "$a" = -V ] && { echo "sort: unrecognized option: V" >&2; exit 1; }; done
+exec /usr/bin/sort "$@"
+' > "$tmp/bin/sort"
+chmod +x "$tmp/bin/sort"
+c7=$(commit seven)
+run_gh "$c7" 'fix: e' 9
+ok "sort without -V: v0.3.2 on c7" '[ "$(tag_at "$c7")" = v0.3.2 ]'
+rm "$tmp/bin/sort"
+
 [ "$fails" -eq 0 ] || { echo "$fails failed"; exit 1; }
 echo "all passed"

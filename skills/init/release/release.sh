@@ -98,7 +98,8 @@ append_note() {
   fi
 }
 
-semver_tags() { git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V || true; }
+# git sorts versions itself: BusyBox `sort` (alpine) may not support -V.
+semver_tags() { git tag -l 'v*' --sort=v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' || true; }
 
 for attempt in 1 2 3 4 5; do
   git fetch -q --tags --force origin

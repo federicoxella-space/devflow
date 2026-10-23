@@ -91,10 +91,20 @@ Enable → copy from `release/` in this skill's base directory, replacing `{{DEV
 `{{BASE_BRANCH}}` with `base_branch`:
 - `release.sh` and `next-version.sh` → `.devflow/` (overwrite: this is also the update path);
 - github → `github-workflow.yml` → `.github/workflows/devflow-release.yml`;
-- gitlab → `gitlab-ci.yml` → `.devflow/gitlab-release.yml`, and in `.gitlab-ci.yml` (create it if
-  missing) the include `- local: .devflow/gitlab-release.yml`: add it to an existing `include:`
-  list, or add `include:` with it; if `include:` exists but is not a list, show the line and ask the
-  user to add it. Never rewrite the rest of the file.
+- gitlab → `gitlab-ci.yml` → `.devflow/gitlab-release.yml`, and in `.gitlab-ci.yml` the include
+  `- local: .devflow/gitlab-release.yml`: add it to an existing `include:` list, or add `include:`
+  with it; if `include:` exists but is not a list, show the line and ask the user to add it. Never
+  rewrite the rest of the file. The job runs in `.post`, and GitLab creates no pipeline with
+  only .pre/.post jobs: if `.gitlab-ci.yml` is missing, create it as
+  ```yaml
+  include:
+    - local: .devflow/gitlab-release.yml
+  stages: [release]
+  devflow-release:
+    stage: release
+  ```
+  and if it exists but no other job runs on a push to the base branch, tell the user the release
+  job will not run until one does (or to add the same `stages`/`stage` override).
 
 GitLab only:
 - `glab api projects/:id` → if `merge_method` is not `merge`, warn: the MR title and number are
