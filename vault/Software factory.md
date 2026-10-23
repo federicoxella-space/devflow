@@ -8,10 +8,10 @@ The factory is one skill, `/devflow:factory`. Whichever Claude Code session runs
 
 - Setup is a separate skill, `/devflow:init`: it detects the stack (on an empty repo it interviews the human to choose one and queues a scaffold feature), writes `factory/config.md` and drafts the project playbook.
 - One feature at a time, on its own branch: `feature/<id>` or `hotfix/<id>`, chosen by the spec-writer.
-- Before the spec, the orchestrator interviews the human one question at a time until nothing is guessed; questions and answers go into the feature playbook. New logic that comes up is integrated if it fits the feature, otherwise deferred to a GitHub issue or, without one, to a queued feature recorded in `factory/backlog.md`.
+- Before the spec, the orchestrator interviews the human one question at a time until nothing is guessed; questions and answers go into the feature playbook. New logic that comes up is integrated if it fits the feature, otherwise deferred to an issue on the forge or, without one, to a queued feature recorded in `factory/backlog.md`.
 - Every agent reads the project playbook (`factory/playbook.md`) first: conventions, patterns, reusable code, Definition of Done. It grows only through rule proposals the human approves.
 - The human approves every spec and its done checklist (acceptance criteria + Definition of Done) before the build.
-- Output is a pull request, never a direct merge to main.
+- Output is a pull request, never a direct merge to main. The forge (`github`, `gitlab`, `azure` or `git` only) is set in `factory/config.md`; the orchestrator reads only `forges/<forge>.md`, which maps five operations (auth, open-pr, pr-state, issues-enabled, create-issue) to that platform's CLI. In git-only mode merges are detected from git (`scripts/git-merged.sh`).
 - Re-running `/devflow:factory` resumes from the state in the board.
 
 ## The loop

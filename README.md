@@ -12,7 +12,14 @@ interview → spec → parallel build → gate → parallel reviews → approve 
 ## Requirements
 
 - Claude Code
-- `git`, and the GitHub CLI `gh` authenticated (`gh auth status`)
+- `git` and a remote `origin`
+- The CLI of your forge, authenticated (`/devflow:init` detects the forge from the remote):
+  - GitHub: `gh` (`gh auth status`)
+  - GitLab, also self-managed: `glab` (`glab auth status --hostname <host>`)
+  - Azure DevOps: `az` with the `azure-devops` extension (`az login`); Azure DevOps Server is
+    prepared but not verified
+  - any other platform: nothing, in **git only** mode the factory pushes the branch and you open
+    the pull request by hand
 - Node.js (`npx`), only for browser UI reviews (Playwright MCP, bundled in `.mcp.json`)
 
 ## Install
@@ -47,8 +54,9 @@ git commit -m "chore: set up devflow factory"
 ### 2. Build a feature: `/devflow:factory <feature description>`
 
 1. **Interview**: questions one at a time until nothing has to be guessed. New logic that comes up
-   (here or at spec approval) is either integrated, if it fits the feature, or deferred: a GitHub
-   issue (labels `devflow`, `deferred`, `enhancement`) when the repo accepts issues, otherwise a
+   (here or at spec approval) is either integrated, if it fits the feature, or deferred: an issue on
+   the forge (labels `devflow`, `deferred`, `enhancement`; tags on Azure DevOps) when the repo
+   accepts issues, otherwise a
    queued feature on the board, recorded in `factory/backlog.md`.
 2. **Spec**: you approve the spec, the done checklist (acceptance criteria + Definition of Done)
    and whether it is a `feature/` or a `hotfix/` branch.
@@ -59,7 +67,7 @@ git commit -m "chore: set up devflow factory"
 5. **Approval**: the approver checks evidence for every checklist item.
 6. **Rule proposals**: conventions the agents discovered are shown to you one at a time; approved
    ones are added to the project playbook.
-7. **Pull request** on GitHub.
+7. **Pull request** on the configured forge (merge request on GitLab).
 
 `/devflow:factory` with no argument resumes the current feature, or starts the oldest queued one.
 When something needs a human, it stops and tells you which files to look at.
