@@ -1,0 +1,31 @@
+# Every pull request merged into main becomes a release: version bump in plugin.json (from the
+# PR title, see .github/scripts/next-version.sh and release.sh), CHANGELOG.md entry, tag and GitHub Release.
+name: release
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # No concurrency group: GitHub keeps only one pending run per group and cancels the others,
+      # which would drop releases. release.sh retries the push on a fresh main instead.
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash .github/scripts/release.sh
