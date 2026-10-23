@@ -17,7 +17,7 @@ Talk to the user in their language. Artifacts are written in the language of `fe
 
 ```
 factory/
-├── config.md                  committed
+├── config.md                  committed: commands, forge (github | gitlab | azure | git), forge_host, ...
 ├── playbook.md                committed: project rules + Definition of Done (user-approved)
 ├── backlog.md                 committed: deferred logic queued on the board (see Deferring logic)
 ├── board.md                   everything except config.md, playbook.md and backlog.md is gitignored
@@ -53,20 +53,27 @@ On every state change update the row **and** append one log line (local time, `Y
 
 1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` or `factory/playbook.md`
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
-2. Read `factory/board.md`. For each `pr-open` row, `gh pr view <PR> --json state -q .state` (if
-   `gh` fails, skip this step and say so):
-   - `MERGED` → state `merged`, then clean up (below).
+   Read `factory/config.md` once; its frontmatter drives the run. Then read the **forge file**
+   `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
+   commands of the five forge operations `auth`, `open-pr`, `pr-state`, `issues-enabled`,
+   `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
+2. Read `factory/board.md`. If there are `pr-open` rows, `git fetch --prune` once, then run
+   **pr-state** for each (PR reference from the PR column, branch from the branch column):
+   - `MERGED` → state `merged`.
    - `CLOSED` → state `closed`; keep the branch. Tell the user in one line: to resume it, set the
      state by hand (e.g. `approve`) and reopen the PR; otherwise they can delete the branch.
-   - `OPEN` → nothing.
+   - `OPEN` → nothing. With forge `git`, list these rows in one line: if one was merged and not
+     detected (squash merge with resolved conflicts), the user sets it `merged` by hand.
+   - `UNKNOWN` → nothing; say in one line which rows could not be checked and why.
 
-   **Cleanup**, only if at least one row became `merged`:
-   1. `git fetch --prune` once (drops the tracking refs of deleted remote branches).
-   2. For each merged row, if the local branch exists and is not the current branch:
-      `git branch -D <kind>/<id>` and log "branch deleted". `-D` because after a squash or rebase
-      merge `-d` refuses; it is safe because `gh` has just confirmed `MERGED`. If it is the current
+   **Cleanup** of every `merged` row whose local branch still exists, including rows the user set
+   `merged` by hand:
+   1. If the branch is not the current branch: `git branch -D <kind>/<id>` and log "branch
+      deleted". `-D` because after a squash or rebase merge `-d` refuses; it is safe because
+      pr-state, or the user editing the board, has confirmed the merge. If it is the current
       branch, keep it and tell the user.
-   3. Update the base branch: if the current branch is `base_branch`, `git pull --ff-only`; else
+   2. If at least one branch was deleted or one row became `merged`, update the base branch: if the
+      current branch is `base_branch`, `git pull --ff-only`; else
       `git fetch origin <base_branch>:<base_branch>`. If it fails (local commits, conflicting
       changes), tell the user in one line and go on.
 3. Pick the feature to work on:
@@ -77,12 +84,10 @@ On every state change update the row **and** append one log line (local time, `Y
    - else, if an argument was given → create the feature (next free NNN, slug from the text, write
      `feature.md`, add the row as `interview`).
    - else the oldest `queued` row; if none, show the board and stop.
-4. Preconditions before `build`: `git status --porcelain` is empty, `gh auth status` succeeds.
+4. Preconditions before `build`: `git status --porcelain` is empty, **auth** succeeds.
    If not, tell the user what is wrong and stop.
 
 ## The loop
-
-Read `factory/config.md` once; its frontmatter drives the run.
 
 ### 0. Interview — state `interview`
 You run it (agents cannot talk to the user). Goal: nothing in the spec is guessed.
@@ -133,17 +138,10 @@ Only behaviour and requirements; project conventions go through rule proposals (
 2. Ask with AskUserQuestion: **Integrate / Defer**, recommended option first. Write the question and
    the answer in `## Interview` as the next `Q<n>`/`A<n>`.
 3. Integrate → it is part of the feature from now on: keep asking about its gaps.
-4. Defer → if `gh repo view --json hasIssuesEnabled -q .hasIssuesEnabled` prints `true`, open one
-   issue per logic, in the language of `feature.md`:
-   ```
-   gh label create devflow --color 5319E7 --description "Created by devflow factory"
-   gh label create deferred --color FBCA04 --description "Logic deferred from a devflow interview"
-   gh issue create --title "<short title>" --body-file <tmp> --label devflow,deferred,enhancement
-   ```
-   Ignore "already exists" from `gh label create`; if a label still cannot be used, create the
-   issue without it. Body: what the logic does, what was said about it, footer
-   `Deferred from <id> — <feature title>`.
-   Otherwise (no `gh`, not authenticated, no GitHub remote, issues disabled) → queue it: next free
+4. Defer → if **issues-enabled** is `true`, open one issue per logic with **create-issue**, in
+   the language of `feature.md`: title = short title; body (in a temp file) = what the logic does,
+   what was said about it, footer `Deferred from <id> — <feature title>`.
+   Otherwise (`false`, CLI missing or not authenticated, create-issue failed) → queue it: next free
    NNN, write `features/<new id>/feature.md` with the logic and the same footer, add the row as
    `queued` with a log line, and append `- <new id> — <logic> — deferred from <id>` to
    `factory/backlog.md` (create it with the heading `# Factory backlog`). The board is gitignored,
@@ -263,17 +261,15 @@ If `decision.md` already says `APPROVE` for this round (resume after an interrup
 skip the approver. Otherwise spawn `devflow:approver` (foreground) with feature dir, base branch,
 round. Read `decision.md` frontmatter:
 - `ESCALATE` → `needs-human` with the approver's reason.
-- `APPROVE` → rule proposals (6b), then open the PR:
-  ```
-  git push -u origin <kind>/<id>
-  gh pr create --base <base_branch> --head <kind>/<id> --title "<PR title>" --body-file <tmp>
-  ```
-  PR title = the `PR title:` line in `gate-r1.md` (Conventional Commits, so a squash merge leaves a
+- `APPROVE` → rule proposals (6b), then open the PR with **open-pr** (base `<base_branch>`, head
+  `<kind>/<id>`, title, body in a temp file). PR title = the `PR title:` line in `gate-r1.md` (Conventional Commits, so a squash merge leaves a
   conventional commit on the base branch); if missing, build it the same way from the spec title:
   `fix` for a hotfix, else `feat`, scope = the main area touched. Body = spec title as heading +
   spec goal + done checklist table from `decision.md` + non-blocking review notes + footer
   `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
-  `pr-open` with the PR URL, then `git switch <base_branch>`.
+  `pr-open` with the reference open-pr returned in the PR column (`-` with forge `git`: pass on its
+  message to the user), then `git switch <base_branch>`. If open-pr fails, `needs-human` with the
+  output.
 
 ### 6b. Rule proposals — still state `approve`
 `rule-proposals.md` collects, in order, the `## Rule proposals` of spec-writer, implementers and
