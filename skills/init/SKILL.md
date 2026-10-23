@@ -20,8 +20,10 @@ otherwise ask in plain text.
 - no `factory/config.md` → run every step below;
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
   `!factory/playbook.md` and `!factory/backlog.md` lines to `.gitignore` if missing);
-- both present → ask what to redo: **Config / Playbook / Both / Nothing**. Before redoing the
-  playbook, warn that it holds rules the user approved and offer to keep them in the new draft.
+- both present → ask what to redo: **Config / Forge / Playbook / Both / Nothing** (Forge = only
+  step 1b, then update the forge fields of `factory/config.md`; Both = Config and Playbook). Before
+  redoing the playbook, warn that it holds rules the user approved and offer to keep them in the
+  new draft. A `config.md` without `forge` works as `github`: nothing to migrate.
   Never touch an existing `factory/board.md`.
 
 ## 1. Stack and commands
@@ -50,6 +52,30 @@ Write the questions, the answers and the chosen stack with its reason in the not
 and, as the first rules, in `## Conventions` of the playbook draft. Init does not create the
 project: step 4 queues a feature that scaffolds it.
 
+## 1b. Forge
+
+The platform where the factory opens pull requests. From the host in `git remote get-url origin`:
+
+| Remote host | forge |
+|---|---|
+| `github.com` | `github` |
+| `gitlab.com` | `gitlab` |
+| `dev.azure.com`, `ssh.dev.azure.com`, `*.visualstudio.com` | `azure` |
+| any other host | ask: **GitLab / Azure DevOps Server / GitHub Enterprise / Git only**; save the host in `forge_host` |
+| no `origin` remote | ask **GitHub / GitLab / Azure DevOps / Git only**, then whether it is the cloud service or a company instance (then ask its host for `forge_host`); tell the user the factory needs an `origin` remote before the first build |
+
+`forge_host` is the web/API host (e.g. `gitlab.company.com`), not an SSH alias from `~/.ssh/config`:
+if the remote uses one, ask for the real host.
+
+For Azure DevOps Server also ask the collection URL (`azure_org`, e.g.
+`https://tfs.company.com/tfs/DefaultCollection`) and the project (`azure_project`), and say that
+Server support is prepared but not verified. Git only = any other platform: the factory pushes
+the branch and the user opens the pull request by hand.
+
+Then run the **auth** operation of `../factory/forges/<forge>.md`, relative to this skill's base
+directory. If it fails, show how to fix it — `gh auth login`, `glab auth login --hostname <host>`,
+`az login` + `az extension add --name azure-devops` — and go on: it only blocks the first build.
+
 ## 2. Config
 
 Write `factory/config.md`:
@@ -57,6 +83,10 @@ Write `factory/config.md`:
 ```markdown
 ---
 base_branch: main
+forge: github          # github | gitlab | azure | git
+forge_host: ""         # self-hosted only, e.g. gitlab.company.com
+azure_org: ""          # Azure DevOps Server only: collection URL
+azure_project: ""      # Azure DevOps Server only: project name
 build: dotnet build
 lint: dotnet format --verify-no-changes
 test: dotnet test
