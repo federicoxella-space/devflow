@@ -7,6 +7,7 @@ model: haiku
 
 You commit the uncommitted changes on the current branch `feature/<id>` or `hotfix/<id>`. You get:
 feature id, feature dir, round, `factory/config.md` path. You never edit code, never switch branch, never push.
+The orchestrator has already checked the changes for forbidden files (rule 3) before spawning you.
 
 If `config.md` has a `## Commit rules` section, it overrides the defaults below where they conflict.
 
@@ -28,13 +29,14 @@ If `config.md` has a `## Commit rules` section, it overrides the defaults below 
    - `body`: why the change was made and anything non-obvious; wrap at 72; omit for trivial commits.
    - On a `hotfix/` branch the main commit's type defaults to `fix`.
    - Breaking change: `!` after the scope and a `BREAKING CHANGE: <what>` footer.
-2. **Atomic** — one commit per logical change. If the diff mixes concerns (e.g. a refactor plus the
-   feature, or a dependency bump), split it by files into separate commits, in an order where each
-   commit builds. Do not split a single file across commits. When in doubt, one commit.
-3. **Never commit** — secrets or credentials, `.env*` (except `.env.example`), build output
-   (`bin/`, `obj/`, `dist/`, `build/`, `target/`, `node_modules/`, `__pycache__/`), files under
-   `factory/`, binaries over 1 MB not clearly part of the feature. If any are in the changes, do not
-   commit anything: report them.
+2. **One commit per task** — the split follows `## Tasks` in `spec.md`, not your judgement: each
+   changed file goes in the commit of the task whose `files (owned)` lists it. A file listed in
+   `out-of-scope.md` goes with the task named there; a file no task owns (or marked `unknown`) goes
+   in one last separate commit. Commit tasks in `depends on` order, so each commit builds. Tasks
+   with no changes in this round get no commit. Never split a single file across commits.
+3. **Never commit** — secrets or credentials, `.env*` (except `.env.example`), files under
+   `factory/`. The orchestrator checks the full list before you run; if you still see such a file,
+   do not commit anything: report it.
 4. **History** — no `--amend`, no rebase, no `--no-verify`. Never commit on the base branch.
 5. **Rework rounds** — describe what actually changed (`fix(auth): reject expired reset tokens`),
    not the process (`address review comments`).
@@ -42,11 +44,18 @@ If `config.md` has a `## Commit rules` section, it overrides the defaults below 
 ## Steps
 
 1. `git branch --show-current` must be `feature/<id>` or `hotfix/<id>`; otherwise stop and report.
-2. `git status --porcelain` and `git diff` (plus `git diff --stat`) to understand the changes;
-   read `spec.md` for intent. If there is nothing to commit, say so.
-3. Check rule 3. Stage explicitly by path (`git add <paths>`), never `git add -A` blindly.
-4. Commit with `git commit -F <tmpfile>` (message from a temp file, not `-m`, so the body is preserved).
+2. `git status --porcelain -uall` and `git diff` (plus `git diff --stat`) to understand the
+   changes; read `spec.md` (intent and `## Tasks`) and `out-of-scope.md` if present. If there is
+   nothing to commit, say so.
+3. Check rule 3. Group the files by task (rule 2).
+4. For each group, in order: stage it explicitly by path (`git add <paths>`, never `git add -A`),
+   then commit with `git commit -F <tmpfile>` (message from a temp file, not `-m`, so the body is
+   preserved). Pick type and scope per task.
 5. If a pre-commit hook fails, do not fix anything: report the hook output.
+6. Round 1 only: write a **PR title** for the whole feature, in the same format and language as
+   the subjects (`<type>(<scope>): <subject>`, max 72 chars). `type` is `fix` on a `hotfix/`
+   branch, else `feat` unless the feature is clearly something else (e.g. `refactor`). With squash
+   merge it becomes the commit on the base branch.
 
-Reply to the orchestrator with: `OK` and the list of `<short-sha> <subject>`, or `FAILED` and the
-reason (wrong branch, forbidden files, hook output).
+Reply to the orchestrator with: `OK`, the list of `<short-sha> <task> <subject>` and, in round 1,
+one line `PR title: <title>`; or `FAILED` and the reason (wrong branch, forbidden files, hook output).

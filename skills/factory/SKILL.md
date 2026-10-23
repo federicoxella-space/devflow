@@ -45,15 +45,30 @@ factory/
 - 2026-10-20 14:02 · 003-password-reset · build → review
 ```
 
-States: `queued → interview → spec → spec-review → build → review → approve → pr-open → merged`, plus `needs-human`.
+States: `queued → interview → spec → spec-review → build → review → approve → pr-open → merged`, plus
+`needs-human` and `closed` (PR closed without merge).
 On every state change update the row **and** append one log line (local time, `YYYY-MM-DD HH:MM`).
 
 ## Entry point
 
 1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` or `factory/playbook.md`
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
-2. Read `factory/board.md`. For each `pr-open` row, `gh pr view <PR> --json state -q .state`; mark
-   `MERGED` as `merged`.
+2. Read `factory/board.md`. For each `pr-open` row, `gh pr view <PR> --json state -q .state` (if
+   `gh` fails, skip this step and say so):
+   - `MERGED` → state `merged`, then clean up (below).
+   - `CLOSED` → state `closed`; keep the branch. Tell the user in one line: to resume it, set the
+     state by hand (e.g. `approve`) and reopen the PR; otherwise they can delete the branch.
+   - `OPEN` → nothing.
+
+   **Cleanup**, only if at least one row became `merged`:
+   1. `git fetch --prune` once (drops the tracking refs of deleted remote branches).
+   2. For each merged row, if the local branch exists and is not the current branch:
+      `git branch -D <kind>/<id>` and log "branch deleted". `-D` because after a squash or rebase
+      merge `-d` refuses; it is safe because `gh` has just confirmed `MERGED`. If it is the current
+      branch, keep it and tell the user.
+   3. Update the base branch: if the current branch is `base_branch`, `git pull --ff-only`; else
+      `git fetch origin <base_branch>:<base_branch>`. If it fails (local commits, conflicting
+      changes), tell the user in one line and go on.
 3. Pick the feature to work on:
    - a row in `interview`, `spec`, `spec-review`, `build`, `review` or `approve` → **resume it**
      from that state. If it has no `features/<id>/playbook.md` (old format), set it back to
@@ -201,8 +216,21 @@ Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the 
   commit (4b).
 
 ### 4b. Commit
-Spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path.
-- `OK` → append the commit list to `gate-r<round>.md`, state `review`.
+First check for **forbidden files** yourself: list the changed paths with
+`git status --porcelain -uall`. Forbidden:
+- secrets or credentials, `.env*` (except `.env.example`);
+- build output: any path segment `bin/`, `obj/`, `dist/`, `build/`, `target/`, `node_modules/`,
+  `__pycache__/`;
+- files under `factory/`;
+- files over 1 MB that no task lists in `files (owned)`.
+
+A pattern that `## Commit rules` in `config.md` explicitly allows (e.g. "commit `dist/`") is not
+forbidden. Any forbidden file → `needs-human` with the list of paths; do not spawn the committer.
+
+Then spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path. It
+makes one commit per task, following `## Tasks` in the spec.
+- `OK` → append the commit list (and, in round 1, the `PR title:` line) to `gate-r<round>.md`,
+  state `review`.
 - `FAILED` because of a commit hook → write the output to `gate-r<round>.md` and treat it as a gate
   fail (rework, same retry limit).
 - `FAILED` for anything else (forbidden files, wrong branch) → `needs-human` with the reason.
@@ -238,11 +266,14 @@ round. Read `decision.md` frontmatter:
 - `APPROVE` → rule proposals (6b), then open the PR:
   ```
   git push -u origin <kind>/<id>
-  gh pr create --base <base_branch> --head <kind>/<id> --title "<spec title>" --body-file <tmp>
+  gh pr create --base <base_branch> --head <kind>/<id> --title "<PR title>" --body-file <tmp>
   ```
-  Body = spec goal + done checklist table from `decision.md` + non-blocking review notes +
-  footer `Built by devflow factory, <N> review round(s)`. Set state `pr-open` with the PR URL,
-  then `git switch <base_branch>`.
+  PR title = the `PR title:` line in `gate-r1.md` (Conventional Commits, so a squash merge leaves a
+  conventional commit on the base branch); if missing, build it the same way from the spec title:
+  `fix` for a hotfix, else `feat`, scope = the main area touched. Body = spec title as heading +
+  spec goal + done checklist table from `decision.md` + non-blocking review notes + footer
+  `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
+  `pr-open` with the PR URL, then `git switch <base_branch>`.
 
 ### 6b. Rule proposals — still state `approve`
 `rule-proposals.md` collects, in order, the `## Rule proposals` of spec-writer, implementers and
