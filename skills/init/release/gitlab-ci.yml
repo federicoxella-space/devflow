@@ -1,0 +1,22 @@
+# Installed by devflow {{DEVFLOW_VERSION}}. Re-run /devflow:init → Release to update.
+# Every push to {{BASE_BRANCH}} (merge requests included) becomes a release: tag vX.Y.Z and a GitLab
+# release whose notes are the MR title (see .devflow/release.sh). Uses only the job token: nothing
+# is pushed to the branch. Included from .gitlab-ci.yml.
+#
+# DEVFLOW_RELEASE_IMAGE: override it in Settings → CI/CD → Variables if the runner cannot pull
+# alpine from Docker Hub; the image needs bash, git and curl (jq optional). Ignored by shell executors.
+variables:
+  DEVFLOW_RELEASE_IMAGE: "alpine:3"
+
+devflow-release:
+  stage: .post
+  image: $DEVFLOW_RELEASE_IMAGE
+  resource_group: devflow-release
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: $CI_COMMIT_BRANCH == "{{BASE_BRANCH}}" && $CI_PIPELINE_SOURCE == "push"
+  before_script:
+    - if command -v apk > /dev/null; then apk add --no-cache bash git curl jq > /dev/null; fi
+  script:
+    - RELEASE_FORGE=gitlab RELEASE_SHA=$CI_COMMIT_SHA bash .devflow/release.sh
