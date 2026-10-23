@@ -20,10 +20,12 @@ otherwise ask in plain text.
 - no `factory/config.md` → run every step below;
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
   `!factory/playbook.md` and `!factory/backlog.md` lines to `.gitignore` if missing);
-- both present → ask what to redo: **Config / Forge / Playbook / Both / Nothing** (Forge = only
-  step 1b, then update the forge fields of `factory/config.md`; Both = Config and Playbook). Before
-  redoing the playbook, warn that it holds rules the user approved and offer to keep them in the
-  new draft. A `config.md` without `forge` works as `github`: nothing to migrate.
+- both present → ask what to redo, with AskUserQuestion `multiSelect`: **Config**, **Forge**,
+  **Release**, **Playbook** (none selected = nothing). Forge = only step 1b, then update the forge
+  fields of `factory/config.md`; Release = only step 1c, which also updates the release files after
+  a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
+  offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
+  `release` as `off`: nothing to migrate.
   Never touch an existing `factory/board.md`.
 
 ## 1. Stack and commands
@@ -76,6 +78,43 @@ Then run the **auth** operation of `../factory/forges/<forge>.md`, relative to t
 directory. If it fails, show how to fix it — `gh auth login`, `glab auth login --hostname <host>`,
 `az login` + `az extension add --name azure-devops` — and go on: it only blocks the first build.
 
+## 1c. Release
+
+Only with forge `github` or `gitlab`; otherwise write `release: off` and skip this step.
+Explain in two lines: every pull request merged into the base branch becomes a release, tag
+`vX.Y.Z` plus an entry on the Releases page with the PR title; the version comes from the PR title
+(`feat` → minor, breaking → major, anything else → patch); nothing is committed by the CI, so it
+works with a protected base branch. Ask **Enable / Skip** → `release: auto | off`.
+
+Enable → copy from `release/` in this skill's base directory, replacing `{{DEVFLOW_VERSION}}` with
+`version` from the plugin's `.claude-plugin/plugin.json` (two levels above this skill) and
+`{{BASE_BRANCH}}` with `base_branch`:
+- `release.sh` and `next-version.sh` → `.devflow/` (overwrite: this is also the update path);
+- github → `github-workflow.yml` → `.github/workflows/devflow-release.yml`;
+- gitlab → `gitlab-ci.yml` → `.devflow/gitlab-release.yml`, and in `.gitlab-ci.yml` the include
+  `- local: .devflow/gitlab-release.yml`: add it to an existing `include:` list, or add `include:`
+  with it; if `include:` exists but is not a list, show the line and ask the user to add it. Never
+  rewrite the rest of the file. The job runs in `.post`, and GitLab creates no pipeline with
+  only .pre/.post jobs: if `.gitlab-ci.yml` is missing, create it as
+  ```yaml
+  include:
+    - local: .devflow/gitlab-release.yml
+  stages: [release]
+  devflow-release:
+    stage: release
+  ```
+  and if it exists but no other job runs on a push to the base branch, tell the user the release
+  job will not run until one does (or to add the same `stages`/`stage` override).
+
+GitLab only:
+- `glab api projects/:id` → if `merge_method` is not `merge`, warn: the MR title and number are
+  read from the merge commit, so with squash or fast-forward merges versions and notes will be
+  wrong. The user can still enable it.
+- Tell the user: if the runner cannot pull `alpine` from Docker Hub, set the CI/CD variable
+  `DEVFLOW_RELEASE_IMAGE` to an image with bash, git and curl; after the first release job, run
+  `glab api --method PUT projects/:id/resource_groups/devflow-release -f process_mode=oldest_first`
+  so queued releases run in merge order.
+
 ## 2. Config
 
 Write `factory/config.md`:
@@ -94,6 +133,7 @@ ui_review: none        # none | static | browser
 dev_server: ""         # browser only, e.g. npm run dev
 base_url: ""           # browser only, e.g. http://localhost:5173
 max_rounds: 2          # rework rounds after the first review
+release: "off"         # auto | off — automatic tag + release on every merged PR (github, gitlab)
 ---
 Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
 
@@ -158,6 +198,8 @@ factory/*
 
 ## 5. Hand-over
 
-Ask the user to commit `factory/config.md`, `factory/playbook.md` and `.gitignore`, then to run
+Ask the user to commit `factory/config.md`, `factory/playbook.md`, `.gitignore` and, with
+`release: auto`, `.devflow/` plus the CI file (`.github/workflows/devflow-release.yml` or
+`.gitlab-ci.yml`), then to run
 `/devflow:factory <feature description>` (or `/devflow:factory` alone to start the scaffold
 feature).
