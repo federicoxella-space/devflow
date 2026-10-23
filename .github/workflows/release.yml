@@ -1,5 +1,5 @@
 # Every pull request merged into main becomes a release: version bump in plugin.json (from the
-# PR title, see .github/scripts/next-version.sh), CHANGELOG.md entry, tag and GitHub Release.
+# PR title, see .github/scripts/next-version.sh and release.sh), CHANGELOG.md entry, tag and GitHub Release.
 name: release
 
 on:
@@ -9,10 +9,6 @@ on:
 
 permissions:
   contents: write
-
-concurrency:
-  group: release
-  cancel-in-progress: false
 
 jobs:
   release:
@@ -24,47 +20,12 @@ jobs:
           ref: main
           fetch-depth: 0
 
+      # No concurrency group: GitHub keeps only one pending run per group and cancels the others,
+      # which would drop releases. release.sh retries the push on a fresh main instead.
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          git pull --ff-only origin main
-
-          if grep -q "(#$PR_NUMBER)\$" CHANGELOG.md; then
-            echo "PR #$PR_NUMBER is already released, nothing to do"
-            exit 0
-          fi
-
-          body_file=$(mktemp)
-          printf '%s' "$PR_BODY" > "$body_file"
-          current=$(jq -r .version .claude-plugin/plugin.json)
-          last_tag=$(git tag -l 'v*' --sort=-v:refname | head -1)
-          next=$(bash .github/scripts/next-version.sh "$PR_TITLE" "$body_file" "$current" "${last_tag#v}")
-
-          if git rev-parse -q --verify "refs/tags/v$next" > /dev/null; then
-            echo "v$next already exists, nothing to release"
-            exit 0
-          fi
-
-          jq --indent 2 --arg v "$next" '.version = $v' .claude-plugin/plugin.json > plugin.json.tmp
-          mv plugin.json.tmp .claude-plugin/plugin.json
-
-          entry="- $PR_TITLE (#$PR_NUMBER)"
-          awk -v head="## v$next — $(date -u +%F)" -v entry="$entry" '
-            NR == 1 { print; print ""; print head; print entry; print ""; next }
-            NR == 2 && $0 == "" { next }
-            { print }
-          ' CHANGELOG.md > CHANGELOG.tmp
-          mv CHANGELOG.tmp CHANGELOG.md
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .claude-plugin/plugin.json CHANGELOG.md
-          git commit -m "chore(release): v$next"
-          git tag -a "v$next" -m "v$next"
-          git push origin main "v$next"
-          gh release create "v$next" --title "v$next" --notes "$entry"
+        run: bash .github/scripts/release.sh

@@ -19,7 +19,8 @@ capire se un plugin installato va aggiornato: senza bump un merge non arriva agl
   portano Node per aggiornare un solo JSON.
 
 ## Design
-- File: `.github/workflows/release.yml`, solo bash + `jq` + `gh` (presenti sui runner GitHub).
+- File: `.github/workflows/release.yml` che chiama `.github/scripts/release.sh` (testabile in locale);
+  solo bash, `sed`, `git`, `gh`.
 - Trigger: `pull_request` `closed` su `main` con `merged == true`. Fonte del bump = **titolo della
   PR** (non il commit: il repo ammette anche merge commit e rebase).
 - Bump (scelta mia): `<type>!:` o `BREAKING CHANGE` nel body → major, ma finché la versione è
@@ -31,8 +32,10 @@ capire se un plugin installato va aggiornato: senza bump un merge non arriva agl
   in testa a `CHANGELOG.md` `## vX.Y.Z — YYYY-MM-DD` + `- <titolo PR> (#N)`, commit
   `chore(release): vX.Y.Z` come `github-actions[bot]`, tag annotato, push, `gh release create`
   con la voce del changelog come note.
-- Sicurezza: `permissions: contents: write`; `concurrency: release` senza cancel, così due merge
-  ravvicinati producono due release in sequenza. Il push con `GITHUB_TOKEN` non riattiva
+- Sicurezza: `permissions: contents: write`. Niente gruppo `concurrency` (GitHub tiene un solo run
+  in coda per gruppo e cancella gli altri): `release.sh` fa `git push --atomic` di main e tag e, se
+  rifiutato, riparte da `origin/main` aggiornato (max 5 tentativi). Re-run di una PR già nel
+  changelog: crea solo la GitHub Release se manca. Il push con `GITHUB_TOKEN` non riattiva
   workflow: nessun loop.
 - `CHANGELOG.md` iniziale con la voce `v0.6.0` (#2).
 
