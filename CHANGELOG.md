@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.9.1 — 2026-10-23
+- docs: describe forges, releases and merged branch cleanup in README (#6)
+
 ## v0.9.0 — 2026-10-23
 - feat(release): automatic releases for factory projects on GitHub and GitLab (#5)
 
