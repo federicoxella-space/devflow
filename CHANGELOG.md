@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.10.0 — 2026-10-24
+- feat(factory): default tasks to simple so sonnet handles most builds (#7)
+
 ## v0.9.1 — 2026-10-23
 - docs: describe forges, releases and merged branch cleanup in README (#6)
 
