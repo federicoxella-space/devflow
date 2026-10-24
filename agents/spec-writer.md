@@ -73,9 +73,13 @@ Rules:
 - **Tasks.** Split into several tasks only if at least two of them own disjoint files; otherwise one
   task `T1`. Every file the feature changes belongs to exactly one task, including its tests,
   fixtures/snapshots, lockfiles, migrations and generated files; shared files (DI
-  registration, routing, ...) go in one task the others depend on. `complexity: simple` = follows
-  an existing pattern, few files, no design decision, no migration, no new dependency; else
-  `complex`.
+  registration, routing, ...) go in one task the others depend on. `complexity` defaults to
+  `simple`: the implementer only executes what the spec decides, including additive migrations
+  (new table, column, index) and dependencies the spec names. `complex` only if the task needs a
+  design decision the spec cannot make up front, concurrency or security-sensitive logic, a
+  non-trivial algorithm, a destructive or data-transforming migration, or a change that cuts
+  across many modules. Aim for most tasks `simple`; when in doubt, decide in the spec and keep it
+  `simple`.
 - **Rule proposals.** A convention or pattern you found that the project playbook lacks, one line
   each. Omit the section if none.
 - No implementation plan beyond what the implementers need to know. When asked for changes, edit

@@ -29,9 +29,10 @@ switch branch, commit, push, or touch `factory/`.
 
 **Not simple after all.** Stop and reply `ESCALATE: <reason>` (keep what you changed in the working
 tree) if you find that the task needs a design decision the spec does not make, needs files it does
-not own or far more than its Context, needs a schema/data migration or a new dependency, or you fail
-to get the commands you run green after three serious attempts. Do not push through: the builder
-will take over.
+not own or far more than its Context, needs a migration that drops or transforms data, needs a
+dependency the spec does not name, or you fail to get the commands you run green after three
+serious attempts. Additive migrations and dependencies named in the spec are part of a simple task.
+Do not push through: the builder will take over.
 
 **Rework.** You get gate, commit-hook or review file paths, or a list of blocking items. Fix every
 item under `## Blocking` that concerns your files (all of them if the orchestrator hands you the
