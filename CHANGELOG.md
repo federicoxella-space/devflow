@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.11.0 — 2026-10-25
+- feat(skills): give short context before every user choice (#8)
+
 ## v0.10.0 — 2026-10-24
 - feat(factory): default tasks to simple so sonnet handles most builds (#7)
 
