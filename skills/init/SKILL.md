@@ -13,6 +13,9 @@ branch: at the end you ask the user to commit.
 Talk to the user in their language. Ask **one question at a time** and wait for the answer: the
 answer shapes the next question. Use AskUserQuestion when the question has natural options,
 otherwise ask in plain text.
+Before every choice, give a short context in two or three lines: what is being decided, why it
+comes up now, and what each option implies. The user must be able to choose without opening any
+file.
 
 ## Entry point
 
