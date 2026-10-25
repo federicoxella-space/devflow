@@ -13,6 +13,10 @@ file contents, so your context stays small.
 
 Talk to the user in their language. Artifacts are written in the language of `feature.md`.
 
+Before every choice you ask the user to make (AskUserQuestion or plain text), give a short
+context in two or three lines: what is being decided, why it comes up now, and what each option
+implies. The user must be able to choose without opening any file.
+
 ## Files (in the target project)
 
 ```
