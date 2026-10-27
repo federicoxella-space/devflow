@@ -98,12 +98,14 @@ with a `factory/config.md`.
   for its contract (what it reads, writes and decides with).
 - **Agents**: a live card for each devflow agent, coloured by model family, with its task,
   model · effort, the tool it is using and its elapsed time.
-- **Reentry**: an arrow back to the build phase, with the reason (gate failure, blocking review,
-  escalation).
+- **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
+  e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
+  shows on its builder card as `builder ← coder`.
 - **Header**: current phase, active agents, round (of `max_rounds`) and total time.
 - **Board summary**: with no feature running, the pane shows a summary of the board instead.
-- **Your turn**: a toast and a system notification when the factory needs you: an interview
-  question, a spec to approve, rule proposals, needs-human, and when the PR is opened.
+- **Your turn**: a toast and a system notification when the factory needs you: each interview
+  question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
+  the PR is opened.
 
 The pane opens by itself on the first `/devflow:factory` of a session; `/devflow-panel` opens and
 closes it at any time. It follows only the current session. The desktop app draws it as an animated
