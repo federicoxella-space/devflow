@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { isTerminal, parseBoard, summarize } from './board'
+import { bindFeature, featureOfArg, isTerminal, parseBoard, soleActive, summarize } from './board'
 
 const BOARD = `# Factory board
 
@@ -64,4 +64,32 @@ test('stati terminali', () => {
   expect(isTerminal('merged')).toBe(true)
   expect(isTerminal('closed')).toBe(true)
   expect(isTerminal('build')).toBe(false)
+})
+
+const row = (id: string, state: string) => ({ id, feature: id, state, round: 0, branch: '', pr: '' })
+const ROWS = [row('001-a', 'merged'), row('002-b', 'build'), row('003-c', 'review'), row('004-d', 'queued')]
+
+test('featureOfArg: id completo o NNN, altrimenti undefined', () => {
+  expect(featureOfArg('002-b', ROWS)).toBe('002-b')
+  expect(featureOfArg(' 003 ', ROWS)).toBe('003-c')
+  expect(featureOfArg('009', ROWS)).toBe(undefined)
+  expect(featureOfArg('009-x', ROWS)).toBe(undefined)
+  expect(featureOfArg('add a login page', ROWS)).toBe(undefined)
+  expect(featureOfArg('', ROWS)).toBe(undefined)
+  expect(featureOfArg(undefined, ROWS)).toBe(undefined)
+})
+test('soleActive: solo con esattamente una riga attiva', () => {
+  expect(soleActive(ROWS)).toBe(undefined)
+  expect(soleActive([row('001-a', 'merged'), row('002-b', 'build'), row('004-d', 'queued')])).toBe('002-b')
+  expect(soleActive([row('001-a', 'merged')])).toBe(undefined)
+  expect(soleActive([])).toBe(undefined)
+})
+test('bindFeature: la sola riga cambiata, o quella nominata nell input', () => {
+  expect(bindFeature([row('002-b', 'review')], 'qualsiasi')).toBe('002-b')
+  const two = [row('002-b', 'review'), row('003-c', 'build')]
+  expect(bindFeature(two, 'sed -i s/x/y/ factory/features/003-c/spec.md')).toBe('003-c')
+  expect(bindFeature(two, 'niente id')).toBe(undefined)
+  expect(bindFeature(two, '002-b e 003-c')).toBe(undefined)
+  expect(bindFeature(two, undefined)).toBe(undefined)
+  expect(bindFeature([], '002-b')).toBe(undefined)
 })
