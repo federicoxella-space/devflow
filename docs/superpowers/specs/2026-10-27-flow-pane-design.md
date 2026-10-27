@@ -60,11 +60,11 @@ Ogni momento in cui devflow aspetta l'utente deve raggiungerlo anche se è su un
 | Feature, stato, round, branch, PR | `factory/board.md` (riga + log), riletto a ogni `Write`/`Edit` su quel file e a `session.start` |
 | Fase attiva | stato del board, raffinato dagli agenti vivi (`devflow:*` in `subagentType`) e dai comandi del gate |
 | Agenti | `agent.spawn` (description, subagentType, model, effort), `$.agent.list()` (status) |
-| Strumento in uso | `tool.call` con `agentId` dell'agente |
+| Strumento in uso | `turn.step` dell'agente: lo strumento chiesto dal modello (nessun hook sul tool `Agent`) |
 | Gate | `tool.call` Bash che corrisponde ai comandi `build`/`lint`/`test` di `config.md`; esito da `gate-rN.md` |
 | Esiti review | frontmatter `verdict` di `reviews/rN-<name>.md`; motivo = primo item bloccante |
 | Escalation | spawn di `devflow:builder` per un task già assegnato a `devflow:coder` nello stesso round |
-| Attesa utente | `tool.call` di `AskUserQuestion` sul loop principale mentre è attivo `/devflow:factory` |
+| Attesa utente | `tool.call` di `AskUserQuestion` sul loop principale mentre è attivo `/devflow:factory`, oppure la fine normale del turno principale dopo lavoro della factory, con la feature in `interview`, `spec`, `spec-review` o `approve` |
 
 La mod si attiva solo se nel repo esiste `factory/config.md`; altrove non fa nulla.
 
@@ -73,9 +73,14 @@ La mod si attiva solo se nel repo esiste `factory/config.md`; altrove non fa nul
   chiamata `Skill` fino alla fine del lavoro o allo stop. Se il turno principale finisce
   normalmente mentre la feature è in `interview`, `spec`, `spec-review` o `approve`, la factory
   sta facendo una domanda in testo semplice: la run resta attiva, la fase passa a "tocca a te" e
-  parte la notifica, come per una domanda con AskUserQuestion. Il prompt successivo dell'utente è
-  la risposta e la fase torna in corso. Esc, un errore o la fine del turno in qualsiasi altro stato
-  chiudono la run. Una riga ferma in uno stato intermedio senza orchestratore attivo è mostrata nel
+  parte la notifica, come per una domanda con AskUserQuestion. Vale solo se nel turno la factory
+  ha lavorato (chiamata `Skill` di `devflow:factory`, spawn di un agente `devflow:*`, `Write`/`Edit`
+  del board, `AskUserQuestion` o un comando del gate): un turno che non ha fatto nulla per la
+  factory vuol dire che l'utente ha lasciato l'intervista per chiedere altro, e chiude la run senza
+  notifiche. Il prompt successivo dell'utente è la risposta e la fase torna in corso; contano solo
+  i prompt della persona (origine `composer` o `bridge`, o senza origine), non notifiche di task,
+  trigger pianificati, altre sessioni o `/devflow-panel`, e un turno nato da uno di questi lascia
+  l'attesa com'è. Esc, un errore o la fine del turno in qualsiasi altro stato chiudono la run. Una riga ferma in uno stato intermedio senza orchestratore attivo è mostrata nel
   riepilogo del board come "ferma in `<stato>`", mai animata.
 - *Tempi per fase*: misurati dalla mod ai cambi di stato e salvati in `$.store` per feature, così
   sopravvivono a un riavvio; per le fasi viste solo dal log del board si usa la precisione al

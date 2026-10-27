@@ -28,6 +28,8 @@ export type Run = {
   phaseStarted: Partial<Record<PhaseId, number>>; phaseEnded: Partial<Record<PhaseId, number>>; questions: number
   /** Domande o attese dell'utente in questa run: numera le notifiche, una per domanda */
   asks?: number
+  /** Lavoro della factory (skill, agenti devflow, board, domande, gate) dall'ultima risposta della persona */
+  activitySinceAnswer?: boolean
 }
 export type FlowView = {
   featureId: string; title: string; branch: string; round: number; maxRounds: number; elapsedMs: number

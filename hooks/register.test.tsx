@@ -93,6 +93,15 @@ const spawn = (description: string, subagentType: string, model = 'sonnet', prom
 const svgOf = (el: { props: Record<string, unknown> } | undefined) =>
   el && { alt: String(el.props.alt), source: String(el.props.source), isInteractive: el.props.isInteractive }
 
+/** Turno principale finito normalmente */
+const endTurn = (turnId: string, answer = 'ok') => ({ reason: 'answer' as const, answer, durationMs: 10, isAborted: false, turnId })
+const animated = async ($: Parameters<TestBody>[0]) => {
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  await ui.unmount()
+  return source.includes('<animate')
+}
+
 test('card di un coder durante la factory', async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
@@ -189,7 +198,7 @@ test('intervista in testo semplice: il turno finisce ma la run resta in attesa',
   const { calls, clock } = stubEngine(on, { files })
   on('prompt.submit', (_, e) => ({ text: e.text }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  await $.prompt.submit({ text: '/devflow:factory', wait: false, origin: { kind: 'user' } } as never)
+  await $.prompt.submit({ text: '/devflow:factory', wait: false, origin: { kind: 'composer' } })
   // la domanda è nel testo della risposta: il turno principale finisce normalmente
   await $.turn.complete({ reason: 'answer', answer: 'Quale provider email?', durationMs: 10, isAborted: false, turnId: 't1' })
   let ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
@@ -204,7 +213,7 @@ test('intervista in testo semplice: il turno finisce ma la run resta in attesa',
   expect(calls.invalidations > before).toBe(true)
 
   // la risposta dell'utente è un prompt qualsiasi: tocca di nuovo alla factory
-  await $.prompt.submit({ text: 'SendGrid', wait: false, origin: { kind: 'user' } } as never)
+  await $.prompt.submit({ text: 'SendGrid', wait: false, origin: { kind: 'composer' } })
   ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('interview phase')).toBe(true)
@@ -221,6 +230,12 @@ test('intervista in testo semplice: il turno finisce ma la run resta in attesa',
   expect(svg?.alt.includes('spec-writer Scrive la spec')).toBe(true)
   await ui.unmount()
   expect(calls.toasts.length).toBe(1)
+
+  // la spec ha una domanda in testo semplice: seconda notifica
+  await $.turn.complete({ reason: 'answer', answer: 'Includo il rate limit?', durationMs: 10, isAborted: false, turnId: 't2' })
+  expect(calls.toasts).toEqual(['003-reset: the interview has a question for you', '003-reset: the spec is ready for approval'])
+  // la factory resta attiva in attesa della persona
+  expect(await animated($)).toBe(true)
 })
 
 test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', async ($, on) => {
@@ -229,7 +244,9 @@ test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', a
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   await $.turn.complete({ reason: 'answer', answer: 'Domanda 1?', durationMs: 10, isAborted: false, turnId: 't1' })
-  await $.prompt.submit({ text: 'risposta', wait: false, origin: { kind: 'user' } } as never)
+  await $.prompt.submit({ text: 'risposta', wait: false, origin: { kind: 'composer' } })
+  // la factory annota la risposta sul board, poi fa la domanda successiva
+  await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'a', new_string: 'b' })
   await $.turn.complete({ reason: 'answer', answer: 'Domanda 2?', durationMs: 10, isAborted: false, turnId: 't2' })
   expect(calls.toasts.length).toBe(2)
   // Esc durante l'attesa: la run finisce
@@ -237,6 +254,59 @@ test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', a
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('<animate')).toBe(false)
   await ui.unmount()
+})
+
+test('intervista abbandonata: un prompt d altro chiude la run, niente notifiche a ogni turno', async ($, on) => {
+  const { calls, clock } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') } })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete(endTurn('t1', 'Quale provider email?'))
+  expect(calls.toasts.length).toBe(1)
+  // la persona chiede altro: il turno non fa nulla per la factory
+  await $.prompt.submit({ text: 'come si rinomina un branch?', wait: false, origin: { kind: 'composer' } })
+  await $.turn.complete(endTurn('t2', 'git branch -m'))
+  expect(calls.toasts.length).toBe(1)
+  expect(calls.notifies.length).toBe(1)
+  expect(await animated($)).toBe(false)
+  const before = calls.invalidations
+  await clock.advance(3000)
+  expect(calls.invalidations).toBe(before)
+  // un altro turno: ancora niente
+  await $.prompt.submit({ text: 'e uno remoto?', wait: false, origin: { kind: 'composer' } })
+  await $.turn.complete(endTurn('t3', 'git push origin :old new'))
+  expect(calls.toasts.length).toBe(1)
+  expect(calls.notifies.length).toBe(1)
+})
+
+test('prompt non della persona: l attesa resta, nessuna nuova notifica', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') } })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete(endTurn('t1', 'Quale provider email?'))
+  await $.prompt.submit({ text: 'task finito', wait: false, origin: { kind: 'task-notification' } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('fill:var(--br)">your turn<')).toBe(true)
+  await ui.unmount()
+  await $.turn.complete(endTurn('t2', 'preso nota'))
+  expect(calls.toasts.length).toBe(1)
+  expect(calls.notifies.length).toBe(1)
+  // la factory aspetta ancora la persona
+  expect(await animated($)).toBe(true)
+})
+
+test('/devflow-panel non è la risposta della persona: l attesa resta', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') } })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete(endTurn('t1', 'Quale provider email?'))
+  await $.prompt.submit({ text: '/devflow-panel', wait: false, origin: { kind: 'composer' } })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('fill:var(--br)">your turn<')).toBe(true)
+  await ui.unmount()
+  expect(calls.toasts.length).toBe(1)
 })
 
 test('fine turno principale in build: la run finisce', async ($, on) => {
@@ -309,7 +379,7 @@ test('/devflow:factory scritto dall utente avvia la run', async ($, on) => {
   })
   on('prompt.submit', (_, e) => ({ text: e.text }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
-  await $.prompt.submit({ text: '/devflow:factory', wait: false, origin: { kind: 'user' } } as never)
+  await $.prompt.submit({ text: '/devflow:factory', wait: false, origin: { kind: 'composer' } })
   expect(calls.opened).toEqual(['devflow-flow'])
   await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
   // il comando del gate accende la fase gate finché gira

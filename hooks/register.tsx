@@ -175,7 +175,9 @@ const startRun = async ($: $) => {
   const phase = phaseOfState(board.rows.find(r => r.id === featureId)?.state ?? '')
   if (phase && times.phaseStarted[phase] === undefined) times.phaseStarted[phase] = now
   // il contatore delle domande prosegue fra una run e l'altra: una domanda nuova non riusa la chiave di una già notificata
-  const run = await update($, runAtom, cur => ({ ...emptyRun(), featureId, active: true, startedAt: now, ...times, asks: cur.asks ?? 0 }))
+  const run = await update($, runAtom, cur => ({
+    ...emptyRun(), featureId, active: true, startedAt: now, ...times, asks: cur.asks ?? 0, activitySinceAnswer: true,
+  }))
   await saveTimes($, run)
   lastRows = new Map(board.rows.map(r => [r.id, r]))
   if (!openedOnce) {
@@ -185,6 +187,12 @@ const startRun = async ($: $) => {
   }
   redraw($)
 }
+
+/** Il turno ha lavorato per la factory: la sua fine normale può essere una domanda alla persona */
+const markActivity = ($: $) => update($, runAtom, r => (r.active && !r.activitySinceAnswer ? { ...r, activitySinceAnswer: true } : r))
+
+/** Il prompt viene dalla persona (Enter al terminale o Remote Control); senza origine si presume la persona */
+const fromPerson = (origin: { kind: string } | undefined) => !origin || origin.kind === 'composer' || origin.kind === 'bridge'
 
 const shift = (run: Run, from: string | undefined, to: string, now: number): Run => {
   const a = phaseOfState(from ?? ''), b = phaseOfState(to)
@@ -325,11 +333,12 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     if (enabled && (isFactory(e.command?.name) || /^\/devflow:factory(\s|$)/.test(e.text.trim()))) {
       await quiet(() => startRun($), undefined)
-    } else if (enabled) {
-      // la risposta dell'utente a una domanda in testo semplice: tocca di nuovo alla factory
+    } else if (enabled && fromPerson(e.origin) && e.command?.name !== COMMAND && !/^\/devflow-panel(\s|$)/.test(e.text.trim())) {
+      // la risposta della persona a una domanda in testo semplice: tocca di nuovo alla factory.
+      // Notifiche, peer, trigger e il comando del pane non sono una risposta.
       await quiet(async () => {
         if (!(await read($, runAtom)).waiting) return
-        await update($, runAtom, r => (r.active ? { ...r, waiting: false } : r))
+        await update($, runAtom, r => (r.active ? { ...r, waiting: false, activitySinceAnswer: false } : r))
         redraw($)
       }, undefined)
     }
@@ -342,6 +351,7 @@ export const register: Register = (on, options) => {
   on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
     if (!enabled || !isBoard(input.file_path)) return next(e)
+    await quiet(() => markActivity($), undefined)
     const r = await next(e)
     await quiet(() => boardChanged($), undefined)
     return r
@@ -366,7 +376,7 @@ export const register: Register = (on, options) => {
       const isNew = e.tool_use_id === undefined || e.tool_use_id !== lastAsk
       lastAsk = e.tool_use_id
       const cur = await update($, runAtom, r => ({
-        ...r, featureId: r.featureId ?? featureId, waiting: true,
+        ...r, featureId: r.featureId ?? featureId, waiting: true, activitySinceAnswer: true,
         asks: (r.asks ?? 0) + (isNew ? 1 : 0),
         questions: r.questions + (isNew && row?.state === 'interview' ? 1 : 0),
       }))
@@ -384,7 +394,7 @@ export const register: Register = (on, options) => {
     if (!enabled || e.agentId !== undefined || e.tool !== 'Bash') return next(e)
     const run = await quiet(() => read($, runAtom), emptyRun())
     if (!run.active || !isGateCommand(e.command, gateCommands)) return next(e)
-    await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true })); redraw($) }, undefined)
+    await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true, activitySinceAnswer: true })); redraw($) }, undefined)
     try {
       return await next(e)
     } finally {
@@ -394,6 +404,7 @@ export const register: Register = (on, options) => {
 
   on('agent.spawn', async ($, e, next) => {
     if (!enabled || !e.subagentType.startsWith('devflow:')) return next(e)
+    await quiet(() => markActivity($), undefined)
     const r = await next(e)
     if (r.deny === undefined && r.agentId) {
       const id = r.agentId
@@ -472,13 +483,16 @@ export const register: Register = (on, options) => {
         const run = await read($, runAtom)
         if (!run.active) return
         if (e.reason === 'answer') {
-          // una domanda in testo semplice chiude il turno: la factory aspetta la risposta, non è finita
+          // un turno non della persona (notifica, peer, trigger) finito durante l'attesa: si aspetta ancora lei
+          if (run.waiting && !run.activitySinceAnswer) return
+          // una domanda in testo semplice chiude il turno: la factory aspetta la risposta, non è finita.
+          // Solo se il turno ha lavorato per la factory: un turno su altro vuol dire intervista abbandonata
           const board = await loadBoard($)
           const featureId = run.featureId ?? pickFeature(board.rows, board.log)
           const row = board.rows.find(r => r.id === featureId)
-          if (row && WAIT_STATES.has(row.state)) {
+          if (row && WAIT_STATES.has(row.state) && run.activitySinceAnswer) {
             const cur = await update($, runAtom, r => ({
-              ...r, featureId: r.featureId ?? featureId, waiting: true, gateRunning: false,
+              ...r, featureId: r.featureId ?? featureId, waiting: true, gateRunning: false, activitySinceAnswer: false,
               asks: (r.asks ?? 0) + 1, questions: r.questions + (row.state === 'interview' ? 1 : 0),
             }))
             redraw($)
