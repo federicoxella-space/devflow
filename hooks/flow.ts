@@ -1,4 +1,4 @@
-import type { AgentCard, BoardRow, FlowView, GateResult, PhaseId, PhaseStatus, ReviewResult, Run } from '../types'
+import type { AgentCard, BoardRow, FlowView, Forge, GateResult, PhaseId, PhaseStatus, ReviewResult, Run } from '../types'
 
 export const PHASES = ['interview', 'spec', 'build', 'gate', 'commit', 'review', 'approver', 'finish'] as const satisfies readonly PhaseId[]
 
@@ -27,7 +27,7 @@ export const phaseOfState = (state: string): PhaseId | undefined => {
 }
 
 type Input = {
-  run: Run; row: BoardRow; agents: AgentCard[]; reviews: ReviewResult[]; gates: GateResult[]; maxRounds: number; now: number
+  run: Run; row: BoardRow; agents: AgentCard[]; reviews: ReviewResult[]; gates: GateResult[]; maxRounds: number; now: number; forge?: Forge
 }
 
 const latestReviews = (reviews: ReviewResult[], round: number) => {
@@ -40,7 +40,7 @@ const latestReviews = (reviews: ReviewResult[], round: number) => {
 const latestGate = (gates: GateResult[], round: number) =>
   gates.filter(g => g.round <= round).sort((a, b) => b.round - a.round)[0]
 
-export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now }: Input): FlowView => {
+export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now, forge = 'github' }: Input): FlowView => {
   const agents = allAgents.filter(a => a.startedAt >= run.startedAt)
   const running = agents.filter(a => a.status === 'running')
   const runningIdx = running.map(a => phaseOfAgent(a.type)).filter((p): p is PhaseId => !!p).map(idx)
@@ -82,9 +82,10 @@ export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRou
   const gate = latestGate(gates, row.round)
 
   let reentry: FlowView['reentry']
-  if (row.round > 1 && activeId === 'build') {
+  if (activeId === 'build') {
+    // il gate fallito del round corrente vale anche al round 1; la review solo dal round 2 (è del round prima)
     const cur = gates.find(g => g.round === row.round && !g.pass)
-    const bad = reviews.find(r => r.round === row.round - 1 && r.verdict === 'CHANGES')
+    const bad = row.round > 1 ? reviews.find(r => r.round === row.round - 1 && r.verdict === 'CHANGES') : undefined
     if (cur) reentry = { from: 'gate', to: 'build', reason: cur.reason ?? 'gate' }
     else if (bad) reentry = { from: 'review', to: 'build', reason: bad.reason ? `${bad.reviewer}: ${bad.reason}` : bad.reviewer }
   }
@@ -107,5 +108,7 @@ export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRou
     ...(reentry ? { reentry } : {}),
     reviews: shownReviews,
     ...(gate ? { gate } : {}),
+    questions: run.questions,
+    forge,
   }
 }

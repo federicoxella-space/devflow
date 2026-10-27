@@ -78,6 +78,12 @@ const agentSub = (agents: AgentCard[]): Sub => {
     : [{ text: roles }]
 }
 
+/** Sottotitolo di una fase senza agenti: domande dell'intervista e piattaforma della PR dalla vista */
+const phaseDesc = (t: Strings, id: PhaseId, view: FlowView): string =>
+  id === 'interview' && (view.questions ?? 0) > 0 ? t.questionsDesc(view.questions ?? 0)
+  : id === 'finish' ? t.finishDesc(view.forge ?? 'github')
+  : t.desc[id]
+
 const dot = (cx: number, cy: number, r: number, fill: string, style: string) =>
   `<polygon transform="translate(${n(cx)} ${n(cy)})" points="${hexPoints(r)}" ${fill} style="${style}"/>`
 
@@ -256,7 +262,7 @@ export function flowSvg(
     } else if (wait) {
       g += txt('d', X0, subY, esc(t.yourTurn), ' style="fill:var(--br)"')
     } else {
-      const parts = p.agents.length ? agentSub(p.agents) : [{ text: t.desc[p.id] }]
+      const parts = p.agents.length ? agentSub(p.agents) : [{ text: phaseDesc(t, p.id, view) }]
       g += txt('d', X0, subY, subSvg(parts, textRoom))
       if (view.reentry?.from === p.id)
         arrows.push({ fromX: X0 + Math.min(parts.map(x => x.text).join('').length, textRoom) * SMALL + 10, fromY: subY - 4 })
@@ -304,9 +310,10 @@ export function boardSvg(
   const W = Math.max(MIN_W, Math.floor(width))
   const B = t.board
   const total = summary.queued.length + summary.open.length + summary.stuck.length + summary.merged.length
-  let body = header(t, W, t.paneTitle, `${total}`)
+  let body = header(t, W, t.paneTitle, t.featureCount(total))
   let y = 96
-  const room = Math.floor((W - 40 - 24) / SMALL)
+  // testo a destra al massimo metà larghezza; il nome a sinistra prende il resto
+  const rightRoom = Math.floor((W / 2 - 20) / SMALL)
 
   const section = (label: string, count: number, rows: { left: string; right: string; color?: string }[]) => {
     body += txt('l', 20, y, `${esc(label.toUpperCase())} · ${count}`)
@@ -314,10 +321,11 @@ export function boardSvg(
     if (!rows.length) { y += 14; body += txt('d', 32, y, esc(B.none)); y += 14 }
     for (const r of rows) {
       y += 20
-      const rightW = r.right.length * SMALL
+      const right = cut(r.right, rightRoom)
+      const leftRoom = Math.floor((W - 20 - 38 - right.length * SMALL - 12) / CHAR)
       body += `<polygon transform="translate(26 ${y - 4})" points="${hexPoints(4)}" fill="none" style="stroke:var(${r.color ?? '--mu'})"/>` +
-        txt('m', 38, y, esc(cut(r.left, Math.max(8, Math.floor((W - 20 - 38 - rightW - 12) / CHAR))))) +
-        txt('d', W - 20, y, esc(cut(r.right, room)), ` text-anchor="end"${r.color ? ` style="fill:var(${r.color})"` : ''}`)
+        txt('m', 38, y, esc(cut(r.left, leftRoom))) +
+        txt('d', W - 20, y, esc(right), ` text-anchor="end"${r.color ? ` style="fill:var(${r.color})"` : ''}`)
     }
     y += 22
   }

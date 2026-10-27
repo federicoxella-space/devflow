@@ -1,7 +1,19 @@
 // Testi del pannello in italiano e inglese. Una lingua nuova = una tabella con le stesse chiavi (lo verifica il test).
-import type { PhaseId } from '../types'
+import type { Forge, PhaseId } from '../types'
 
 export type Lang = 'it' | 'en'
+
+/** Nome della piattaforma di `forge` (config.md) */
+export const FORGE_NAME: Record<Forge, string> = { github: 'GitHub', gitlab: 'GitLab', azure: 'Azure DevOps', git: 'git' }
+
+/** `forge` di config.md: assente o ignoto → github */
+export const parseForge = (value: unknown): Forge => {
+  const v = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  return v === 'gitlab' || v === 'azure' || v === 'git' ? v : 'github'
+}
+
+const enFinish = (forge: Forge) => `you decide · ${forge === 'git' ? 'then push the branch' : `then PR on ${FORGE_NAME[forge]}`}`
+const itFinish = (forge: Forge) => `qui tocca a te · ${forge === 'git' ? 'poi push del branch' : `poi PR su ${FORGE_NAME[forge]}`}`
 
 const en = {
   paneTitle: 'devflow',
@@ -19,8 +31,11 @@ const en = {
   desc: {
     interview: 'orchestrator · questions', spec: 'spec-writer · writes the spec', build: 'coder · builder',
     gate: 'orchestrator', commit: 'committer · Conventional Commits', review: 'reviewers · PASS or CHANGES',
-    approver: 'verifies the evidence', finish: 'you decide · then PR on github',
+    approver: 'verifies the evidence', finish: enFinish('github'),
   } as Record<PhaseId, string>,
+  questionsDesc: (n: number) => `orchestrator · ${n} ${n === 1 ? 'question' : 'questions'}`,
+  finishDesc: enFinish,
+  featureCount: (n: number) => `${n} ${n === 1 ? 'feature' : 'features'}`,
   contracts: {
     interview: 'Interview (orchestrator): reads feature.md, playbook, codebase. Asks until every criterion can be written without guessing; the human chooses integrate or defer for new logic.',
     spec: 'spec-writer: reads both playbooks and the codebase, writes spec.md and the done checklist. Decides kind, tasks with owned files and complexity, reviewers list.',
@@ -58,7 +73,7 @@ const en = {
     interview: (id: string) => `${id}: the interview has a question for you`,
     spec: (id: string) => `${id}: the spec is ready for approval`,
     approve: (id: string) => `${id}: rule proposals to review`,
-    needsHuman: (id: string, why: string) => `${id}: needs you${why ? ` - ${why}` : ''}`,
+    needsHuman: (id: string, why: string) => `${id}: needs you${why ? ` — ${why}` : ''}`,
     prOpen: (id: string, pr: string) => `${id}: PR open${pr ? ` ${pr}` : ''}, waiting for review`,
   },
 }
@@ -81,17 +96,20 @@ const it: Strings = {
   desc: {
     interview: 'orchestratore · domande', spec: 'spec-writer · scrive la spec', build: 'coder · builder',
     gate: 'orchestratore', commit: 'committer · Conventional Commits', review: 'reviewer · PASS o CHANGES',
-    approver: 'verifica le evidenze', finish: 'qui tocca a te · poi PR su github',
+    approver: 'verifica le prove', finish: itFinish('github'),
   },
+  questionsDesc: (n: number) => `orchestratore · ${n} ${n === 1 ? 'domanda' : 'domande'}`,
+  finishDesc: itFinish,
+  featureCount: (n: number) => `${n} feature`,
   contracts: {
-    interview: 'Intervista (orchestratore): legge feature.md, playbook, codebase. Chiede finché ogni criterio si può scrivere senza indovinare; l\'umano sceglie se integrare o rimandare la logica nuova.',
+    interview: 'Intervista (orchestratore): legge feature.md, il playbook e la codebase. Chiede finché ogni criterio si può scrivere senza indovinare; l\'utente sceglie se integrare o rimandare la logica nuova.',
     spec: 'spec-writer: legge i due playbook e la codebase, scrive spec.md e la checklist di fine lavori. Decide kind, task con file assegnati e complessità, elenco dei reviewer.',
-    build: 'coder / builder: legge spec.md, un task, le review. Scrive codice e test per i file assegnati (niente commit). Il coder manda ESCALATE al builder se il task non è semplice.',
-    gate: 'Gate (orchestratore): legge i comandi di config.md, scrive gate-rN.md. Decide dagli exit code.',
-    commit: 'committer: legge working tree, Tasks, regole di commit. Scrive Conventional Commits sul branch della feature, uno per task. Un hook che fallisce lo ferma.',
-    review: 'reviewer: leggono diff, spec.md, playbook. Scrivono reviews/rN-<nome>.md con la tabella checklist. Verdetto PASS o CHANGES (CHANGES solo per punti bloccanti).',
-    approver: 'approver: legge tutto quanto sopra, scrive decision.md. Ogni voce della checklist ha evidenza: APPROVE, altrimenti ESCALATE.',
-    finish: 'Rule proposals (orchestratore + umano): proposte di tutti gli agenti, scritte in factory/playbook.md sul branch della feature. L\'umano approva, modifica o scarta ciascuna.',
+    build: 'coder / builder: legge spec.md, il proprio task e le review. Scrive codice e test per i file assegnati (niente commit). Se il task non è semplice, il coder risponde ESCALATE e lo passa al builder.',
+    gate: 'Gate (orchestratore): legge i comandi di config.md, scrive gate-rN.md. Decide in base agli exit code.',
+    commit: 'committer: legge il working tree, la sezione Tasks e le regole di commit. Scrive i Conventional Commits sul branch della feature, uno per task. Si ferma se un hook fallisce.',
+    review: 'reviewer: leggono il diff, spec.md e i playbook. Scrivono reviews/rN-<nome>.md con la tabella della checklist. Verdetto PASS o CHANGES (CHANGES solo per punti bloccanti).',
+    approver: 'approver: legge tutto ciò che precede, scrive decision.md. Se ogni voce della checklist ha una prova: APPROVE, altrimenti ESCALATE.',
+    finish: 'Rule proposals (orchestratore + utente): proposte di tutti gli agenti, scritte in factory/playbook.md sul branch della feature. L\'utente approva, modifica o scarta ciascuna.',
   },
   thinking: 'Sta ragionando…',
   yourTurn: 'tocca a te',
@@ -107,7 +125,7 @@ const it: Strings = {
   gatePass: (round: number) => `r${round} pass`,
   gateFail: (round: number, reason: string) => `r${round} ✕ ${reason}`,
   board: {
-    queued: 'In coda', open: 'PR aperte', stuck: 'Ferme', merged: 'Ultime mergiate', none: 'nessuna',
+    queued: 'In coda', open: 'PR aperte', stuck: 'Ferme', merged: 'Merge recenti', none: 'nessuna',
   },
   stuckIn: (state: string) => `ferma in ${state || '(?)'}`,
   legend: {
@@ -120,8 +138,8 @@ const it: Strings = {
     interview: (id: string) => `${id}: l’intervista ha una domanda per te`,
     spec: (id: string) => `${id}: la spec è pronta per l’approvazione`,
     approve: (id: string) => `${id}: rule proposals da rivedere`,
-    needsHuman: (id: string, why: string) => `${id}: serve il tuo intervento${why ? ` - ${why}` : ''}`,
-    prOpen: (id: string, pr: string) => `${id}: PR aperta${pr ? ` ${pr}` : ''}, in attesa di revisione`,
+    needsHuman: (id: string, why: string) => `${id}: serve il tuo intervento${why ? ` — ${why}` : ''}`,
+    prOpen: (id: string, pr: string) => `${id}: PR aperta${pr ? ` ${pr}` : ''}, in attesa di review`,
   },
 }
 

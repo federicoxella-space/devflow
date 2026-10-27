@@ -15,13 +15,13 @@ const codePassR1: ReviewResult = { reviewer: 'code', round: 1, verdict: 'PASS' }
 type Sc = {
   state?: string; round?: number; active?: boolean; waiting?: boolean; gateRunning?: boolean
   agents?: AgentCard[]; reviews?: ReviewResult[]; gates?: GateResult[]
-  phaseStarted?: Run['phaseStarted']; phaseEnded?: Run['phaseEnded']; now?: number; startedAt?: number
+  phaseStarted?: Run['phaseStarted']; phaseEnded?: Run['phaseEnded']; now?: number; startedAt?: number; questions?: number
 }
 const scenario = (o: Sc = {}) => {
   const row: BoardRow = { id: '003-x', feature: 'Password reset', state: o.state ?? 'build', round: o.round ?? 1, branch: 'feature/003-x', pr: '' }
   const run: Run = {
     featureId: row.id, active: o.active ?? true, startedAt: o.startedAt ?? 1000, waiting: o.waiting ?? false,
-    gateRunning: o.gateRunning ?? false, phaseStarted: o.phaseStarted ?? {}, phaseEnded: o.phaseEnded ?? {}, questions: 0,
+    gateRunning: o.gateRunning ?? false, phaseStarted: o.phaseStarted ?? {}, phaseEnded: o.phaseEnded ?? {}, questions: o.questions ?? 0,
   }
   return { run, row, agents: o.agents ?? [], reviews: o.reviews ?? [], gates: o.gates ?? [], maxRounds: 3, now: o.now ?? 61000 }
 }
@@ -154,6 +154,16 @@ test('rientro dal gate se nessun CHANGES nel round precedente', () => {
   expect(v.reentry).toEqual({ from: 'gate', to: 'build', reason: 'tests rossi' })
   const w = deriveView(scenario({ state: 'build', round: 2, agents: [coderRunning], gates: [{ round: 2, pass: false }] }))
   expect(w.reentry?.reason).toBe('gate')
+})
+test('rientro dal gate gia al round 1', () => {
+  const v = deriveView(scenario({ state: 'build', round: 1, agents: [coderRunning], gates: [{ round: 1, pass: false, reason: 'tests rossi' }] }))
+  expect(v.reentry).toEqual({ from: 'gate', to: 'build', reason: 'tests rossi' })
+})
+test('domande e forge passano alla vista', () => {
+  const v = deriveView({ ...scenario({ state: 'interview', questions: 2 }), forge: 'gitlab' })
+  expect(v.questions).toBe(2)
+  expect(v.forge).toBe('gitlab')
+  expect(deriveView(scenario({})).forge).toBe('github')
 })
 test('niente rientro al round 1, fuori da build o senza esiti negativi', () => {
   expect(deriveView(scenario({ state: 'build', round: 1, reviews: [secChangesR1] })).reentry).toBeUndefined()

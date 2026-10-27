@@ -148,3 +148,40 @@ test('escape di motivi e nomi reviewer', () => {
   expect(source.includes('r&lt;&amp;&quot;')).toBe(true)
   expect(source.includes('a<&"b')).toBe(false)
 })
+
+const todoAll = (over: Partial<Record<PhaseId, FlowView['phases'][number]['status']>>) =>
+  PHASES.map(id => phase(id, over[id] ?? 'todo'))
+
+test('sottotitolo dell intervista con il numero di domande', () => {
+  const v: FlowView = { ...VIEW, reentry: undefined, reviews: [], phases: todoAll({ interview: 'active' }) }
+  expect(flowSvg({ ...v, questions: 3 }, 680, STRINGS.it, 'auto', NOW).source.includes('orchestratore · 3 domande')).toBe(true)
+  expect(flowSvg({ ...v, questions: 1 }, 680, STRINGS.en, 'auto', NOW).source.includes('orchestrator · 1 question<')).toBe(true)
+  expect(flowSvg({ ...v, questions: 0 }, 680, STRINGS.it, 'auto', NOW).source.includes('orchestratore · domande')).toBe(true)
+})
+test('fase finale con la piattaforma di config.md', () => {
+  const v: FlowView = { ...VIEW, reentry: undefined, reviews: [], phases: todoAll({ interview: 'active' }) }
+  expect(flowSvg(v, 680, STRINGS.en, 'auto', NOW).source.includes('you decide · then PR on GitHub')).toBe(true)
+  expect(flowSvg({ ...v, forge: 'gitlab' }, 680, STRINGS.it, 'auto', NOW).source.includes('qui tocca a te · poi PR su GitLab')).toBe(true)
+  expect(flowSvg({ ...v, forge: 'git' }, 680, STRINGS.it, 'auto', NOW).source.includes('poi push del branch')).toBe(true)
+  expect(flowSvg({ ...v, forge: 'git' }, 680, STRINGS.en, 'auto', NOW).source.includes('then push the branch')).toBe(true)
+})
+test('riepilogo del board: numero di feature nell intestazione', () => {
+  expect(boardSvg(SUMMARY, 680, STRINGS.en, 'auto').source.includes('>4 features<')).toBe(true)
+  expect(boardSvg(SUMMARY, 680, STRINGS.it, 'auto').source.includes('>4 feature<')).toBe(true)
+  const one: BoardSummary = { ...SUMMARY, open: [], stuck: [], merged: [] }
+  expect(boardSvg(one, 680, STRINGS.en, 'auto').source.includes('>1 feature<')).toBe(true)
+})
+test('riepilogo del board: motivo lungo non si sovrappone al nome', () => {
+  const reason = 'gate keeps failing on the integration tests of the payment provider after three rounds of fixes'
+  const s: BoardSummary = { ...SUMMARY, stuck: [{ row: { id: '002-login-with-a-long-name', feature: 'login with sso and many providers', state: 'needs-human', round: 2, branch: '', pr: '' }, reason }] }
+  for (const W of [360, 520, 680]) {
+    const { source } = boardSvg(s, W, STRINGS.en, 'auto')
+    const rows = [...source.matchAll(/<text class="m" x="38" y="([\d.]+)">([^<]*)<\/text><text class="d" x="([\d.]+)" y="\1" text-anchor="end"[^>]*>([^<]*)<\/text>/g)]
+    expect(rows.length).toBe(4)
+    for (const [, , left = '', rx = '0', right = ''] of rows) {
+      const leftEnd = 38 + left.length * 7.2
+      const rightStart = Number(rx) - right.length * 6.6
+      expect(leftEnd < rightStart).toBe(true)
+    }
+  }
+})
