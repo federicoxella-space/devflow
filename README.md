@@ -102,7 +102,7 @@ with a `factory/config.md`.
   shows on its builder card as `builder ← coder`.
 - **Header**: current phase, active agents, round (of `max_rounds`) and total time.
 - **Board summary**: with no feature running, the pane shows a summary of the board instead.
-- **Your turn**: a toast and a system notification when the factory needs you: each interview
+- **Your turn**: a toast when the factory needs you (a system notification too, from the terminal only; the desktop app's own banners cover questions and turn ends while the app is in the background): each interview
   question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
   the PR is opened.
 
