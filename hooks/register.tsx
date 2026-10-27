@@ -270,9 +270,19 @@ const agentPhase = async ($: $, type: string, edge: 'start' | 'end', now: number
   if (changed) await saveTimes($, run)
 }
 
-/** Un comando Bash è del gate se uno dei suoi pezzi (`&&`, `||`, `;`, `|`) inizia con build/lint/test di config.md */
-export const isGateCommand = (command: string, gates: readonly string[]) =>
-  gates.length > 0 && command.split(/&&|\|\||;|\|/).map(c => c.trim()).some(seg => gates.some(g => seg === g || seg.startsWith(`${g} `)))
+/** Un comando di shell è del gate se contiene (ovunque, anche tra virgolette o in un ciclo) build/lint/test di config.md, a meno di spazi e su confini di parola */
+export const isGateCommand = (command: string, gates: readonly string[]) => {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const cmd = norm(command)
+  const word = /\w/
+  return gates.map(norm).filter(g => g !== '').some(g => {
+    for (let i = cmd.indexOf(g); i !== -1; i = cmd.indexOf(g, i + 1)) {
+      const before = cmd[i - 1], after = cmd[i + g.length]
+      if ((before === undefined || !word.test(before)) && (after === undefined || !word.test(after))) return true
+    }
+    return false
+  })
+}
 
 /** Il board lo aggiorna anche l'orchestratore da shell (Get-Content/Set-Content, sed): dopo ogni comando lo si rilegge */
 const shellCall = async <E extends { agentId?: string; command: string }, R>($: $, e: E, next: (e: E) => Promise<R>): Promise<R> => {

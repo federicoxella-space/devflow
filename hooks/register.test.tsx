@@ -515,6 +515,30 @@ test('comandi del gate reali: pipe e catene; npm install no', async ($, on) => {
   expect(calls.toasts).toEqual([])
 })
 
+test('gate rilevato ovunque nel comando: ciclo PowerShell, Invoke-Expression; non comandi simili', async ($, on) => {
+  const gates = ['npx -y -p typescript tsc -p .', 'claude plugin validate .', 'claude plugin test .']
+  const config = CONFIG.replace('npm run build', () => gates[0] ?? '').replace('npm run lint', () => gates[1] ?? '').replace('npm test', () => gates[2] ?? '')
+  const seen: Record<string, string> = {}
+  const { calls } = stubEngine(on, {
+    files: { 'factory/config.md': config, 'factory/board.md': BOARD_BUILD },
+    bash: async command => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+      seen[command] = svgOf(await ui.find({ type: 'Svg' }))?.alt ?? ''
+      await ui.unmount()
+    },
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const loop = 'foreach ($c in @("npx -y -p typescript tsc -p .", "claude plugin validate .", "claude plugin test .")) { $o = Invoke-Expression "$c 2>&1"; "$c => $LASTEXITCODE" }'
+  const iex = 'Invoke-Expression "claude plugin test ."'
+  const others = ['claude plugin list', 'git status', 'claude plugin test .x']
+  for (const command of [loop, iex, ...others]) await $.tool.call({ tool: 'Bash', command })
+  expect(seen[loop]?.includes('gate phase')).toBe(true)
+  expect(seen[iex]?.includes('gate phase')).toBe(true)
+  for (const c of others) expect(seen[c]?.includes('build phase')).toBe(true)
+  expect(calls.toasts).toEqual([])
+})
+
 test('cambio del board durante il gate non spegne gateRunning', async ($, on) => {
   const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }
   let during = ''
