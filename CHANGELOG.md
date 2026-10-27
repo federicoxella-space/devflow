@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.12.0 — 2026-10-27
+- feat(pane): show the factory flow in a live pane (#9)
+
 ## v0.11.0 — 2026-10-25
 - feat(skills): give short context before every user choice (#8)
 
