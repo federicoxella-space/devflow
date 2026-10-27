@@ -281,41 +281,65 @@ const isFactory = (name: unknown) => typeof name === 'string' && name.replace(/^
 
 // ───────────── hook ─────────────
 
+const isConfig = (path: unknown) => typeof path === 'string' && /(^|[\\/])factory[\\/]config\.md$/i.test(path)
+
+/** Rilegge max_rounds, forge e comandi del gate da config.md */
+const loadConfig = async ($: $) => {
+  const cfg = frontmatter((await readText($, CONFIG)) ?? '')
+  const rounds = Number(cfg.max_rounds)
+  maxRounds = Number.isFinite(rounds) && rounds > 0 ? rounds : 2
+  forge = parseForge(cfg.forge)
+  gateCommands = [cfg.build, cfg.lint, cfg.test].filter((c): c is string => !!c && c.trim() !== '').map(c => c.trim())
+}
+
+let commandRegistered = false
+
+/** Attiva la mod (idempotente): config.md esiste ma la sessione era partita senza, o rilettura dopo una sua modifica */
+const activate = async ($: $, options: { language?: unknown }, fresh = false) => {
+  await loadConfig($)
+  if (enabled && !fresh) return
+  enabled = true
+  const settings = await quiet(() => $.settings.read(), {} as Awaited<ReturnType<$['settings']['read']>>)
+  const lang = resolveLang(options.language as never, settings.language,
+    await quiet(() => $.env.get('LC_ALL'), undefined), await quiet(() => $.env.get('LANG'), undefined))
+  t = STRINGS[lang]
+  mode = await paletteMode($)
+  openedOnce = false
+  notified = new Notified()
+  lastAsk = undefined
+  lastRows = new Map((await loadBoard($)).rows.map(r => [r.id, r]))
+  await update($, runAtom, run => ({ ...run, active: false, waiting: false, gateRunning: false }))
+  if (!commandRegistered) {
+    commandRegistered = true
+    await quiet(() => $.command.register({ name: COMMAND, description: t.commandDescription }), undefined)
+  }
+  try { ticker?.cancel() } catch { /* timer già fermo */ }
+  ticker = $.clock.every(1000, () => {
+    void quiet(async () => {
+      const run = await read($, runAtom)
+      if (!run.active) return
+      const live = run.gateRunning || run.waiting ||
+        Object.values(await read($, agentsAtom)).some(a => a.status === 'running' && a.startedAt >= run.startedAt)
+      if (live) redraw($)
+    }, undefined)
+  })
+}
+
+/** Mod inattiva: se nel frattempo config.md è comparso (init a metà sessione) la attiva */
+const ensureActive = async ($: $, options: { language?: unknown }) => {
+  if (enabled) return
+  await quiet(async () => { if (await $.fs.exists(CONFIG)) await activate($, options) }, undefined)
+}
+
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     try {
       // il timer di una sessione precedente si ferma anche se qui devflow non c'è
       try { ticker?.cancel() } catch { /* timer già fermo */ }
       ticker = undefined
-      enabled = await quiet(() => $.fs.exists(CONFIG), false)
-      if (enabled) {
-        const cfg = frontmatter((await readText($, CONFIG)) ?? '')
-        const rounds = Number(cfg.max_rounds)
-        maxRounds = Number.isFinite(rounds) && rounds > 0 ? rounds : 2
-        forge = parseForge(cfg.forge)
-        gateCommands = [cfg.build, cfg.lint, cfg.test].filter((c): c is string => !!c && c.trim() !== '').map(c => c.trim())
-        const settings = await quiet(() => $.settings.read(), {} as Awaited<ReturnType<$['settings']['read']>>)
-        const lang = resolveLang(options.language, settings.language,
-          await quiet(() => $.env.get('LC_ALL'), undefined), await quiet(() => $.env.get('LANG'), undefined))
-        t = STRINGS[lang]
-        mode = await paletteMode($)
-        openedOnce = false
-        notified = new Notified()
-        lastAsk = undefined
-        lastRows = new Map((await loadBoard($)).rows.map(r => [r.id, r]))
-        await update($, runAtom, run => ({ ...run, active: false, waiting: false, gateRunning: false }))
-        await quiet(() => $.command.register({ name: COMMAND, description: t.commandDescription }), undefined)
-        // Ridisegno ogni secondo (timer di card e tempo totale) solo mentre la factory gira e qualcosa avanza
-        ticker = $.clock.every(1000, () => {
-          void quiet(async () => {
-            const run = await read($, runAtom)
-            if (!run.active) return
-            const live = run.gateRunning || run.waiting ||
-              Object.values(await read($, agentsAtom)).some(a => a.status === 'running' && a.startedAt >= run.startedAt)
-            if (live) redraw($)
-          }, undefined)
-        })
-      }
+      commandRegistered = false
+      enabled = false
+      if (await quiet(() => $.fs.exists(CONFIG), false)) await activate($, options, true)
     } catch {
       // un errore qui non deve fermare l'avvio della sessione
     }
@@ -334,6 +358,7 @@ export const register: Register = (on, options) => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    if (!enabled && (isFactory(e.command?.name) || /^\/devflow:factory(\s|$)/.test(e.text.trim()))) await ensureActive($, options)
     if (enabled && (isFactory(e.command?.name) || /^\/devflow:factory(\s|$)/.test(e.text.trim()))) {
       await quiet(() => startRun($), undefined)
     } else if (enabled && fromPerson(e.origin) && e.command?.name !== COMMAND && !/^\/devflow-panel(\s|$)/.test(e.text.trim())) {
@@ -353,6 +378,16 @@ export const register: Register = (on, options) => {
   // Modello, effort e attività degli agenti arrivano da turn.step, come in agent-monitor.
   on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
+    if (isConfig(input.file_path)) {
+      // init scrive config.md: a file scritto si attiva la mod, o si rileggono i valori
+      const r = await next(e)
+      await quiet(async () => {
+        if (enabled) await activate($, options)
+        else await ensureActive($, options)
+        if (enabled) await markActivity($)
+      }, undefined)
+      return r
+    }
     if (!enabled || !inFactory(input.file_path)) return next(e)
     await quiet(() => markActivity($), undefined)
     if (!isBoard(input.file_path)) return next(e)
@@ -363,6 +398,7 @@ export const register: Register = (on, options) => {
 
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
+    if (!enabled && e.agentId === undefined && (isFactory(input.skill) || isFactory(input.command))) await ensureActive($, options)
     if (enabled && e.agentId === undefined && (isFactory(input.skill) || isFactory(input.command))) await quiet(() => startRun($), undefined)
     return next(e)
   })

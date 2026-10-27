@@ -150,6 +150,56 @@ test('repo senza devflow: nessun pane, nessun comando', async ($, on) => {
   await ui.unmount()
 })
 
+test('init a metà sessione: la Write di config.md attiva la mod', async ($, on) => {
+  const files: Record<string, string> = { 'factory/board.md': BOARD_BUILD }
+  const { calls } = stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(calls.commands).toEqual([])
+  // /devflow:init scrive config.md: il file esiste quando la Write ha finito
+  files['factory/config.md'] = CONFIG
+  await $.tool.call({ tool: 'Write', file_path: 'F:/repo/factory/config.md', content: CONFIG })
+  expect(calls.commands).toEqual(['devflow-panel'])
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  expect(calls.opened).toEqual(['devflow-flow'])
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('Test di regressione')).toBe(true)
+  expect(svg?.alt.includes('003-reset')).toBe(true)
+  expect(svg?.source.includes('R1/3')).toBe(true)
+  await ui.unmount()
+})
+
+test('config.md creato tra session.start e la Skill: la Skill attiva la mod', async ($, on) => {
+  const files: Record<string, string> = { 'factory/board.md': BOARD_BUILD }
+  const { calls } = stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(calls.commands).toEqual([])
+  files['factory/config.md'] = CONFIG
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  expect(calls.commands).toEqual(['devflow-panel'])
+  expect(calls.opened).toEqual(['devflow-flow'])
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('Test di regressione')).toBe(true)
+  await ui.unmount()
+})
+
+test('config.md riscritto con la mod attiva: rilegge max_rounds, comando registrato una volta', async ($, on) => {
+  const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }
+  const { calls } = stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  files['factory/config.md'] = CONFIG.replace('max_rounds: 3', 'max_rounds: 5')
+  await $.tool.call({ tool: 'Write', file_path: 'factory/config.md', content: CONFIG })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/5')).toBe(true)
+  await ui.unmount()
+  expect(calls.commands).toEqual(['devflow-panel'])
+})
+
 test('Esc a metà: fine turno principale ferma l animazione', async ($, on) => {
   const { calls, clock } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
