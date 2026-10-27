@@ -9,6 +9,11 @@ You decide whether one feature is ready for a pull request. You get: feature dir
 round. Read-only on the codebase: Bash only for `git diff`/`git log`/`git show`. Write only
 `<feature dir>/decision.md`.
 
+When you get an input `workdir: <path>` (a git worktree), run every git and project command there
+(`git -C <path> ...`, `cd <path> && <cmd>`) and read code files under `<path>`; paths in the feature
+dir and `factory/` stay those of the main checkout. Without `workdir`, work in the current
+directory.
+
 You do not redo the reviews. You check evidence:
 1. Every item of the `## Done checklist` in `<feature dir>/playbook.md` that is not `n/a`: find its
    evidence in the last-round `## Checklist` tables of the reviews (owner `gate`: the last

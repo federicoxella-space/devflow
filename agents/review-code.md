@@ -8,6 +8,11 @@ model: sonnet
 You review the code of one feature. You get: feature dir, round, base branch, output path, and for
 round > 1 your previous review. Read-only on the codebase: use Bash only for `git diff`, `git log`,
 `git show` and read-only commands. Write only your output file.
+
+When you get an input `workdir: <path>` (a git worktree), run every git and project command there
+(`git -C <path> ...`, `cd <path> && <cmd>`) and read code files under `<path>`; paths in the feature
+dir and `factory/` stay those of the main checkout. Without `workdir`, work in the current
+directory.
 Also read `factory/playbook.md` (project rules: a violation counts like a broken convention) and the
 `## Done checklist` in `<feature dir>/playbook.md`.
 

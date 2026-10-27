@@ -42,6 +42,8 @@ Run once in each repo you want to use the factory in.
   project.
 - Detects the **forge** from the `origin` remote (GitHub, GitLab, Azure DevOps); for a company
   instance it asks the platform and its host. Any other platform works in **git only** mode.
+- Asks where new features run (`workspace`: **Ask**, **Branch** or **Worktree**) and proposes
+  `worktree_setup`, the command that prepares a new worktree (e.g. `npm ci`).
 - Optionally enables **automatic releases** (GitHub and GitLab, see below).
 - Drafts the **project playbook**: conventions, patterns, reusable code and the Definition of
   Done. You review it before it is written.
@@ -59,7 +61,8 @@ git commit -m "chore: set up devflow factory"
 
 ### 2. Build a feature: `/devflow:factory <feature description>`
 
-1. **Interview**: questions one at a time until nothing has to be guessed. New logic that comes up
+1. **Interview**: first, if `workspace` is `ask`, whether the feature runs as a **branch** in your
+   checkout or in a separate **git worktree**; then questions one at a time until nothing has to be guessed. New logic that comes up
    (here or at spec approval) is either integrated, if it fits the feature, or deferred: an issue on
    the forge (labels `devflow`, `deferred`, `enhancement`; tags on Azure DevOps) when the repo
    accepts issues, otherwise a queued feature on the board, recorded in `factory/backlog.md`.
@@ -85,8 +88,16 @@ become `closed` and keep their branch. In git only mode merges are detected from
 commit, fast-forward, rebase, squash); a squash merge with resolved conflicts is not detected, so
 you set that row to `merged` on the board by hand.
 
-`/devflow:factory` with no argument resumes the current feature, or starts the oldest queued one.
-When something needs a human, it stops and tells you which files to look at.
+**Worktrees and parallel sessions.** In worktree mode the spec approval creates
+`../<repo>.worktrees/<id>` on the branch `<kind>/<id>`, runs `worktree_setup` there, and the build,
+commits and reviews happen in it, so your checkout stays free. The worktree stays until the PR is
+merged; the next run then removes it (never with `--force`: if it has local changes it is kept and
+you are told). Each session runs its own feature against the shared board.
+
+`/devflow:factory <id>` (or just `<NNN>`) resumes that feature. With no argument it resumes the
+only active feature; with several it asks which one, or **New feature**; with none it starts the
+oldest queued one. Any other argument is a new feature description. When something needs a human,
+it stops and tells you which files to look at.
 
 ### 3. Follow the run: the flow pane
 
@@ -107,7 +118,9 @@ with a `factory/config.md`.
   the PR is opened.
 
 The pane opens by itself on the first `/devflow:factory` of a session; `/devflow-panel` opens and
-closes it at any time. It follows only the current session. The desktop app draws it as an animated
+closes it at any time. It follows only the current session, and in it only the feature that session runs
+(from the `/devflow:factory` argument, or the first row the session changes), so parallel sessions
+each show their own feature. The desktop app draws it as an animated
 SVG image (animations stay in phase across the per-second redraws), the terminal gets a text version. Colours follow the light or dark theme.
 
 The pane language is the plugin option `language`: `auto` (default, follows the Claude Code
@@ -117,7 +130,7 @@ The pane language is the plugin option `language`: `auto` (default, follows the 
 
 ```
 factory/
-├── config.md          commands, forge, release, ui_review, max rounds   (committed)
+├── config.md          commands, forge, release, workspace, ui_review... (committed)
 ├── playbook.md        project rules + Definition of Done                (committed)
 ├── backlog.md         deferred logic queued on the board                (committed)
 ├── board.md           one row per feature + log                         (gitignored)

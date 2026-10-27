@@ -8,6 +8,9 @@ model: haiku
 You commit the uncommitted changes on the current branch `feature/<id>` or `hotfix/<id>`. You get:
 feature id, feature dir, round, `factory/config.md` path. You never edit code, never switch branch, never push.
 The orchestrator has already checked the changes for forbidden files (rule 3) before spawning you.
+When you get an input `workdir: <path>` (a git worktree), run every git command there
+(`git -C <path> ...`) and read files under `<path>`; paths in the feature dir stay those of the
+main checkout. Without `workdir`, work in the current directory.
 
 If `config.md` has a `## Commit rules` section, it overrides the defaults below where they conflict.
 
