@@ -88,6 +88,31 @@ you set that row to `merged` on the board by hand.
 `/devflow:factory` with no argument resumes the current feature, or starts the oldest queued one.
 When something needs a human, it stops and tells you which files to look at.
 
+### 3. Follow the run: the flow pane
+
+devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It only
+observes the session and the files in `factory/`; it never writes the board. It is active in repos
+with a `factory/config.md`.
+
+- **Phases**: a vertical line of the factory phases, each with its state and time.
+- **Agents**: a live card for each devflow agent, coloured by model family, with its task,
+  model · effort, the tool it is using and its elapsed time.
+- **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
+  e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
+  shows on its builder card as `builder ← coder`.
+- **Header**: current phase, active agents, round (of `max_rounds`) and total time.
+- **Board summary**: with no feature running, the pane shows a summary of the board instead.
+- **Your turn**: a toast when the factory needs you (a system notification too, from the terminal only; the desktop app's own banners cover questions and turn ends while the app is in the background): each interview
+  question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
+  the PR is opened.
+
+The pane opens by itself on the first `/devflow:factory` of a session; `/devflow-panel` opens and
+closes it at any time. It follows only the current session. The desktop app draws it as an animated
+SVG image (animations stay in phase across the per-second redraws), the terminal gets a text version. Colours follow the light or dark theme.
+
+The pane language is the plugin option `language`: `auto` (default, follows the Claude Code
+`language` setting, then `LANG`; English otherwise), `it` or `en`.
+
 ## Files in your repo
 
 ```
@@ -123,6 +148,47 @@ Every pull request merged into this repo is released automatically: the version 
 `.claude-plugin/plugin.json` is bumped from the PR title, an entry is added to
 [`CHANGELOG.md`](CHANGELOG.md), and a tag and GitHub Release are created. PR titles must follow
 Conventional Commits. `/plugin` updates the installed plugin when the version changes.
+
+### Testing a change before it is released
+
+Unreleased work is tested from the `develop` branch, which only receives merges of feature
+branches: nothing is committed on it directly, and it is never merged into `main` (each feature
+reaches `main` through its own pull request). On `develop` the marketplace is named `devflow-dev`,
+so it can sit next to the released `devflow` marketplace.
+
+Once, in the repo where you test, declare the marketplace and install the plugin in project
+scope (the declaration goes to `.claude/settings.json`, which this repo ignores):
+
+```bash
+claude plugin marketplace add "federicoxella-space/devflow#develop" --scope project
+claude plugin install devflow@devflow-dev --scope project
+```
+
+For every change you want to try:
+
+1. Bump the version in `.claude-plugin/plugin.json` on the feature branch and commit it. Use the
+   bump the PR title will ask for (`feat` → minor, anything else → patch); further changes to the
+   same unreleased feature only bump the patch. Without a new version the update below finds
+   nothing to do.
+2. Merge the feature branch into `develop` and push the merge.
+3. Refresh your local copy of the marketplace: `plugin update` compares against that copy, not
+   against GitHub.
+
+   ```bash
+   claude plugin marketplace update devflow-dev
+   ```
+
+4. Update the plugin in the scope it is installed in, then restart the session:
+
+   ```bash
+   claude plugin update devflow@devflow-dev --scope project
+   ```
+
+`plugin update` never moves to a lower version: after lowering one, reinstall with
+`claude plugin uninstall devflow@devflow-dev --scope project` and the install command above.
+
+Before opening the pull request, set the version back to the released one (the last tag): the
+test bumps never reach `main`, and the release workflow computes the new version from the PR title.
 
 ## More
 
