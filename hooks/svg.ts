@@ -293,6 +293,11 @@ export function flowAlt(view: FlowView, t: Strings): string {
 
 // ───────────── Board ─────────────
 
+export function boardAlt(summary: BoardSummary, t: Strings): string {
+  const B = t.board
+  return `${t.paneTitle}: ${B.queued} ${summary.queued.length}, ${B.open} ${summary.open.length}, ${B.stuck} ${summary.stuck.length}, ${B.merged} ${summary.merged.length}`
+}
+
 export function boardSvg(
   summary: BoardSummary, width: number, t: Strings, mode: PaletteMode,
 ): { source: string; height: number } {
@@ -326,6 +331,6 @@ export function boardSvg(
   section(B.merged, summary.merged.length, summary.merged.map(m => ({ left: name(m.row), right: [m.row.pr, m.at].filter(Boolean).join(' · ') })))
 
   const height = y + 4
-  const alt = `${t.paneTitle}: ${B.queued} ${summary.queued.length}, ${B.open} ${summary.open.length}, ${B.stuck} ${summary.stuck.length}, ${B.merged} ${summary.merged.length}`
+  const alt = boardAlt(summary, t)
   return { source: `${open(W, height, alt)}${styleBlock(mode)}${body}</svg>`, height }
 }

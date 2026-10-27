@@ -5,6 +5,9 @@ export type Lang = 'it' | 'en'
 
 const en = {
   paneTitle: 'devflow',
+  commandDescription: 'Open or close the devflow flow pane',
+  commandOpened: 'devflow pane opened.',
+  commandClosed: 'devflow pane closed.',
   phases: {
     interview: 'Interview', spec: 'Spec', build: 'Build', gate: 'Gate', commit: 'Commit',
     review: 'Review', approver: 'Approver', finish: 'Rule proposals and pull request',
@@ -64,6 +67,9 @@ export type Strings = typeof en
 
 const it: Strings = {
   paneTitle: 'devflow',
+  commandDescription: 'Apre o chiude il pannello del flusso devflow',
+  commandOpened: 'Pannello devflow aperto.',
+  commandClosed: 'Pannello devflow chiuso.',
   phases: {
     interview: 'Intervista', spec: 'Spec', build: 'Build', gate: 'Gate', commit: 'Commit',
     review: 'Review', approver: 'Approver', finish: 'Rule proposals e pull request',
@@ -113,7 +119,7 @@ const it: Strings = {
   attention: {
     interview: (id: string) => `${id}: l’intervista ha una domanda per te`,
     spec: (id: string) => `${id}: la spec è pronta per l’approvazione`,
-    approve: (id: string) => `${id}: rule proposal da rivedere`,
+    approve: (id: string) => `${id}: rule proposals da rivedere`,
     needsHuman: (id: string, why: string) => `${id}: serve il tuo intervento${why ? ` - ${why}` : ''}`,
     prOpen: (id: string, pr: string) => `${id}: PR aperta${pr ? ` ${pr}` : ''}, in attesa di revisione`,
   },
