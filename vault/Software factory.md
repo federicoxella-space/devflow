@@ -14,6 +14,7 @@ The factory is one skill, `/devflow:factory`. Whichever Claude Code session runs
 - Output is a pull request, never a direct merge to main. The forge (`github`, `gitlab`, `azure` or `git` only) is set in `factory/config.md`; the orchestrator reads only `forges/<forge>.md`, which maps five operations (auth, open-pr, pr-state, issues-enabled, create-issue) to that platform's CLI. In git-only mode merges are detected from git (`scripts/git-merged.sh`).
 - Optional automatic releases (`release: auto`, GitHub and GitLab): `/devflow:init` installs a CI job that tags every merged PR `vX.Y.Z` from its Conventional Commits title and creates a release with it, through the API only (`.devflow/release.sh`).
 - Re-running `/devflow:factory` resumes from the state in the board.
+- The flow pane mod (`hooks/`) only observes the session and `factory/`, to show phases, agents and "your turn" notifications; it never writes the board.
 
 ## The loop
 
@@ -78,4 +79,5 @@ skills/factory/SKILL.md (orchestrator)   factory/backlog.md  deferred logic queu
 skills/init/SKILL.md (setup)             factory/features/<id>/
 agents/*.md          (9 agents)              feature.md, playbook.md, spec.md, rule-proposals.md,
                                              gate-rN.md, reviews/rN-*.md, decision.md
+hooks/               (flow pane mod, read-only)
 ```
