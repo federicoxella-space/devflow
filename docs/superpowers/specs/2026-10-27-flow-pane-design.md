@@ -69,10 +69,14 @@ Ogni momento in cui devflow aspetta l'utente deve raggiungerlo anche se è su un
 La mod si attiva solo se nel repo esiste `factory/config.md`; altrove non fa nulla.
 
 **Scelte del designer (da confermare in lettura)**
-- *Feature attiva*: la fase anima solo mentre `/devflow:factory` gira in questa sessione (dalla
-  chiamata `Skill` fino alla fine del turno o allo stop). Una riga ferma in uno stato intermedio
-  senza orchestratore attivo è mostrata nel riepilogo del board come "ferma in `<stato>`", mai
-  animata.
+- *Feature attiva*: la fase anima solo mentre `/devflow:factory` gira in questa sessione, dalla
+  chiamata `Skill` fino alla fine del lavoro o allo stop. Se il turno principale finisce
+  normalmente mentre la feature è in `interview`, `spec`, `spec-review` o `approve`, la factory
+  sta facendo una domanda in testo semplice: la run resta attiva, la fase passa a "tocca a te" e
+  parte la notifica, come per una domanda con AskUserQuestion. Il prompt successivo dell'utente è
+  la risposta e la fase torna in corso. Esc, un errore o la fine del turno in qualsiasi altro stato
+  chiudono la run. Una riga ferma in uno stato intermedio senza orchestratore attivo è mostrata nel
+  riepilogo del board come "ferma in `<stato>`", mai animata.
 - *Tempi per fase*: misurati dalla mod ai cambi di stato e salvati in `$.store` per feature, così
   sopravvivono a un riavvio; per le fasi viste solo dal log del board si usa la precisione al
   minuto. Il conteggio delle domande dell'intervista è il numero di `AskUserQuestion` visti in

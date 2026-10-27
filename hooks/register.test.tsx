@@ -85,8 +85,8 @@ const stubEngine = (on: On, { files, bash }: { files: Record<string, string>; ba
   return { calls, clock }
 }
 
-const spawn = (description: string, subagentType: string, model = 'sonnet') => ({
-  tool_use_id: `tu-${description}`, prompt: 'p', description, subagentType, model,
+const spawn = (description: string, subagentType: string, model = 'sonnet', prompt = 'p') => ({
+  tool_use_id: `tu-${description}`, prompt, description, subagentType, model,
   provider: { plugin: 'engine', tier: 'core' as const }, parentModel: 'opus', background: false, fork: false,
 })
 /** Props dell'Svg disegnato, come stringhe */
@@ -165,18 +165,89 @@ test('Esc a metà: fine turno principale ferma l animazione', async ($, on) => {
   await ui.unmount()
 })
 
-test('domanda in spec-review: toast e notify una volta', async ($, on) => {
+test('domande in spec-review: una notifica per domanda, non per evento ripetuto', async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('spec-review') } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const ask = {
-    tool: 'AskUserQuestion' as const,
+  const ask = (tool_use_id: string) => ({
+    tool: 'AskUserQuestion' as const, tool_use_id,
     questions: [{ question: 'Approvi la spec?', header: 'Spec', multiSelect: false, options: [{ label: 'Sì', description: '' }, { label: 'No', description: '' }] }],
-  }
-  await $.tool.call(ask)
-  await $.tool.call(ask)
-  expect(calls.toasts).toEqual(['003-reset: the spec is ready for approval'])
-  expect(calls.notifies).toEqual([{ text: '003-reset: the spec is ready for approval', title: 'devflow · 003-reset' }])
+  })
+  const text = '003-reset: the spec is ready for approval'
+  // la stessa chiamata rielaborata: una notifica sola
+  await $.tool.call(ask('q-1'))
+  await $.tool.call(ask('q-1'))
+  expect(calls.toasts).toEqual([text])
+  // una seconda domanda nello stesso stato: notifica anche lei
+  await $.tool.call(ask('q-2'))
+  expect(calls.toasts).toEqual([text, text])
+  expect(calls.notifies).toEqual([{ text, title: 'devflow · 003-reset' }, { text, title: 'devflow · 003-reset' }])
+})
+
+test('intervista in testo semplice: il turno finisce ma la run resta in attesa', async ($, on) => {
+  const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': board('interview', '', ['queued → interview']) }
+  const { calls, clock } = stubEngine(on, { files })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: '/devflow:factory', wait: false, origin: { kind: 'user' } } as never)
+  // la domanda è nel testo della risposta: il turno principale finisce normalmente
+  await $.turn.complete({ reason: 'answer', answer: 'Quale provider email?', durationMs: 10, isAborted: false, turnId: 't1' })
+  let ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  let svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('interview phase')).toBe(true)
+  expect(svg?.source.includes('fill:var(--br)">your turn<')).toBe(true)
+  expect(svg?.source.includes('<animate')).toBe(true)
+  await ui.unmount()
+  expect(calls.toasts).toEqual(['003-reset: the interview has a question for you'])
+  const before = calls.invalidations
+  await clock.advance(2000)
+  expect(calls.invalidations > before).toBe(true)
+
+  // la risposta dell'utente è un prompt qualsiasi: tocca di nuovo alla factory
+  await $.prompt.submit({ text: 'SendGrid', wait: false, origin: { kind: 'user' } } as never)
+  ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('interview phase')).toBe(true)
+  expect(svg?.source.includes('fill:var(--br)">your turn<')).toBe(false)
+  await ui.unmount()
+
+  // fine intervista: il board passa a spec e parte lo spec-writer
+  files['factory/board.md'] = board('spec', '', ['queued → interview', 'interview → spec'])
+  await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'interview', new_string: 'spec' })
+  await $.agent.spawn(spawn('Scrive la spec', 'devflow:spec-writer'))
+  ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('spec phase')).toBe(true)
+  expect(svg?.alt.includes('spec-writer Scrive la spec')).toBe(true)
+  await ui.unmount()
+  expect(calls.toasts.length).toBe(1)
+})
+
+test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') } })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete({ reason: 'answer', answer: 'Domanda 1?', durationMs: 10, isAborted: false, turnId: 't1' })
+  await $.prompt.submit({ text: 'risposta', wait: false, origin: { kind: 'user' } } as never)
+  await $.turn.complete({ reason: 'answer', answer: 'Domanda 2?', durationMs: 10, isAborted: false, turnId: 't2' })
+  expect(calls.toasts.length).toBe(2)
+  // Esc durante l'attesa: la run finisce
+  await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 10, isAborted: true, turnId: 't3' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('<animate')).toBe(false)
+  await ui.unmount()
+})
+
+test('fine turno principale in build: la run finisce', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete({ reason: 'answer', answer: 'fatto', durationMs: 10, isAborted: false, turnId: 't1' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('stuck in build')).toBe(true)
+  await ui.unmount()
+  expect(calls.toasts).toEqual([])
 })
 
 test('board scritto durante la factory: needs-human notificato col motivo dal log', async ($, on) => {
@@ -186,7 +257,7 @@ test('board scritto durante la factory: needs-human notificato col motivo dal lo
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   files['factory/board.md'] = board('needs-human', '', ['spec-review → build', 'needs-human: gate keeps failing'])
   await $.tool.call({ tool: 'Edit', file_path: 'F:\\repo\\factory\\board.md', old_string: 'a', new_string: 'b' })
-  expect(calls.toasts).toEqual(['003-reset: needs you - gate keeps failing'])
+  expect(calls.toasts).toEqual(['003-reset: needs you — gate keeps failing'])
   // stesso stato riscritto: nessuna seconda notifica
   await $.tool.call({ tool: 'Write', file_path: 'factory/board.md', content: files['factory/board.md'] ?? '' })
   expect(calls.toasts.length).toBe(1)
@@ -207,6 +278,22 @@ test('escalation: builder dopo un coder sullo stesso task', async ($, on) => {
   expect(svg?.source.includes('builder ← coder')).toBe(true)
   expect(svg?.alt.includes('Cerca file')).toBe(false)
   expect(svg?.alt.includes('2 agents')).toBe(true)
+  await ui.unmount()
+})
+
+test('escalation riconosciuta dal task id del prompt, anche con descrizioni diverse', async ($, on) => {
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const coder = await $.agent.spawn(spawn('Parser CSV', 'devflow:coder', 'haiku', 'Feature dir: factory/features/003-reset\nSpec: spec.md\nTask id: T2\nparallel: false'))
+  await $.turn.complete({ reason: 'answer', answer: 'ESCALATE', durationMs: 10, isAborted: false, turnId: 't2', agentId: coder.agentId })
+  await $.agent.spawn(spawn('Parser CSV robusto', 'devflow:builder', 'opus', 'Feature dir: factory/features/003-reset\nTask id: T2\nCoder reply: ESCALATE'))
+  // stessa descrizione ma task diverso: nessuna escalation
+  await $.agent.spawn(spawn('Parser CSV', 'devflow:builder', 'opus', 'Task id: T3'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  expect(source.split('builder ← coder').length - 1).toBe(1)
+  expect(/Parser CSV robusto<\/text><text class="d"[^>]*>builder ← coder/.test(source)).toBe(true)
   await ui.unmount()
 })
 
@@ -242,7 +329,7 @@ test('needs-human due volte nella stessa sessione: due notifiche', async ($, on)
   await write(board('needs-human', '', ['needs-human: gate keeps failing']))
   await write(board('build', '', ['needs-human → build']))
   await write(board('needs-human', '', ['needs-human: still red']))
-  expect(calls.toasts).toEqual(['003-reset: needs you - gate keeps failing', '003-reset: needs you - still red'])
+  expect(calls.toasts).toEqual(['003-reset: needs you — gate keeps failing', '003-reset: needs you — still red'])
 })
 
 test('comandi del gate reali: pipe e catene; npm install no', async ($, on) => {
@@ -317,4 +404,44 @@ test('terminale: niente factory, riepilogo del board con riga in coda', async ($
   expect(await ui.find({ type: 'Text', text: /QUEUED · 1/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /003-reset/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('forge di config.md nel testo della fase finale', async ($, on) => {
+  stubEngine(on, { files: { 'factory/config.md': CONFIG.replace('max_rounds', 'forge: git\nmax_rounds'), 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('then push the branch')).toBe(true)
+  await ui.unmount()
+})
+
+test('attività della card dal turn.step dell agente, nessun hook sul tool Agent', async ($, on) => {
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  on('turn.step', async function* (_, e) {
+    return {
+      turnId: e.turnId, index: 0, answer: '', stopReason: 'tool_use',
+      toolUses: [{ name: 'Edit', input: { file_path: 'src/repo/UserRepo.ts' } }],
+    } as never
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const coder = await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const step = $.turn.step({ turnId: 't9', index: 0, model: 'claude-sonnet-5-5', effort: 'medium', agentId: coder.agentId } as never)
+  for await (const _ of step) { /* consuma lo stream */ }
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  expect(source.includes('Edit repo/UserRepo.ts')).toBe(true)
+  expect(source.includes('sonnet 5.5 · medium')).toBe(true)
+  await ui.unmount()
+})
+
+test('factory ripresa dopo Esc: la prima domanda della nuova run notifica', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete({ reason: 'answer', answer: 'Domanda 1?', durationMs: 10, isAborted: false, turnId: 't1' })
+  await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 10, isAborted: true, turnId: 't2' })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete({ reason: 'answer', answer: 'Domanda 2?', durationMs: 10, isAborted: false, turnId: 't3' })
+  expect(calls.toasts.length).toBe(2)
 })

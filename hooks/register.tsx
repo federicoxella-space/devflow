@@ -3,12 +3,12 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AgentCard, BoardRow, GateResult, LogLine, PhaseId, ReviewResult, Run } from '../types'
+import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
 import { parseBoard, summarize } from './board'
 import { parseGate, parseReview } from './feature'
 import { deriveView, phaseOfAgent, phaseOfState } from './flow'
-import { resolveLang, STRINGS } from './i18n'
+import { parseForge, resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
 import { boardAlt, boardSvg, flowAlt, flowSvg } from './svg'
 import { boardTerminal, flowTerminal } from './terminal'
@@ -39,6 +39,8 @@ let mode: PaletteMode = 'auto'
 let notified = new Notified()
 let lastRows = new Map<string, BoardRow>()
 let ticker: { cancel: () => void } | undefined
+let forge: Forge = 'github'
+let lastAsk: string | undefined
 
 // ───────────── helper senza eccezioni ─────────────
 
@@ -92,6 +94,15 @@ export const needsHumanReason = (text: string | undefined): string | undefined =
 const lastLogOf = (log: LogLine[], id: string) => [...log].reverse().find(l => l.id === id)?.text
 
 const ACTIVE_STATES = new Set(['interview', 'spec', 'spec-review', 'build', 'review', 'approve'])
+/** Stati in cui la fine del turno principale è una domanda all'utente in testo semplice */
+const WAIT_STATES = new Set(['interview', 'spec', 'spec-review', 'approve'])
+
+/** Task id dal prompt di spawn dell'orchestratore (`task id: T2`, `Task: T2`, oppure un `T2` isolato) */
+export const taskIdOf = (prompt: unknown): string | undefined => {
+  if (typeof prompt !== 'string') return undefined
+  const named = /\btask(?:[ _-]?id)?\s*[:=#]\s*[`"']?([A-Za-z]*\d+[\w.-]*)/i.exec(prompt)
+  return (named?.[1] ?? /\b(T\d+)\b/.exec(prompt)?.[1])?.toUpperCase()
+}
 
 /** La feature su cui lavora la factory: una riga in uno stato di lavoro, la più recente nel log */
 const pickFeature = (rows: BoardRow[], log: LogLine[]): string | undefined => {
@@ -113,6 +124,10 @@ const notify = async ($: $, a: Attention | undefined, id: string) => {
   notified.add(a.key)
   try { $.ui.toast(a.text) } catch { /* nessun toast: resta la notifica */ }
   await quiet(() => $.ui.notify(a.text, { title: `devflow · ${id}` }), undefined)
+}
+
+const logError = ($: $, err: unknown) => {
+  try { void Promise.resolve($.ui.log(`devflow: ${String(err)}`, { to: 'debug' })).catch(() => undefined) } catch { /* niente log */ }
 }
 
 const redraw = ($: $) => {
@@ -159,8 +174,8 @@ const startRun = async ($: $) => {
   const times = await loadTimes($, featureId)
   const phase = phaseOfState(board.rows.find(r => r.id === featureId)?.state ?? '')
   if (phase && times.phaseStarted[phase] === undefined) times.phaseStarted[phase] = now
-  const run: Run = { ...emptyRun(), featureId, active: true, startedAt: now, ...times }
-  await update($, runAtom, () => run)
+  // il contatore delle domande prosegue fra una run e l'altra: una domanda nuova non riusa la chiave di una già notificata
+  const run = await update($, runAtom, cur => ({ ...emptyRun(), featureId, active: true, startedAt: now, ...times, asks: cur.asks ?? 0 }))
   await saveTimes($, run)
   lastRows = new Map(board.rows.map(r => [r.id, r]))
   if (!openedOnce) {
@@ -258,11 +273,15 @@ const isFactory = (name: unknown) => typeof name === 'string' && name.replace(/^
 export const register: Register = (on, options) => {
   on('session.start', async ($, e, next) => {
     try {
+      // il timer di una sessione precedente si ferma anche se qui devflow non c'è
+      try { ticker?.cancel() } catch { /* timer già fermo */ }
+      ticker = undefined
       enabled = await quiet(() => $.fs.exists(CONFIG), false)
       if (enabled) {
         const cfg = frontmatter((await readText($, CONFIG)) ?? '')
         const rounds = Number(cfg.max_rounds)
         maxRounds = Number.isFinite(rounds) && rounds > 0 ? rounds : 2
+        forge = parseForge(cfg.forge)
         gateCommands = [cfg.build, cfg.lint, cfg.test].filter((c): c is string => !!c && c.trim() !== '').map(c => c.trim())
         const settings = await quiet(() => $.settings.read(), {} as Awaited<ReturnType<$['settings']['read']>>)
         const lang = resolveLang(options.language, settings.language,
@@ -271,11 +290,11 @@ export const register: Register = (on, options) => {
         mode = await paletteMode($)
         openedOnce = false
         notified = new Notified()
+        lastAsk = undefined
         lastRows = new Map((await loadBoard($)).rows.map(r => [r.id, r]))
         await update($, runAtom, run => ({ ...run, active: false, waiting: false, gateRunning: false }))
         await quiet(() => $.command.register({ name: COMMAND, description: t.commandDescription }), undefined)
         // Ridisegno ogni secondo (timer di card e tempo totale) solo mentre la factory gira e qualcosa avanza
-        try { ticker?.cancel() } catch { /* timer già fermo */ }
         ticker = $.clock.every(1000, () => {
           void quiet(async () => {
             const run = await read($, runAtom)
@@ -306,71 +325,71 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     if (enabled && (isFactory(e.command?.name) || /^\/devflow:factory(\s|$)/.test(e.text.trim()))) {
       await quiet(() => startRun($), undefined)
+    } else if (enabled) {
+      // la risposta dell'utente a una domanda in testo semplice: tocca di nuovo alla factory
+      await quiet(async () => {
+        if (!(await read($, runAtom)).waiting) return
+        await update($, runAtom, r => (r.active ? { ...r, waiting: false } : r))
+        redraw($)
+      }, undefined)
     }
     return next(e)
   })
 
-  on('tool.call', async ($, e, next) => {
-    if (!enabled) return next(e)
-
-    // Strumento in uso da un agente con una card
-    if (e.agentId !== undefined) {
-      const id = e.agentId
-      await quiet(async () => {
-        if (!(await read($, agentsAtom))[id]) return
-        await update($, agentsAtom, all => {
-          const a = all[id]
-          return a ? { ...all, [id]: { ...a, activity: describeTool(e.tool, e) } } : all
-        })
-      }, undefined)
-    }
-
+  // Un hook per strumento, mai sul tool `Agent`: un agente salta gli hook in cui è annidata la sua spawn
+  // (claude-code.d.ts, turn.start e turn.step), quindi nessun hook di questa mod deve avvolgerla.
+  // Modello, effort e attività degli agenti arrivano da turn.step, come in agent-monitor.
+  on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
-    if ((e.tool === 'Write' || e.tool === 'Edit') && isBoard(input.file_path)) {
-      const r = await next(e)
-      await quiet(() => boardChanged($), undefined)
-      return r
-    }
-    if (e.agentId !== undefined) return next(e)
+    if (!enabled || !isBoard(input.file_path)) return next(e)
+    const r = await next(e)
+    await quiet(() => boardChanged($), undefined)
+    return r
+  })
 
-    if (e.tool === 'Skill') {
-      if (isFactory(input.skill) || isFactory(input.command)) await quiet(() => startRun($), undefined)
-      return next(e)
-    }
-
-    if (e.tool === 'AskUserQuestion') {
-      const run = await quiet(() => read($, runAtom), emptyRun())
-      if (!run.active) return next(e)
-      await quiet(async () => {
-        const board = await loadBoard($)
-        // senza feature nota (factory appena partita su una riga in coda), quella su cui si lavora ora
-        const featureId = run.featureId ?? pickFeature(board.rows, board.log)
-        const row = board.rows.find(r => r.id === featureId)
-        await update($, runAtom, r => ({
-          ...r, featureId: r.featureId ?? featureId, waiting: true, questions: r.questions + (row?.state === 'interview' ? 1 : 0),
-        }))
-        redraw($)
-        if (row) void notify($, onQuestion(row, t), row.id)
-      }, undefined)
-      try {
-        return await next(e)
-      } finally {
-        await quiet(async () => { await update($, runAtom, r => ({ ...r, waiting: false })); redraw($) }, undefined)
-      }
-    }
-
-    if (e.tool === 'Bash') {
-      const run = await quiet(() => read($, runAtom), emptyRun())
-      if (!run.active || !isGateCommand(e.command, gateCommands)) return next(e)
-      await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true })); redraw($) }, undefined)
-      try {
-        return await next(e)
-      } finally {
-        await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: false })); redraw($) }, undefined)
-      }
-    }
-
+  on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
+    const input = e as unknown as Record<string, unknown>
+    if (enabled && e.agentId === undefined && (isFactory(input.skill) || isFactory(input.command))) await quiet(() => startRun($), undefined)
     return next(e)
+  })
+
+  on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+    if (!enabled || e.agentId !== undefined) return next(e)
+    const run = await quiet(() => read($, runAtom), emptyRun())
+    if (!run.active) return next(e)
+    await quiet(async () => {
+      const board = await loadBoard($)
+      // senza feature nota (factory appena partita su una riga in coda), quella su cui si lavora ora
+      const featureId = run.featureId ?? pickFeature(board.rows, board.log)
+      const row = board.rows.find(r => r.id === featureId)
+      // la stessa chiamata rielaborata non è una domanda nuova
+      const isNew = e.tool_use_id === undefined || e.tool_use_id !== lastAsk
+      lastAsk = e.tool_use_id
+      const cur = await update($, runAtom, r => ({
+        ...r, featureId: r.featureId ?? featureId, waiting: true,
+        asks: (r.asks ?? 0) + (isNew ? 1 : 0),
+        questions: r.questions + (isNew && row?.state === 'interview' ? 1 : 0),
+      }))
+      redraw($)
+      if (row) void notify($, onQuestion(row, t, cur.asks ?? 0), row.id)
+    }, undefined)
+    try {
+      return await next(e)
+    } finally {
+      await quiet(async () => { await update($, runAtom, r => ({ ...r, waiting: false })); redraw($) }, undefined)
+    }
+  })
+
+  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
+    if (!enabled || e.agentId !== undefined || e.tool !== 'Bash') return next(e)
+    const run = await quiet(() => read($, runAtom), emptyRun())
+    if (!run.active || !isGateCommand(e.command, gateCommands)) return next(e)
+    await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true })); redraw($) }, undefined)
+    try {
+      return await next(e)
+    } finally {
+      await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: false })); redraw($) }, undefined)
+    }
   })
 
   on('agent.spawn', async ($, e, next) => {
@@ -381,15 +400,19 @@ export const register: Register = (on, options) => {
       await quiet(async () => {
         const now = await $.clock.now()
         const type = e.subagentType.replace(/^devflow:/, '')
+        const task = taskIdOf(e.prompt)
         const run = await read($, runAtom)
         const all = await read($, agentsAtom)
+        // stesso task del coder concluso: dal task id del prompt, altrimenti dalla descrizione identica
+        const sameTask = (c: AgentCard) => (task && c.task ? c.task === task : c.description === e.description)
         const escalated = type === 'builder' && Object.values(all).some(c =>
-          c.type === 'coder' && c.description === e.description && c.status !== 'running' && c.startedAt >= run.startedAt)
+          c.type === 'coder' && sameTask(c) && c.status !== 'running' && c.startedAt >= run.startedAt)
         await update($, agentsAtom, cur => {
           const old = cur[id]
           const card: AgentCard = {
             id, type, description: e.description, model: r.model ?? old?.model, effort: old?.effort,
             startedAt: old?.startedAt ?? now, status: 'running', activity: '@starting',
+            ...(task ?? old?.task ? { task: task ?? old?.task } : {}),
             ...(escalated ? { escalatedFrom: 'coder' } : old?.escalatedFrom ? { escalatedFrom: old.escalatedFrom } : {}),
           }
           return { ...cur, [id]: card }
@@ -414,7 +437,19 @@ export const register: Register = (on, options) => {
         } : all
       })
     }, undefined)
-    return yield* next(e)
+    const r = yield* next(e)
+    // lo strumento chiesto dal modello è l'attività della card finché gira
+    const tool = r.toolUses[0]
+    if (tool) {
+      await quiet(async () => {
+        if (!(await read($, agentsAtom))[id]) return
+        await update($, agentsAtom, all => {
+          const a = all[id]
+          return a ? { ...all, [id]: { ...a, activity: describeTool(tool.name, tool.input) } } : all
+        })
+      }, undefined)
+    }
+    return r
   })
 
   on('turn.complete', async ($, e, next) => {
@@ -433,9 +468,26 @@ export const register: Register = (on, options) => {
         })
         await agentPhase($, card.type, 'end', now)
         redraw($)
-      } else if ((await read($, runAtom)).active) {
-        // fine del turno principale (risposta o Esc): la factory non gira più
-        await update($, runAtom, run => ({ ...run, active: false, waiting: false, gateRunning: false }))
+      } else {
+        const run = await read($, runAtom)
+        if (!run.active) return
+        if (e.reason === 'answer') {
+          // una domanda in testo semplice chiude il turno: la factory aspetta la risposta, non è finita
+          const board = await loadBoard($)
+          const featureId = run.featureId ?? pickFeature(board.rows, board.log)
+          const row = board.rows.find(r => r.id === featureId)
+          if (row && WAIT_STATES.has(row.state)) {
+            const cur = await update($, runAtom, r => ({
+              ...r, featureId: r.featureId ?? featureId, waiting: true, gateRunning: false,
+              asks: (r.asks ?? 0) + 1, questions: r.questions + (row.state === 'interview' ? 1 : 0),
+            }))
+            redraw($)
+            await notify($, onQuestion(row, t, cur.asks ?? 0), row.id)
+            return
+          }
+        }
+        // Esc, errore, rifiuto o fine del lavoro: la factory non gira più
+        await update($, runAtom, r => ({ ...r, active: false, waiting: false, gateRunning: false }))
         redraw($)
       }
     }, undefined)
@@ -458,14 +510,15 @@ export const register: Register = (on, options) => {
         const now = await $.clock.now()
         const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
         const { gates, reviews } = await loadFeature($, row.id)
-        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now })
+        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge })
         if (!Svg) return flowTerminal(els, view, t, now)
         const { source, height } = flowSvg(view, W, t, mode, now)
         const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
         const alt = shown.length ? `${flowAlt(view, t)}: ${shown.join(', ')}` : flowAlt(view, t)
         return <Svg isInteractive source={source} alt={alt} width={W} height={height} />
-      } catch {
+      } catch (err) {
         // un errore nel diagramma lascia il riepilogo del board
+        logError($, err)
       }
     }
 
@@ -474,7 +527,8 @@ export const register: Register = (on, options) => {
       if (!Svg) return boardTerminal(els, summary, t)
       const { source, height } = boardSvg(summary, W, t, mode)
       return <Svg isInteractive source={source} alt={boardAlt(summary, t)} width={W} height={height} />
-    } catch {
+    } catch (err) {
+      logError($, err)
       return next(e)
     }
   })

@@ -3,14 +3,15 @@ import type { Strings } from './i18n'
 
 export type Attention = { key: string; text: string }
 
-export const onQuestion = (row: BoardRow, t: Strings): Attention | undefined => {
+/** `n`: numero della domanda nella run, così ogni domanda ha la sua notifica */
+export const onQuestion = (row: BoardRow, t: Strings, n: number): Attention | undefined => {
   const a = t.attention
   const text =
     row.state === 'interview' ? a.interview(row.id)
     : row.state === 'spec' || row.state === 'spec-review' ? a.spec(row.id)
     : row.state === 'approve' ? a.approve(row.id)
     : undefined
-  return text === undefined ? undefined : { key: `${row.id}:${row.state}:q`, text }
+  return text === undefined ? undefined : { key: `${row.id}:${row.state}:q${n}`, text }
 }
 
 export const onBoardChange = (
