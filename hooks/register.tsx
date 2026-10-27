@@ -11,6 +11,7 @@ import { deriveView, phaseOfAgent, phaseOfState } from './flow'
 import { resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
 import { boardAlt, boardSvg, flowAlt, flowSvg } from './svg'
+import { boardTerminal, flowTerminal } from './terminal'
 
 type $ = EngineInterface
 
@@ -442,10 +443,11 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e, next) => {
-    if (!enabled || e.surface === 'terminal') return next(e)
+    if (!enabled) return next(e)
     const els = $.ui.resolve(e)
-    if (!('Svg' in els)) return next(e)
-    const Svg = els.Svg
+    // il terminale ha un Svg che non disegna nulla: ci si affida alla superficie, non alla presenza del tag
+    const Svg = e.surface !== 'terminal' && 'Svg' in els ? els.Svg : undefined
+    if (!Svg && e.surface !== 'terminal') return next(e)
     const W = Math.max(MIN_W, Math.floor((e.props.bodyColumns ?? 60) * CELL_W))
     const board = await loadBoard($)
     const run = await quiet(() => read($, runAtom), emptyRun())
@@ -457,6 +459,7 @@ export const register: Register = (on, options) => {
         const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
         const { gates, reviews } = await loadFeature($, row.id)
         const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now })
+        if (!Svg) return flowTerminal(els, view, t, now)
         const { source, height } = flowSvg(view, W, t, mode, now)
         const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
         const alt = shown.length ? `${flowAlt(view, t)}: ${shown.join(', ')}` : flowAlt(view, t)
@@ -468,6 +471,7 @@ export const register: Register = (on, options) => {
 
     try {
       const summary = summarize(board)
+      if (!Svg) return boardTerminal(els, summary, t)
       const { source, height } = boardSvg(summary, W, t, mode)
       return <Svg isInteractive source={source} alt={boardAlt(summary, t)} width={W} height={height} />
     } catch {

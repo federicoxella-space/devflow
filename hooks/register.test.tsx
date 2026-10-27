@@ -290,3 +290,31 @@ test('cambio del board durante il gate non spegne gateRunning', async ($, on) =>
   expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('review phase')).toBe(true)
   await ui.unmount()
 })
+
+test('terminale: righe di fase, card dell agente e rientro come Text', async ($, on) => {
+  const round2 = BOARD_BUILD.replace('| build | 1 |', '| build | 2 |')
+  const review = '---\nverdict: CHANGES\n---\n## Blocking\n- `a.ts` — SQL injection — use params\n'
+  stubEngine(on, {
+    files: { 'factory/config.md': CONFIG, 'factory/board.md': round2, 'factory/features/003-reset/reviews/r1-security.md': review },
+  })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /Test di regressione/ }))?.text).toMatch(/coder · sonnet/)
+  expect(await ui.find({ type: 'Text', text: /Build/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /↩ security/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('terminale: niente factory, riepilogo del board con riga in coda', async ($, on) => {
+  const queued = BOARD_BUILD.replace('| build | 1 |', '| queued | 0 |')
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': queued } })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Svg' })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /QUEUED · 1/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /003-reset/ })).toBeDefined()
+  await ui.unmount()
+})
