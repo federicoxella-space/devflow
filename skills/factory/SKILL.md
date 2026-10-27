@@ -212,14 +212,19 @@ reviewers, out of scope. Ask with AskUserQuestion: **Approve / Request changes /
 - Approve, `worktree` mode:
   1. Update `base_branch` without switching branch in the main checkout: `git pull --ff-only` if it
      is the current branch, else `git fetch origin <base_branch>:<base_branch>`.
-  2. `git worktree add -b <kind>/<id> <path> <base_branch>`; the branch column is `<kind>/<id>`,
-     as in `branch` mode; log `spec-review → build · worktree <path>`.
+  2. `git worktree add -b "<kind>/<id>" "<path>" <base_branch>`; the branch column is
+     `<kind>/<id>`, as in `branch` mode; log `spec-review → build · worktree <path>`.
   3. If `worktree_setup` in config is not empty, run it in `<path>`.
-  4. An error in 1-3 → `needs-human` with the output; worktree and branch stay, the user fixes the
-     cause and sets the state back to `build`.
-  5. If `factory/backlog.md` has uncommitted changes: copy it into `<path>/factory/backlog.md`,
-     add `!factory/backlog.md` to `.gitignore` there if missing, commit in `<path>` with the same
-     message and footer as above, then `git restore factory/backlog.md` in the main checkout.
+  4. An error → `needs-human` with the output. In 1-2 no worktree exists: the user fixes the cause
+     and sets the state back to `spec-review` (the next Approve creates it). In 3 worktree and
+     branch stay: the user runs the setup by hand in `<path>` and sets the state back to `build`.
+  5. If the feature playbook's `## Deferred` has `queued` lines, move this feature's backlog lines
+     (those ending in `deferred from <id>`) into the worktree, never the whole file: `mkdir -p
+     "<path>/factory"`, append them to `<path>/factory/backlog.md` (create it with the heading
+     `# Factory backlog` if missing), add `!factory/backlog.md` to `<path>/.gitignore` if missing,
+     commit in `<path>` with the same message and footer as above. Then remove only those lines
+     from `factory/backlog.md` in the main checkout (`git restore` the file only if no other line
+     differs from `HEAD`): other sessions may have uncommitted lines there.
   Set state `build`, round `1`. A rejected spec never creates a worktree.
 
 ### 3. Build — state `build`
@@ -339,8 +344,9 @@ remaining ones **one at a time** with AskUserQuestion: **Approve / Edit / Discar
 section of `factory/playbook.md` (Definition of Done items as `- [<owner>] <item>`, appended at the
 end so existing `DoD-<n>` ids do not move). Only if at least one rule was approved, commit it on the
 feature branch: `git add factory/playbook.md && git commit -m "docs(factory): update playbook"` with
-the footer `Factory: <id>` (in `worktree` mode: copy the file to `<path>/factory/playbook.md`,
-commit there, then `git restore factory/playbook.md` in the main checkout); if a commit hook rejects it, `needs-human` with the output. The rules
+the footer `Factory: <id>`. In `worktree` mode add the rules to `<path>/factory/playbook.md` and
+commit in `<path>`; never edit `factory/playbook.md` in the main checkout, which other sessions
+share. If a commit hook rejects it, `needs-human` with the output. The rules
 reach the base branch with the PR. If the feature goes to `needs-human`, the file stays and its open lines are
 shown when the feature is back in `approve`.
 
