@@ -187,6 +187,9 @@ For every change you want to try:
 `plugin update` never moves to a lower version: after lowering one, reinstall with
 `claude plugin uninstall devflow@devflow-dev --scope project` and the install command above.
 
+Before opening the pull request, set the version back to the released one (the last tag): the
+test bumps never reach `main`, and the release workflow computes the new version from the PR title.
+
 ## More
 
 How the loop, the agents and their contracts work: [`vault/Software factory.md`](vault/Software%20factory.md).
