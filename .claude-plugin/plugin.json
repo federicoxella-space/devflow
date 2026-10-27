@@ -1,6 +1,6 @@
 {
   "name": "devflow",
-  "version": "0.12.3",
+  "version": "0.11.0",
   "description": "Small software factory: interview -> spec -> parallel build -> gate -> parallel reviews -> approve -> PR. Set up with /devflow:init, run with /devflow:factory, guided by a project playbook.",
   "types": "./types/index.d.ts",
   "userConfig": {
