@@ -88,6 +88,32 @@ you set that row to `merged` on the board by hand.
 `/devflow:factory` with no argument resumes the current feature, or starts the oldest queued one.
 When something needs a human, it stops and tells you which files to look at.
 
+### 3. Follow the run: the flow pane
+
+devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It only
+observes the session and the files in `factory/`; it never writes the board. It is active in repos
+with a `factory/config.md`.
+
+- **Phases**: a vertical line of the factory phases, each with its state and time. Hover a phase
+  for its contract (what it reads, writes and decides with).
+- **Agents**: a live card for each devflow agent, coloured by model family, with its task,
+  model · effort, the tool it is using and its elapsed time.
+- **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
+  e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
+  shows on its builder card as `builder ← coder`.
+- **Header**: current phase, active agents, round (of `max_rounds`) and total time.
+- **Board summary**: with no feature running, the pane shows a summary of the board instead.
+- **Your turn**: a toast and a system notification when the factory needs you: each interview
+  question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
+  the PR is opened.
+
+The pane opens by itself on the first `/devflow:factory` of a session; `/devflow-panel` opens and
+closes it at any time. It follows only the current session. The desktop app draws it as an animated
+SVG, the terminal gets a text version. Colours follow the light or dark theme.
+
+The pane language is the plugin option `language`: `auto` (default, follows the Claude Code
+`language` setting, then `LANG`; English otherwise), `it` or `en`.
+
 ## Files in your repo
 
 ```
