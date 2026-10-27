@@ -112,7 +112,7 @@ test('card di un coder durante la factory', async ($, on) => {
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('Test di regressione')).toBe(true)
   expect(svg?.alt.includes('003-reset')).toBe(true)
-  expect(svg?.isInteractive).toBe(true)
+  expect(svg?.isInteractive).toBeUndefined()
   expect(svg?.source.includes('Test di regressione')).toBe(true)
   // max_rounds dal frontmatter di config.md
   expect(svg?.source.includes('R1/3')).toBe(true)

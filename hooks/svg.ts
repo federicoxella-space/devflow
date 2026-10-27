@@ -18,6 +18,13 @@ export const esc = (text: string): string =>
 const cut = (text: string, chars: number): string =>
   chars <= 1 ? '' : text.length <= chars ? text : `${text.slice(0, Math.max(0, chars - 1))}…`
 
+/**
+ * Attributi di una animazione SMIL che resta in fase fra un ridisegno e l'altro: ogni ridisegno è un SVG nuovo
+ * e l'animazione ripartirebbe da zero; il `begin` negativo la riporta dov'è sull'orologio (`offsetMs` sfasa).
+ */
+export const loop = (durMs: number, now: number, offsetMs = 0): string =>
+  `dur="${n(durMs / 1000)}s" begin="-${(((now + offsetMs) % durMs) / 1000).toFixed(3)}s" repeatCount="indefinite"`
+
 const n = (value: number): string => String(Math.round(value * 100) / 100)
 const clock = (ms: number): string => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -100,13 +107,13 @@ const card = (a: AgentCard, y: number, i: number, W: number, t: Strings, now: nu
   const labelX = X0 + 28 + descW + 12
   const activity = a.activity === '@thinking' || a.activity === '@starting' ? `○ ${t.thinking}` : `↳ ${a.activity}`
   const timeText = `⏱ ${clock((a.endedAt ?? now) - a.startedAt)}`
-  const begin = i ? ` begin="${n((i * 0.4) % 1.2)}s"` : ''
+  const offset = (i * 400) % 1200
   const line2Max = Math.floor((w - 28 - timeText.length * SMALL - 12) / SMALL)
   const showLabel = labelX + label.length * SMALL < x + w - 14 - rightW - 6
   return (
     `<rect x="${x}" y="${y}" width="${w}" height="${CARD_H}" rx="6" fill="none" stroke-width="4" opacity="0.15" style="stroke:var(${v})"/>` +
     `<rect x="${x}" y="${y}" width="${w}" height="${CARD_H}" rx="6" stroke-width="1" style="fill:var(--cd);stroke:var(${v})"/>` +
-    `<circle cx="${x + 16}" cy="${y + 15}" r="3.5" style="fill:var(${v})"><animate attributeName="opacity" values="1;0.2;1" dur="1.2s"${begin} repeatCount="indefinite"/></circle>` +
+    `<circle cx="${x + 16}" cy="${y + 15}" r="3.5" style="fill:var(${v})"><animate attributeName="opacity" values="1;0.2;1" ${loop(1200, now, offset)}/></circle>` +
     txt('m', x + 28, y + 19, esc(desc), ' style="font-weight:500"') +
     (showLabel ? txt('d', labelX, y + 19, esc(label)) : '') +
     txt('m', x + w - 14, y + 19, esc(right), ` text-anchor="end" style="fill:var(${v})"`) +
@@ -115,7 +122,7 @@ const card = (a: AgentCard, y: number, i: number, W: number, t: Strings, now: nu
   )
 }
 
-const legend = (t: Strings, W: number, top: number): { svg: string; rows: number } => {
+const legend = (t: Strings, W: number, top: number, now: number): { svg: string; rows: number } => {
   const L = t.legend
   type Item = { w: number; draw: (x: number, y: number) => string }
   const lab = (s: string) => s.length * SMALL + 22
@@ -126,7 +133,7 @@ const legend = (t: Strings, W: number, top: number): { svg: string; rows: number
       w: lab(L.waiting),
       draw: (x, y) =>
         `<polygon transform="translate(${x + 6} ${y})" points="${hexPoints(5)}" fill="none" stroke-width="1.2" style="stroke:var(--br)">` +
-        '<animateTransform attributeName="transform" type="scale" additive="sum" values="1;1.3;1" dur="0.9s" repeatCount="indefinite"/></polygon>' +
+        `<animateTransform attributeName="transform" type="scale" additive="sum" values="1;1.3;1" ${loop(900, now)}/></polygon>` +
         txt('d', x + 16, y + 4, esc(L.waiting)),
     },
     { w: lab(L.todo), draw: (x, y) => dot(x + 6, y, 5, 'fill="none"', 'stroke:var(--mu)') + txt('d', x + 16, y + 4, esc(L.todo)) },
@@ -197,7 +204,7 @@ export function flowSvg(
     const cur = layout[i]!.p, next = layout[i + 1]!.p
     const y1 = (cys[i] ?? 0) + 8, y2 = (cys[i + 1] ?? 0) - 8
     if (next.status === 'active' || next.status === 'waiting')
-      body += `<line x1="40" y1="${y1}" x2="40" y2="${y2}" stroke-width="1.5" stroke-dasharray="3 3" style="stroke:var(--br)"><animate attributeName="stroke-dashoffset" from="0" to="-12" dur="0.8s" repeatCount="indefinite"/></line>`
+      body += `<line x1="40" y1="${y1}" x2="40" y2="${y2}" stroke-width="1.5" stroke-dasharray="3 3" style="stroke:var(--br)"><animate attributeName="stroke-dashoffset" from="0" to="-12" ${loop(800, now)}/></line>`
     else if (cur.status === 'done' && next.status === 'done')
       body += `<line x1="40" y1="${y1}" x2="40" y2="${y2}" stroke-width="1.5" style="stroke:var(--sd)"/>`
     else body += `<line x1="40" y1="${y1}" x2="40" y2="${y2}" stroke-width="1" stroke-dasharray="2 4" style="stroke:var(--ln)"/>`
@@ -215,12 +222,12 @@ export function flowSvg(
     const base = t.phases[p.id]
     const title = p.id === 'build' && view.round > 1 ? t.roundTitle(base, view.round)
       : p.id === 'review' && hasPills ? t.reviewResult(base, view.reviews[0]?.round ?? view.round) : base
-    let g = `<g><title>${esc(t.contracts[p.id])}</title>`
+    let g = '<g>'
     if (on)
-      g += `<polygon transform="translate(40 ${y})" points="${hexPoints(9)}" fill="none" stroke-width="1" style="stroke:var(--br)"><animateTransform attributeName="transform" type="scale" additive="sum" values="1;2.1" dur="2.4s" repeatCount="indefinite"/><animate attributeName="opacity" values="0.8;0" dur="2.4s" repeatCount="indefinite"/></polygon>`
+      g += `<polygon transform="translate(40 ${y})" points="${hexPoints(9)}" fill="none" stroke-width="1" style="stroke:var(--br)"><animateTransform attributeName="transform" type="scale" additive="sum" values="1;2.1" ${loop(2400, now)}/><animate attributeName="opacity" values="0.8;0" ${loop(2400, now)}/></polygon>`
     if (on || done) g += dot(40, y, 8, '', `fill:var(${on ? '--br' : '--sd'})`)
     else if (wait)
-      g += `<polygon transform="translate(40 ${y})" points="${hexPoints(8)}" fill="none" stroke-width="1.2" style="stroke:var(--br)"><animateTransform attributeName="transform" type="scale" additive="sum" values="1;1.3;1" dur="0.9s" repeatCount="indefinite"/></polygon>`
+      g += `<polygon transform="translate(40 ${y})" points="${hexPoints(8)}" fill="none" stroke-width="1.2" style="stroke:var(--br)"><animateTransform attributeName="transform" type="scale" additive="sum" values="1;1.3;1" ${loop(900, now)}/></polygon>`
     else g += dot(40, y, 7, 'fill="none" stroke-width="1"', 'stroke:var(--mu)')
     g += txt(on || wait ? 'b' : 'm', X0, y - 3, esc(cut(title, Math.floor((timeX - X0 - 60) / 7.8))))
     if (p.durationMs !== undefined) g += txt('d', timeX, y - 3, clock(p.durationMs), ' text-anchor="end"')
@@ -278,13 +285,13 @@ export function flowSvg(
     const destY = cyOf(view.reentry.to)
     arrow =
       `<path d="M${Math.round(fromX)} ${a.fromY} L${lane} ${a.fromY} L${lane} ${destY} L${W - 42} ${destY}" fill="none" stroke-width="1.2" stroke-dasharray="6 5" marker-end="url(#arrow)" style="stroke:var(--rd)">` +
-      '<animate attributeName="stroke-dashoffset" from="0" to="-22" dur="1s" repeatCount="indefinite"/></path>'
+      `<animate attributeName="stroke-dashoffset" from="0" to="-22" ${loop(1000, now)}/></path>`
   }
   body += arrow
 
   const footTop = lastCy + 32
   body += `<line x1="20" y1="${footTop}" x2="${W - 20}" y2="${footTop}" stroke-dasharray="2 4" style="stroke:var(--ln)"/>`
-  const lg = legend(t, W, footTop + 18)
+  const lg = legend(t, W, footTop + 18, now)
   body += lg.svg
   const height = footTop + 18 + (lg.rows - 1) * 18 + 28
 

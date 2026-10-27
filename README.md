@@ -94,8 +94,7 @@ devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the fact
 observes the session and the files in `factory/`; it never writes the board. It is active in repos
 with a `factory/config.md`.
 
-- **Phases**: a vertical line of the factory phases, each with its state and time. Hover a phase
-  for its contract (what it reads, writes and decides with).
+- **Phases**: a vertical line of the factory phases, each with its state and time.
 - **Agents**: a live card for each devflow agent, coloured by model family, with its task,
   model · effort, the tool it is using and its elapsed time.
 - **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
@@ -109,7 +108,7 @@ with a `factory/config.md`.
 
 The pane opens by itself on the first `/devflow:factory` of a session; `/devflow-panel` opens and
 closes it at any time. It follows only the current session. The desktop app draws it as an animated
-SVG, the terminal gets a text version. Colours follow the light or dark theme.
+SVG image (animations stay in phase across the per-second redraws), the terminal gets a text version. Colours follow the light or dark theme.
 
 The pane language is the plugin option `language`: `auto` (default, follows the Claude Code
 `language` setting, then `LANG`; English otherwise), `it` or `en`.
