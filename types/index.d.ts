@@ -9,7 +9,7 @@ export type BoardRow = { id: string; feature: string; state: BoardState | string
 export type Verdict = 'PASS' | 'CHANGES'
 export type ReviewResult = { reviewer: string; round: number; verdict: Verdict; reason?: string }
 export type GateResult = { round: number; pass: boolean; reason?: string }
-export type LogLine= { at: string; id: string; text: string }
+export type LogLine = { at: string; id: string; text: string }
 export type BoardSummary = {
   queued: BoardRow[]
   open: BoardRow[]

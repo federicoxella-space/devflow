@@ -57,7 +57,7 @@ function blockingReason(lines: string[]): string | undefined {
 
 // Il gate e' markdown libero scritto dall'orchestrator (skills/factory/SKILL.md, passi 4 e 4b).
 // Euristiche, in ordine:
-//  1. testo con `hook` e `fail` (senza distinzione di maiuscole) -> fallito, reason `commit hook`;
+//  1. una riga con `hook` e (`fail` o `reject`), senza distinzione di maiuscole -> fallito, reason `commit hook`;
 //  2. riga che nomina un comando e un exit code (`npm test: exit 1`, `npm test → exit 1`,
 //     `npm test failed with exit code 1`) oppure riga di tabella `| npm test | 1 |`:
 //     il primo con codice != 0 da' `reason: "<comando>: exit <n>"`;
@@ -99,7 +99,7 @@ export function parseGate(fileName: string, text: string): GateResult | undefine
   const round = roundOf(fileName, nm)
   if (round === undefined) return undefined
 
-  if (/hook/i.test(text) && /fail/i.test(text)) return { round, pass: false, reason: 'commit hook' }
+  if (text.split(/\r?\n/).some(l => /hook/i.test(l) && /fail|reject/i.test(l))) return { round, pass: false, reason: 'commit hook' }
   const failed = exitCodes(text).find(x => x.code !== 0)
   if (failed) {
     return { round, pass: false, reason: failed.command ? `${failed.command}: exit ${failed.code}` : `exit ${failed.code}` }

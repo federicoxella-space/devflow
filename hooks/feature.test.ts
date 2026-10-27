@@ -95,6 +95,23 @@ test('gate: forme alternative di exit code', () => {
 test('gate: commit hook', () => {
   expect(parseGate('gate-r3.md', 'npm test: exit 0\nCommit hook failed:\nlint-staged error')).toEqual({ round: 3, pass: false, reason: 'commit hook' })
 })
+test('gate: pass realistico con menzione di hook', () => {
+  const t = `# Gate round 1
+
+- npm run lint: exit 0
+- npm test: exit 0
+
+Output: 3 passed, 0 failed
+
+003-password-reset ok
+
+Commits:
+- abc1234 fix: pre-commit hook config
+
+PR title: fix: pre-commit hook config
+`
+  expect(parseGate('gate-r1.md', t)).toEqual({ round: 1, pass: true })
+})
 test('gate: testo non riconosciuto', () => {
   expect(parseGate('gate-r1.md', 'all good')).toEqual({ round: 1, pass: true })
   expect(parseGate('gate-r1.md', 'something failed')).toEqual({ round: 1, pass: false })
