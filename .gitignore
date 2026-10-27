@@ -1,3 +1,7 @@
 vault/.obsidian/workspace.json
 .claude-plugin/types/
 node_modules/
+factory/*
+!factory/config.md
+!factory/playbook.md
+!factory/backlog.md
