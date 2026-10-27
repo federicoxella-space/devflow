@@ -107,3 +107,44 @@ test('riepilogo del board', () => {
   expect(source.includes('ferma in build')).toBe(true)
   expect(source.includes('login &lt;b&gt;')).toBe(true)
 })
+
+test('badge completo, non troncato', () => {
+  const v: FlowView = { ...VIEW, reentry: undefined, round: 1, phases: VIEW.phases.map(p => (p.id === 'build' ? phase('build', 'todo') : p.id === 'interview' ? phase('interview', 'waiting') : p)) }
+  expect(flowSvg(v, 680, STRINGS.it, 'auto', NOW).source.includes('INTERVISTA · R1/2')).toBe(true)
+  expect(flowSvg(v, 680, STRINGS.en, 'auto', NOW).source.includes('INTERVIEW · R1/2')).toBe(true)
+})
+test('pill CHANGES sempre disegnata, le altre in +N', () => {
+  const v: FlowView = {
+    ...VIEW,
+    reviews: ['code', 'ux', 'ui', 'security'].map((r, i) => ({ reviewer: r, round: 1, verdict: i === 3 ? 'CHANGES' : 'PASS' }) as const),
+  }
+  const { source } = flowSvg(v, 360, STRINGS.it, 'auto', NOW)
+  expect(source.includes('✕ security')).toBe(true)
+  expect(/>\+\d</.test(source)).toBe(true)
+})
+test('rientro dalla review senza esiti: la freccia c e comunque', () => {
+  const v: FlowView = { ...VIEW, reviews: [] }
+  const { source } = flowSvg(v, 680, STRINGS.it, 'auto', NOW)
+  expect(source.includes('marker-end')).toBe(true)
+  const hexY = Number(/translate\(40 (\d+)\)"[^>]*style="fill:var\(--br\)"/.exec(source)![1])
+  expect(Number(/L\d+ \d+ L\d+ (\d+)" [^>]*marker-end/.exec(source)![1])).toBe(hexY)
+})
+test('descrizione lunga troncata nella card', () => {
+  const long = 'x'.repeat(200)
+  const v = withAgents(1)
+  v.phases.find(p => p.id === 'build')!.agents[0]!.description = long
+  const { source } = flowSvg(v, 680, STRINGS.it, 'auto', NOW)
+  expect(source.includes(long)).toBe(false)
+  expect(source.includes('x…')).toBe(true)
+})
+test('escape di motivi e nomi reviewer', () => {
+  const v: FlowView = {
+    ...VIEW,
+    reentry: { from: 'review', to: 'build', reason: 'a<&"b' },
+    reviews: [{ reviewer: 'r<&"', round: 1, verdict: 'CHANGES' }],
+  }
+  const { source } = flowSvg(v, 680, STRINGS.it, 'auto', NOW)
+  expect(source.includes('a&lt;&amp;&quot;b')).toBe(true)
+  expect(source.includes('r&lt;&amp;&quot;')).toBe(true)
+  expect(source.includes('a<&"b')).toBe(false)
+})

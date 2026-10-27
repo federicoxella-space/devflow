@@ -41,14 +41,15 @@ const txt = (cls: string, x: number, y: number, body: string, extra = '') =>
   `<text class="${cls}" x="${n(x)}" y="${n(y)}"${extra}>${body}</text>`
 
 const header = (t: Strings, W: number, title: string, sub: string, badge?: string): string => {
-  const room = Math.floor((W - 40 - (badge ? 130 : 0)) / 7.8)
+  const bw = badge ? Math.ceil(badge.length * CHAR) + 24 : 0
+  const room = Math.floor((W - 40 - (badge ? bw + 10 : 0)) / 7.8)
   return (
     txt('l', 20, 28, esc(t.paneTitle.toUpperCase())) +
     txt('b', 20, 48, esc(cut(title, room))) +
-    txt('d', 20, 64, esc(cut(sub, Math.floor((W - 40 - (badge ? 130 : 0)) / SMALL))), '') +
+    txt('d', 20, 64, esc(cut(sub, Math.floor((W - 40 - (badge ? bw + 10 : 0)) / SMALL))), '') +
     (badge
-      ? `<rect x="${W - 140}" y="30" width="120" height="24" rx="4" fill="none" style="stroke:var(--br)"/>` +
-        txt('m', W - 80, 46, esc(cut(badge, 15)), ' text-anchor="middle"')
+      ? `<rect x="${W - 20 - bw}" y="30" width="${bw}" height="24" rx="4" fill="none" style="stroke:var(--br)"/>` +
+        txt('m', W - 20 - bw / 2, 46, esc(badge), ' text-anchor="middle"')
       : '')
   )
 }
@@ -221,15 +222,25 @@ export function flowSvg(
     const subY = y + (on ? 14 : 12)
     if (pills) {
       let x = X0
-      for (const r of view.reviews) {
-        const ok = r.verdict === 'PASS'
-        const label = `${ok ? '✓' : '✕'} ${r.reviewer}`
-        const w = Math.ceil(label.length * SMALL + 20)
-        if (x + w > W - 40) break
-        const c = ok ? '--ok' : '--rd'
+      const sorted = [...view.reviews].sort((a, b) => Number(b.verdict === 'CHANGES') - Number(a.verdict === 'CHANGES'))
+      const pillW = (label: string) => Math.ceil(label.length * SMALL + 20)
+      const reserve = pillW('+99') + 8
+      const drawPill = (label: string, c: string, w: number) => {
         g += `<rect x="${x}" y="${y + 8}" width="${w}" height="20" rx="4" fill="none" style="stroke:var(${c})"/>` +
           txt('d', x + w / 2, y + 22, esc(label), ` text-anchor="middle" style="fill:var(${c})"`)
         x += w + 8
+      }
+      for (let k = 0; k < sorted.length; k++) {
+        const r = sorted[k]!
+        const label = `${r.verdict === 'PASS' ? '✓' : '✕'} ${r.reviewer}`
+        const w = pillW(label)
+        const more = sorted.length - k - 1 > 0
+        if (x + w + (more ? reserve : 0) > W - 40) {
+          const rest = `+${sorted.length - k}`
+          drawPill(rest, '--mu', pillW(rest))
+          break
+        }
+        drawPill(label, r.verdict === 'PASS' ? '--ok' : '--rd', w)
       }
       if (view.reentry?.from === 'review') arrows.push({ fromX: x, fromY: y + 18 })
     } else if (reentryHere) {
@@ -245,7 +256,10 @@ export function flowSvg(
     } else if (wait) {
       g += txt('d', X0, subY, esc(t.yourTurn), ' style="fill:var(--br)"')
     } else {
-      g += txt('d', X0, subY, subSvg(p.agents.length ? agentSub(p.agents) : [{ text: t.desc[p.id] }], textRoom))
+      const parts = p.agents.length ? agentSub(p.agents) : [{ text: t.desc[p.id] }]
+      g += txt('d', X0, subY, subSvg(parts, textRoom))
+      if (view.reentry?.from === p.id)
+        arrows.push({ fromX: X0 + Math.min(parts.map(x => x.text).join('').length, textRoom) * SMALL + 10, fromY: subY - 4 })
     }
     p.agents.forEach((a, k) => { g += card(a, y + cardsTop + k * CARD_STEP, k, W, t, now) })
     body += `${g}</g>`
