@@ -51,6 +51,13 @@ const en = {
   alt: (id: string, phase: string | undefined, agents: number, reentry: string | undefined) =>
     `devflow panel, ${id}: ${phase ? `${phase} phase` : 'no active phase'}, ${agents} ${agents === 1 ? 'agent' : 'agents'}` +
     (reentry ? `, back to build after ${reentry}` : ''),
+  attention: {
+    interview: (id: string) => `${id}: the interview has a question for you`,
+    spec: (id: string) => `${id}: the spec is ready for approval`,
+    approve: (id: string) => `${id}: rule proposals to review`,
+    needsHuman: (id: string, why: string) => `${id}: needs you${why ? ` - ${why}` : ''}`,
+    prOpen: (id: string, pr: string) => `${id}: PR open${pr ? ` ${pr}` : ''}, waiting for review`,
+  },
 }
 
 export type Strings = typeof en
@@ -103,6 +110,13 @@ const it: Strings = {
   alt: (id: string, phase: string | undefined, agents: number, reentry: string | undefined) =>
     `Pannello devflow, ${id}: ${phase ? `fase ${phase}` : 'nessuna fase attiva'}, ${agents} ${agents === 1 ? 'agente' : 'agenti'}` +
     (reentry ? `, rientro in build dopo ${reentry}` : ''),
+  attention: {
+    interview: (id: string) => `${id}: l’intervista ha una domanda per te`,
+    spec: (id: string) => `${id}: la spec è pronta per l’approvazione`,
+    approve: (id: string) => `${id}: rule proposal da rivedere`,
+    needsHuman: (id: string, why: string) => `${id}: serve il tuo intervento${why ? ` - ${why}` : ''}`,
+    prOpen: (id: string, pr: string) => `${id}: PR aperta${pr ? ` ${pr}` : ''}, in attesa di revisione`,
+  },
 }
 
 export const STRINGS: Record<Lang, Strings> = { en, it }
