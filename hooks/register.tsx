@@ -569,7 +569,7 @@ export const register: Register = (on, options) => {
         const { source, height } = flowSvg(view, W, t, mode, now)
         const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
         const alt = shown.length ? `${flowAlt(view, t)}: ${shown.join(', ')}` : flowAlt(view, t)
-        return <Svg isInteractive source={source} alt={alt} width={W} height={height} />
+        return <Svg source={source} alt={alt} width={W} height={height} />
       } catch (err) {
         // un errore nel diagramma lascia il riepilogo del board
         logError($, err)
@@ -580,7 +580,7 @@ export const register: Register = (on, options) => {
       const summary = summarize(board)
       if (!Svg) return boardTerminal(els, summary, t)
       const { source, height } = boardSvg(summary, W, t, mode)
-      return <Svg isInteractive source={source} alt={boardAlt(summary, t)} width={W} height={height} />
+      return <Svg source={source} alt={boardAlt(summary, t)} width={W} height={height} />
     } catch (err) {
       logError($, err)
       return next(e)

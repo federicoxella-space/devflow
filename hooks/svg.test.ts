@@ -3,7 +3,7 @@ import { expect, test } from 'claude-code/testing'
 import type { AgentCard, BoardSummary, FlowView, PhaseId } from '../types'
 import { PHASES } from './flow'
 import { STRINGS, resolveLang } from './i18n'
-import { boardSvg, flowAlt, flowSvg } from './svg'
+import { boardSvg, flowAlt, flowSvg, loop } from './svg'
 
 const NOW = 1_000_000
 
@@ -76,9 +76,29 @@ test('tocca a te: contorno che pulsa e sottotitolo', () => {
   expect(source.includes('values="1;1.3;1"')).toBe(true)
   expect(source.includes('tocca a te')).toBe(true)
 })
-test('tooltip con il contratto di ogni fase', () => {
+test('un solo title: quello della radice', () => {
   const { source } = flowSvg(VIEW, 680, STRINGS.it, 'dark', NOW)
-  expect((source.match(/<title>/g) ?? []).length).toBe(PHASES.length + 1)
+  expect((source.match(/<title>/g) ?? []).length).toBe(1)
+})
+test('loop: durata, begin negativo in fase con l orologio, sfasamento', () => {
+  expect(loop(2400, 1_000_000)).toBe('dur="2.4s" begin="-1.600s" repeatCount="indefinite"')
+  expect(loop(1200, 1_000_000, 500)).toBe('dur="1.2s" begin="-0.900s" repeatCount="indefinite"')
+})
+test('ogni animazione ha dur, begin negativo e repeatCount', () => {
+  const { source } = flowSvg(VIEW, 680, STRINGS.it, 'auto', NOW)
+  const tags = [...source.matchAll(/<animate(?:Transform)? [^>]*>/g)].map(m => m[0])
+  expect(tags.length > 0).toBe(true)
+  for (const tag of tags) expect(/dur="[\d.]+s" begin="-[\d.]+s" repeatCount="indefinite"/.test(tag) ? '' : tag).toBe('')
+})
+test('ridisegno dopo 1 s: l alone avanza esattamente di 1 s (mod dur)', () => {
+  const begins = (now: number) => {
+    const { source } = flowSvg(VIEW, 680, STRINGS.it, 'auto', now)
+    return [...source.matchAll(/values="1;2\.1" dur="2\.4s" begin="-([\d.]+)s"/g)].map(m => Number(m[1]))
+  }
+  const [a] = begins(NOW), [b] = begins(NOW + 1000)
+  expect(a).toBeDefined()
+  expect(b).toBeDefined()
+  expect(Math.round((((b! - a!) * 1000) % 2400 + 2400) % 2400)).toBe(1000)
 })
 test('escape', () => {
   const v = { ...VIEW, title: 'A <b> & "c"' }

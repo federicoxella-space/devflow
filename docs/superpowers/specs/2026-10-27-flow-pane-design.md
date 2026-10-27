@@ -26,8 +26,8 @@ Ogni momento in cui devflow aspetta l'utente deve raggiungerlo anche se è su un
   round, tempo totale).
 - Toast e notifica di sistema in ogni momento che richiede l'utente (tabella sotto).
 - Senza feature attiva: riepilogo del board.
-- Tooltip su ogni fase con il suo contratto (cosa legge, cosa scrive, come decide), dalla tabella
-  Contracts di `vault/Software factory.md`.
+- Nessun tooltip: l'SVG è disegnato come immagine e un'immagine non può mostrarli (il contratto di
+  ogni fase resta in `vault/Software factory.md`).
 
 ## Non obiettivi
 - Seguire una factory che gira in un'altra sessione o finestra sullo stesso repo: il pannello
@@ -138,8 +138,11 @@ La stessa palette è proposta per agent-monitor:
 che il frame sandbox della desktop app lo propaghi; altrimenti la mod legge `theme` da
 `$.config.list()` e genera direttamente la palette giusta.
 
-**Animazioni**: SMIL nell'`Svg` con `isInteractive: true`; i timer avanzano ridisegnando il
-pannello ogni secondo (`$.clock.every`) solo mentre qualche agente lavora. La freccia di rientro
+**Animazioni**: SMIL in un `Svg` disegnato come immagine (senza `isInteractive`: un frame che si
+ricarica a ogni sorgente nuova farebbe sfarfallare tutto il disegno). I timer avanzano ridisegnando
+il pannello ogni secondo (`$.clock.every`) solo mentre qualche agente lavora; ogni animazione ha un
+`begin` negativo calcolato sull'orologio, così resta in fase fra un ridisegno e l'altro. I tooltip
+sono stati tolti perché un'immagine non può mostrarli. La freccia di rientro
 termina all'altezza del centro dell'esagono della fase di destinazione e il tratteggio scorre nel
 verso della freccia.
 
