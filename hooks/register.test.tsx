@@ -245,8 +245,8 @@ test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', a
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   await $.turn.complete({ reason: 'answer', answer: 'Domanda 1?', durationMs: 10, isAborted: false, turnId: 't1' })
   await $.prompt.submit({ text: 'risposta', wait: false, origin: { kind: 'composer' } })
-  // la factory annota la risposta sul board, poi fa la domanda successiva
-  await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'a', new_string: 'b' })
+  // la factory annota la risposta nel playbook della feature (SKILL.md §0), poi fa la domanda successiva
+  await $.tool.call({ tool: 'Write', file_path: 'F:\\repo\\factory\\features\\003-reset\\playbook.md', content: '- provider: SendGrid' })
   await $.turn.complete({ reason: 'answer', answer: 'Domanda 2?', durationMs: 10, isAborted: false, turnId: 't2' })
   expect(calls.toasts.length).toBe(2)
   // Esc durante l'attesa: la run finisce

@@ -274,6 +274,9 @@ export const isGateCommand = (command: string, gates: readonly string[]) =>
 
 const isBoard = (path: unknown) => typeof path === 'string' && /(^|[\\/])factory[\\/]board\.md$/i.test(path)
 
+/** Un file sotto `factory/` (board, playbook della feature, spec, review…): scriverlo è lavoro della factory */
+const inFactory = (path: unknown) => typeof path === 'string' && /(^|[\\/])factory[\\/]/i.test(path)
+
 const isFactory = (name: unknown) => typeof name === 'string' && name.replace(/^\//, '').trim() === FACTORY
 
 // ───────────── hook ─────────────
@@ -350,8 +353,9 @@ export const register: Register = (on, options) => {
   // Modello, effort e attività degli agenti arrivano da turn.step, come in agent-monitor.
   on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
-    if (!enabled || !isBoard(input.file_path)) return next(e)
+    if (!enabled || !inFactory(input.file_path)) return next(e)
     await quiet(() => markActivity($), undefined)
+    if (!isBoard(input.file_path)) return next(e)
     const r = await next(e)
     await quiet(() => boardChanged($), undefined)
     return r

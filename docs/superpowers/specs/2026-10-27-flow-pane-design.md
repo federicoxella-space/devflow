@@ -75,7 +75,8 @@ La mod si attiva solo se nel repo esiste `factory/config.md`; altrove non fa nul
   sta facendo una domanda in testo semplice: la run resta attiva, la fase passa a "tocca a te" e
   parte la notifica, come per una domanda con AskUserQuestion. Vale solo se nel turno la factory
   ha lavorato (chiamata `Skill` di `devflow:factory`, spawn di un agente `devflow:*`, `Write`/`Edit`
-  del board, `AskUserQuestion` o un comando del gate): un turno che non ha fatto nulla per la
+  di un file sotto `factory/`, come il board o il playbook della feature dove l'orchestratore annota
+  ogni risposta, `AskUserQuestion` o un comando del gate): un turno che non ha fatto nulla per la
   factory vuol dire che l'utente ha lasciato l'intervista per chiedere altro, e chiude la run senza
   notifiche. Il prompt successivo dell'utente è la risposta e la fase torna in corso; contano solo
   i prompt della persona (origine `composer` o `bridge`, o senza origine), non notifiche di task,
