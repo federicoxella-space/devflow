@@ -149,6 +149,44 @@ Every pull request merged into this repo is released automatically: the version 
 [`CHANGELOG.md`](CHANGELOG.md), and a tag and GitHub Release are created. PR titles must follow
 Conventional Commits. `/plugin` updates the installed plugin when the version changes.
 
+### Testing a change before it is released
+
+Unreleased work is tested from the `develop` branch, which only receives merges of feature
+branches: nothing is committed on it directly, and it is never merged into `main` (each feature
+reaches `main` through its own pull request). On `develop` the marketplace is named `devflow-dev`,
+so it can sit next to the released `devflow` marketplace.
+
+Once, in the repo where you test, declare the marketplace and install the plugin in project
+scope (the declaration goes to `.claude/settings.json`, which this repo ignores):
+
+```bash
+claude plugin marketplace add "federicoxella-space/devflow#develop" --scope project
+claude plugin install devflow@devflow-dev --scope project
+```
+
+For every change you want to try:
+
+1. Bump the version in `.claude-plugin/plugin.json` on the feature branch and commit it. Use the
+   bump the PR title will ask for (`feat` → minor, anything else → patch); further changes to the
+   same unreleased feature only bump the patch. Without a new version the update below finds
+   nothing to do.
+2. Merge the feature branch into `develop` and push the merge.
+3. Refresh your local copy of the marketplace: `plugin update` compares against that copy, not
+   against GitHub.
+
+   ```bash
+   claude plugin marketplace update devflow-dev
+   ```
+
+4. Update the plugin in the scope it is installed in, then restart the session:
+
+   ```bash
+   claude plugin update devflow@devflow-dev --scope project
+   ```
+
+`plugin update` never moves to a lower version: after lowering one, reinstall with
+`claude plugin uninstall devflow@devflow-dev --scope project` and the install command above.
+
 ## More
 
 How the loop, the agents and their contracts work: [`vault/Software factory.md`](vault/Software%20factory.md).

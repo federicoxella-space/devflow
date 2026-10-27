@@ -273,13 +273,15 @@ test('intervista in testo semplice: il turno finisce ma la run resta in attesa',
   // fine intervista: il board passa a spec e parte lo spec-writer
   files['factory/board.md'] = board('spec', '', ['queued → interview', 'interview → spec'])
   await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'interview', new_string: 'spec' })
-  await $.agent.spawn(spawn('Scrive la spec', 'devflow:spec-writer'))
+  const writer = await $.agent.spawn(spawn('Scrive la spec', 'devflow:spec-writer'))
   ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('spec phase')).toBe(true)
   expect(svg?.alt.includes('spec-writer Scrive la spec')).toBe(true)
   await ui.unmount()
   expect(calls.toasts.length).toBe(1)
+  // lo spec-writer in primo piano ha finito prima che il turno principale chiuda
+  await $.turn.complete({ ...endTurn('w1'), agentId: writer.agentId } as never)
 
   // la spec ha una domanda in testo semplice: seconda notifica
   await $.turn.complete({ reason: 'answer', answer: 'Includo il rate limit?', durationMs: 10, isAborted: false, turnId: 't2' })
@@ -564,4 +566,60 @@ test('factory ripresa dopo Esc: la prima domanda della nuova run notifica', asyn
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   await $.turn.complete({ reason: 'answer', answer: 'Domanda 2?', durationMs: 10, isAborted: false, turnId: 't3' })
   expect(calls.toasts.length).toBe(2)
+})
+
+const bg = (description: string, subagentType: string) => ({ ...spawn(description, subagentType), background: true })
+const flowAlt = async ($: Parameters<TestBody>[0]) => {
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const alt = svgOf(await ui.find({ type: 'Svg' }))?.alt ?? ''
+  await ui.unmount()
+  return alt
+}
+
+test('agenti in background: il turno principale finisce ma la run resta attiva', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
+  await $.agent.spawn(bg('Coder due', 'devflow:coder'))
+  await $.agent.spawn(bg('Coder tre', 'devflow:coder'))
+  await $.turn.complete(endTurn('t1'))
+  let alt = await flowAlt($)
+  expect(alt).toContain('Coder uno')
+  expect(alt).toContain('Coder tre')
+  expect(alt).not.toContain('Stuck')
+  // un coder finisce, la notifica apre un nuovo turno principale
+  await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
+  await $.turn.complete(endTurn('t2'))
+  alt = await flowAlt($)
+  expect(alt).toContain('Coder due')
+  expect(alt).toContain('Coder tre')
+  expect(alt).not.toContain('Stuck')
+  expect(calls.toasts.length).toBe(0)
+})
+
+test('finiti tutti gli agenti e il turno principale in build: la run termina', async ($, on) => {
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
+  await $.turn.complete(endTurn('t1'))
+  await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
+  await $.turn.complete(endTurn('t2'))
+  expect(await flowAlt($)).toContain('Stuck')
+})
+
+test('spawn devflow a run inattiva: la run riparte sulla fase commit', async ($, on) => {
+  const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
+  await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
+  await $.turn.complete(endTurn('t1'))
+  expect(await flowAlt($)).toContain('Stuck')
+  await $.agent.spawn(bg('Commit finale', 'devflow:committer'))
+  const alt = await flowAlt($)
+  expect(alt).toContain('Commit finale')
+  expect(alt).not.toContain('Stuck')
+  expect(calls.opened.length).toBe(1)
 })
