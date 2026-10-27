@@ -448,6 +448,8 @@ export const register: Register = (on, options) => {
     const r = await next(e)
     if (r.deny === undefined && r.agentId) {
       const id = r.agentId
+      // run già partita e poi finita, ma la factory lancia ancora agenti: la run riparte (tempi di fase ripristinati da startRun)
+      await quiet(async () => { const cur = await read($, runAtom); if (!cur.active && cur.startedAt > 0) await startRun($) }, undefined)
       await quiet(async () => {
         const now = await $.clock.now()
         const type = e.subagentType.replace(/^devflow:/, '')
@@ -523,6 +525,8 @@ export const register: Register = (on, options) => {
         const run = await read($, runAtom)
         if (!run.active) return
         if (e.reason === 'answer') {
+          // agenti in background ancora in corso: il turno principale è finito ma la factory lavora
+          if (Object.values(await read($, agentsAtom)).some(a => a.status === 'running' && a.startedAt >= run.startedAt)) return
           // un turno non della persona (notifica, peer, trigger) finito durante l'attesa: si aspetta ancora lei
           if (run.waiting && !run.activitySinceAnswer) return
           // una domanda in testo semplice chiude il turno: la factory aspetta la risposta, non è finita.
