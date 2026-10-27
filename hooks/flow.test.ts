@@ -117,6 +117,35 @@ test('reviews e gate: ultimo round <= row.round con dati', () => {
   expect(w.reviews).toEqual([secChangesR1, codePassR1])
   expect(w.gate).toBeUndefined()
 })
+test('rientro: il gate fallito del round corrente ha priorita sulla review', () => {
+  const v = deriveView(scenario({
+    state: 'build', round: 2, agents: [coderRunning], reviews: [secChangesR1],
+    gates: [{ round: 2, pass: false, reason: 'tests rossi' }],
+  }))
+  expect(v.reentry).toEqual({ from: 'gate', to: 'build', reason: 'tests rossi' })
+  const w = deriveView(scenario({ state: 'build', round: 2, agents: [coderRunning], reviews: [secChangesR1], gates: [{ round: 2, pass: true }] }))
+  expect(w.reentry?.from).toBe('review')
+})
+test('durationMs assente se la fase e attiva con timestamp del round precedente', () => {
+  const v = deriveView(scenario({ state: 'build', agents: [coderRunning], phaseStarted: { build: 9000 }, phaseEnded: { build: 5000 } }))
+  expect(v.phases[2]?.durationMs).toBeUndefined()
+})
+test('durationMs assente per fasi todo anche con entrambi i timestamp', () => {
+  const v = deriveView(scenario({ state: 'build', agents: [coderRunning], phaseStarted: { review: 1000 }, phaseEnded: { review: 2000 } }))
+  expect(v.phases[5]?.durationMs).toBeUndefined()
+})
+test('card di una run precedente: running ignorato', () => {
+  const stale = card('coder', { startedAt: 500 })
+  const v = deriveView(scenario({ state: 'interview', startedAt: 1000, agents: [stale] }))
+  expect(v.phases[2]?.status).toBe('todo')
+  expect(v.phases[0]?.status).toBe('active')
+  expect(v.phases.every(p => p.agents.length === 0)).toBe(true)
+})
+test('card di una run precedente: approver done ignorato', () => {
+  const stale = card('approver', { status: 'done', startedAt: 500 })
+  expect(st({ state: 'approve', startedAt: 1000, agents: [stale] })[7]).toBe('todo')
+  expect(st({ state: 'approve', startedAt: 1000, agents: [stale] })[6]).toBe('active')
+})
 test('rientro dal gate se nessun CHANGES nel round precedente', () => {
   const v = deriveView(scenario({
     state: 'build', round: 2, agents: [coderRunning], reviews: [codePassR1],

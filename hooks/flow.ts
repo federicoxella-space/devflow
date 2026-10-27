@@ -40,7 +40,8 @@ const latestReviews = (reviews: ReviewResult[], round: number) => {
 const latestGate = (gates: GateResult[], round: number) =>
   gates.filter(g => g.round <= round).sort((a, b) => b.round - a.round)[0]
 
-export const deriveView = ({ run, row, agents, reviews, gates, maxRounds, now }: Input): FlowView => {
+export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now }: Input): FlowView => {
+  const agents = allAgents.filter(a => a.startedAt >= run.startedAt)
   const running = agents.filter(a => a.status === 'running')
   const runningIdx = running.map(a => phaseOfAgent(a.type)).filter((p): p is PhaseId => !!p).map(idx)
   const maxRunning = runningIdx.length ? Math.max(...runningIdx) : -1
@@ -82,10 +83,10 @@ export const deriveView = ({ run, row, agents, reviews, gates, maxRounds, now }:
 
   let reentry: FlowView['reentry']
   if (row.round > 1 && activeId === 'build') {
-    const bad = reviews.find(r => r.round === row.round - 1 && r.verdict === 'CHANGES')
     const cur = gates.find(g => g.round === row.round && !g.pass)
-    if (bad) reentry = { from: 'review', to: 'build', reason: bad.reason ? `${bad.reviewer}: ${bad.reason}` : bad.reviewer }
-    else if (cur) reentry = { from: 'gate', to: 'build', reason: cur.reason ?? 'gate' }
+    const bad = reviews.find(r => r.round === row.round - 1 && r.verdict === 'CHANGES')
+    if (cur) reentry = { from: 'gate', to: 'build', reason: cur.reason ?? 'gate' }
+    else if (bad) reentry = { from: 'review', to: 'build', reason: bad.reason ? `${bad.reviewer}: ${bad.reason}` : bad.reviewer }
   }
 
   const starts = Object.values(run.phaseStarted).filter((v): v is number => typeof v === 'number')
@@ -99,7 +100,7 @@ export const deriveView = ({ run, row, agents, reviews, gates, maxRounds, now }:
       const shown = statuses[i] === 'active' || statuses[i] === 'waiting'
       return {
         id, status: statuses[i] ?? 'todo',
-        ...(s !== undefined && e !== undefined ? { durationMs: e - s } : {}),
+        ...(statuses[i] === 'done' && s !== undefined && e !== undefined && e >= s ? { durationMs: e - s } : {}),
         agents: shown ? running.filter(a => phaseOfAgent(a.type) === id) : [],
       }
     }),
