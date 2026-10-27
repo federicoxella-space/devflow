@@ -1,6 +1,6 @@
 declare module 'claude-code' {
   interface PluginState {
-    devflow: {}
+    devflow: { run: Run; agents: Record<string, AgentCard> }
   }
 }
 
@@ -15,4 +15,22 @@ export type BoardSummary = {
   open: BoardRow[]
   stuck: { row: BoardRow; reason?: string }[]
   merged: { row: BoardRow; at?: string }[]
+}
+
+export type PhaseId = 'interview' | 'spec' | 'build' | 'gate' | 'commit' | 'review' | 'approver' | 'finish'
+export type PhaseStatus = 'done' | 'active' | 'waiting' | 'todo'
+export type AgentCard = {
+  id: string; type: string; description: string; model?: string; effort?: string
+  startedAt: number; endedAt?: number; status: 'running' | 'done' | 'failed'; activity: string; escalatedFrom?: string
+}
+export type Run = {
+  featureId?: string; active: boolean; startedAt: number; waiting: boolean; gateRunning: boolean
+  phaseStarted: Partial<Record<PhaseId, number>>; phaseEnded: Partial<Record<PhaseId, number>>; questions: number
+}
+export type FlowView = {
+  featureId: string; title: string; branch: string; round: number; maxRounds: number; elapsedMs: number
+  phases: { id: PhaseId; status: PhaseStatus; durationMs?: number; agents: AgentCard[] }[]
+  reentry?: { from: PhaseId; to: PhaseId; reason: string }
+  reviews: ReviewResult[]
+  gate?: GateResult
 }
