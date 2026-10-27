@@ -123,7 +123,9 @@ const notify = async ($: $, a: Attention | undefined, id: string) => {
   if (!a || notified.has(a.key)) return
   notified.add(a.key)
   try { $.ui.toast(a.text) } catch { /* nessun toast: resta la notifica */ }
-  await quiet(() => $.ui.notify(a.text, { title: `devflow · ${id}` }), undefined)
+  // la notifica di sistema esiste solo dal terminale; sull'app desktop bastano i suoi banner. Se la superficie non si legge, si prova comunque
+  const onTerminal = await quiet(async () => (await $.session.surfaces()).includes('terminal'), true)
+  if (onTerminal) await quiet(() => $.ui.notify(a.text, { title: `devflow · ${id}` }), undefined)
 }
 
 const logError = ($: $, err: unknown) => {
@@ -268,9 +270,36 @@ const agentPhase = async ($: $, type: string, edge: 'start' | 'end', now: number
   if (changed) await saveTimes($, run)
 }
 
-/** Un comando Bash è del gate se uno dei suoi pezzi (`&&`, `||`, `;`, `|`) inizia con build/lint/test di config.md */
-export const isGateCommand = (command: string, gates: readonly string[]) =>
-  gates.length > 0 && command.split(/&&|\|\||;|\|/).map(c => c.trim()).some(seg => gates.some(g => seg === g || seg.startsWith(`${g} `)))
+/** Un comando di shell è del gate se contiene (ovunque, anche tra virgolette o in un ciclo) build/lint/test di config.md, a meno di spazi e su confini di parola */
+export const isGateCommand = (command: string, gates: readonly string[]) => {
+  const norm = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const cmd = norm(command)
+  const word = /\w/
+  return gates.map(norm).filter(g => g !== '').some(g => {
+    for (let i = cmd.indexOf(g); i !== -1; i = cmd.indexOf(g, i + 1)) {
+      const before = cmd[i - 1], after = cmd[i + g.length]
+      if ((before === undefined || !word.test(before)) && (after === undefined || !word.test(after))) return true
+    }
+    return false
+  })
+}
+
+/** Il board lo aggiorna anche l'orchestratore da shell (Get-Content/Set-Content, sed): dopo ogni comando lo si rilegge */
+const shellCall = async <E extends { agentId?: string; command: string }, R>($: $, e: E, next: (e: E) => Promise<R>): Promise<R> => {
+  if (!enabled || e.agentId !== undefined) return next(e)
+  const run = await quiet(() => read($, runAtom), emptyRun())
+  if (!run.active) return next(e)
+  const gate = isGateCommand(e.command, gateCommands)
+  if (/factory[\/]/i.test(e.command)) await quiet(() => markActivity($), undefined)
+  if (gate) await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true, activitySinceAnswer: true })); redraw($) }, undefined)
+  try {
+    const r = await next(e)
+    await quiet(() => boardChanged($), undefined)
+    return r
+  } finally {
+    if (gate) await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: false })); redraw($) }, undefined)
+  }
+}
 
 const isBoard = (path: unknown) => typeof path === 'string' && /(^|[\\/])factory[\\/]board\.md$/i.test(path)
 
@@ -430,17 +459,8 @@ export const register: Register = (on, options) => {
     }
   })
 
-  on('tool.call', { tool: 'Bash' }, async ($, e, next) => {
-    if (!enabled || e.agentId !== undefined || e.tool !== 'Bash') return next(e)
-    const run = await quiet(() => read($, runAtom), emptyRun())
-    if (!run.active || !isGateCommand(e.command, gateCommands)) return next(e)
-    await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true, activitySinceAnswer: true })); redraw($) }, undefined)
-    try {
-      return await next(e)
-    } finally {
-      await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: false })); redraw($) }, undefined)
-    }
-  })
+  on('tool.call', { tool: 'Bash' }, ($, e, next) => shellCall($, e, next))
+  on('tool.call', { tool: 'PowerShell' }, ($, e, next) => shellCall($, e, next))
 
   on('agent.spawn', async ($, e, next) => {
     if (!enabled || !e.subagentType.startsWith('devflow:')) return next(e)

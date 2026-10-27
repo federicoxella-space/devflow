@@ -24,7 +24,7 @@ Ogni momento in cui devflow aspetta l'utente deve raggiungerlo anche se è su un
   destinazione.
 - Intestazione: id feature, branch, badge `FASE · Rn/max`, riga di metriche (fase, agenti attivi,
   round, tempo totale).
-- Toast e notifica di sistema in ogni momento che richiede l'utente (tabella sotto).
+- Toast sempre, in ogni momento che richiede l'utente (tabella sotto); notifica di sistema solo dal terminale. Sull'app desktop bastano i banner dell'app.
 - Senza feature attiva: riepilogo del board.
 - Nessun tooltip: l'SVG è disegnato come immagine e un'immagine non può mostrarli (il contratto di
   ogni fase resta in `vault/Software factory.md`).
@@ -103,7 +103,20 @@ La mod si attiva solo se nel repo esiste `factory/config.md`; altrove non fa nul
 | PR aperta | board → `pr-open`, link alla PR |
 | Permesso richiesto da un agente | notifica di permesso del motore, se intercettabile (da verificare) |
 
-Ognuno produce `$.ui.toast` + `$.ui.notify` (titolo `devflow · <id>`), una volta per evento.
+Ognuno produce, una volta per evento:
+- `$.ui.toast`, sempre;
+- `$.ui.notify` (titolo `devflow · <id>`) solo se la sessione disegna sul terminale
+  (`$.session.surfaces()` contiene `terminal`). Sull'app desktop `$.ui.notify` non può inviare
+  (`{ isSent: false, reason: 'no-surface' }`) e non lo si chiama; se le superfici non si leggono, lo si
+  chiama comunque e si ignora l'esito.
+
+Sull'app desktop, con l'app in background, le domande e la fine del turno sono già coperte dai banner
+dell'app. Nessun suono.
+
+Il board lo aggiorna l'orchestratore anche da shell (`Get-Content`/`Set-Content`, `sed`): dopo ogni
+comando Bash o PowerShell della conversazione principale mentre la run è attiva il board viene riletto,
+così le transizioni di stato (tempi di fase, needs-human, PR aperta) non si perdono. Un comando che cita
+`factory/` conta come attività della factory.
 
 ### Aspetto
 Stile di agent-monitor (font monospace, nodi esagonali, card con leggero alone, riga `↳` dello

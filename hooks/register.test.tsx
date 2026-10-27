@@ -42,7 +42,7 @@ const BOARD_BUILD = board('build', '', ['spec-review → build'])
 type Calls = { toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
 
 /** Sta al posto del motore: file in memoria, store, clock, UI registrata */
-const stubEngine = (on: On, { files, bash }: { files: Record<string, string>; bash?: (command: string) => Promise<void> }) => {
+const stubEngine = (on: On, { files, bash, surfaces = ['terminal'] }: { files: Record<string, string>; bash?: (command: string) => Promise<void>; surfaces?: string[] }) => {
   const calls: Calls = { toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
   const clock = mock.clock(on, { now: 1_000_000 })
   mock.store(on)
@@ -73,10 +73,11 @@ const stubEngine = (on: On, { files, bash }: { files: Record<string, string>; ba
   on('ui.open', (_, e) => { calls.opened.push(e.id); return { value: { isPlaced: true } } })
   on('ui.toast', (_, e) => { calls.toasts.push(e.text); return { value: undefined } })
   on('ui.notify', (_, e) => { calls.notifies.push({ text: e.text, title: e.title }); return { value: { isSent: true, channel: 'iterm2' } } })
+  on('session.surfaces', () => ({ value: surfaces as never }))
   on('ui.invalidate', () => { calls.invalidations++; return { value: undefined } })
   on('ui.log', () => ({ value: undefined }))
   on('tool.call', async (_, e) => {
-    if (e.tool === 'Bash' && bash) await bash(e.command)
+    if ((e.tool === 'Bash' || e.tool === 'PowerShell') && bash) await bash(e.command)
     return { result: {} }
   })
   let n = 0
@@ -331,6 +332,45 @@ test('intervista abbandonata: un prompt d altro chiude la run, niente notifiche 
   expect(calls.notifies.length).toBe(1)
 })
 
+for (const tool of ['PowerShell', 'Bash'] as const) {
+  test(`${tool} che riscrive il board: transizione seguita, un solo toast`, async ($, on) => {
+    const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }
+    const { calls } = stubEngine(on, {
+      files,
+      bash: async () => { files['factory/board.md'] = board('needs-human', '', ['spec-review → build', 'needs-human: gate keeps failing']) },
+    })
+    await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+    await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+    await $.tool.call({ tool, command: "(Get-Content -Raw factory/board.md) -replace 'build','needs-human' | Set-Content factory/board.md" })
+    expect(calls.toasts).toEqual(['003-reset: needs you — gate keeps failing'])
+    await $.tool.call({ tool, command: 'Get-Content factory/board.md' })
+    expect(calls.toasts.length).toBe(1)
+    const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+    expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('no active phase')).toBe(true)
+    await ui.unmount()
+  })
+
+  test(`${tool} che non cambia il board: nessuna notifica`, async ($, on) => {
+    const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }, bash: async () => undefined })
+    await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+    await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+    await $.tool.call({ tool, command: 'git status' })
+    expect(calls.toasts).toEqual([])
+    expect(calls.notifies).toEqual([])
+  })
+}
+
+for (const [surface, sent] of [['terminal', 1], ['desktop', 0]] as const) {
+  test(`notifica di sistema solo dal terminale (${surface}); il toast sempre`, async ($, on) => {
+    const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') }, surfaces: [surface] })
+    await $.session.start({ cwd: '/', surface, isInteractive: true })
+    await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+    await $.turn.complete(endTurn('t1', 'Quale provider email?'))
+    expect(calls.toasts.length).toBe(1)
+    expect(calls.notifies.length).toBe(sent)
+  })
+}
+
 test('prompt non della persona: l attesa resta, nessuna nuova notifica', async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': board('interview') } })
   on('prompt.submit', (_, e) => ({ text: e.text }))
@@ -472,6 +512,30 @@ test('comandi del gate reali: pipe e catene; npm install no', async ($, on) => {
   expect(seen['npm test 2>&1 | tail -60']?.includes('gate phase')).toBe(true)
   expect(seen['npm run build && npm run lint && npm test']?.includes('gate phase')).toBe(true)
   expect(seen['npm install']?.includes('build phase')).toBe(true)
+  expect(calls.toasts).toEqual([])
+})
+
+test('gate rilevato ovunque nel comando: ciclo PowerShell, Invoke-Expression; non comandi simili', async ($, on) => {
+  const gates = ['npx -y -p typescript tsc -p .', 'claude plugin validate .', 'claude plugin test .']
+  const config = CONFIG.replace('npm run build', () => gates[0] ?? '').replace('npm run lint', () => gates[1] ?? '').replace('npm test', () => gates[2] ?? '')
+  const seen: Record<string, string> = {}
+  const { calls } = stubEngine(on, {
+    files: { 'factory/config.md': config, 'factory/board.md': BOARD_BUILD },
+    bash: async command => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+      seen[command] = svgOf(await ui.find({ type: 'Svg' }))?.alt ?? ''
+      await ui.unmount()
+    },
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const loop = 'foreach ($c in @("npx -y -p typescript tsc -p .", "claude plugin validate .", "claude plugin test .")) { $o = Invoke-Expression "$c 2>&1"; "$c => $LASTEXITCODE" }'
+  const iex = 'Invoke-Expression "claude plugin test ."'
+  const others = ['claude plugin list', 'git status', 'claude plugin test .x']
+  for (const command of [loop, iex, ...others]) await $.tool.call({ tool: 'Bash', command })
+  expect(seen[loop]?.includes('gate phase')).toBe(true)
+  expect(seen[iex]?.includes('gate phase')).toBe(true)
+  for (const c of others) expect(seen[c]?.includes('build phase')).toBe(true)
   expect(calls.toasts).toEqual([])
 })
 
