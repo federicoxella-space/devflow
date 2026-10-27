@@ -42,7 +42,7 @@ const BOARD_BUILD = board('build', '', ['spec-review → build'])
 type Calls = { toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
 
 /** Sta al posto del motore: file in memoria, store, clock, UI registrata */
-const stubEngine = (on: On, { files, bash }: { files: Record<string, string>; bash?: () => Promise<void> }) => {
+const stubEngine = (on: On, { files, bash }: { files: Record<string, string>; bash?: (command: string) => Promise<void> }) => {
   const calls: Calls = { toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
   const clock = mock.clock(on, { now: 1_000_000 })
   mock.store(on)
@@ -76,7 +76,7 @@ const stubEngine = (on: On, { files, bash }: { files: Record<string, string>; ba
   on('ui.invalidate', () => { calls.invalidations++; return { value: undefined } })
   on('ui.log', () => ({ value: undefined }))
   on('tool.call', async (_, e) => {
-    if (e.tool === 'Bash' && bash) await bash()
+    if (e.tool === 'Bash' && bash) await bash(e.command)
     return { result: {} }
   })
   let n = 0
@@ -92,8 +92,6 @@ const spawn = (description: string, subagentType: string, model = 'sonnet') => (
 /** Props dell'Svg disegnato, come stringhe */
 const svgOf = (el: { props: Record<string, unknown> } | undefined) =>
   el && { alt: String(el.props.alt), source: String(el.props.source), isInteractive: el.props.isInteractive }
-
-const start = ($: Parameters<Parameters<typeof test>[1] & (($: never, on: never) => unknown)>[0]) => $
 
 test('card di un coder durante la factory', async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
@@ -230,4 +228,65 @@ test('/devflow:factory scritto dall utente avvia la run', async ($, on) => {
   // il comando del gate accende la fase gate finché gira
   await $.tool.call({ tool: 'Bash', command: 'npm test' })
   expect(during.includes('gate phase')).toBe(true)
+})
+
+test('needs-human due volte nella stessa sessione: due notifiche', async ($, on) => {
+  const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }
+  const { calls } = stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const write = async (text: string) => {
+    files['factory/board.md'] = text
+    await $.tool.call({ tool: 'Write', file_path: 'factory/board.md', content: text })
+  }
+  await write(board('needs-human', '', ['needs-human: gate keeps failing']))
+  await write(board('build', '', ['needs-human → build']))
+  await write(board('needs-human', '', ['needs-human: still red']))
+  expect(calls.toasts).toEqual(['003-reset: needs you - gate keeps failing', '003-reset: needs you - still red'])
+})
+
+test('comandi del gate reali: pipe e catene; npm install no', async ($, on) => {
+  const seen: Record<string, string> = {}
+  const { calls } = stubEngine(on, {
+    files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD },
+    bash: async command => {
+      const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+      seen[command] = svgOf(await ui.find({ type: 'Svg' }))?.alt ?? ''
+      await ui.unmount()
+    },
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  for (const command of ['npm test 2>&1 | tail -60', 'npm run build && npm run lint && npm test', 'npm install']) {
+    await $.tool.call({ tool: 'Bash', command })
+  }
+  expect(seen['npm test 2>&1 | tail -60']?.includes('gate phase')).toBe(true)
+  expect(seen['npm run build && npm run lint && npm test']?.includes('gate phase')).toBe(true)
+  expect(seen['npm install']?.includes('build phase')).toBe(true)
+  expect(calls.toasts).toEqual([])
+})
+
+test('cambio del board durante il gate non spegne gateRunning', async ($, on) => {
+  const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }
+  let during = ''
+  stubEngine(on, {
+    files,
+    bash: async () => {
+      // l'orchestratore scrive il board mentre il comando del gate gira
+      files['factory/board.md'] = board('build', '', ['round 2'])
+      files['factory/board.md'] = files['factory/board.md'].replace('| build | 1 |', '| review | 1 |')
+      await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'build', new_string: 'review' })
+      const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+      during = svgOf(await ui.find({ type: 'Svg' }))?.alt ?? ''
+      await ui.unmount()
+    },
+  })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.tool.call({ tool: 'Bash', command: 'npm test' })
+  expect(during.includes('gate phase')).toBe(true)
+  // a gate finito resta la fase dello stato del board
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('review phase')).toBe(true)
+  await ui.unmount()
 })

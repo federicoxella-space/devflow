@@ -37,6 +37,7 @@ let openedOnce = false
 let mode: PaletteMode = 'auto'
 let notified = new Notified()
 let lastRows = new Map<string, BoardRow>()
+let ticker: { cancel: () => void } | undefined
 
 // ───────────── helper senza eccezioni ─────────────
 
@@ -179,28 +180,44 @@ const shift = (run: Run, from: string | undefined, to: string, now: number): Run
 
 const boardChanged = async ($: $) => {
   const board = await loadBoard($)
-  const now = await $.clock.now()
-  let run = await read($, runAtom)
-  for (const row of board.rows) {
-    const prev = lastRows.get(row.id)
-    if (prev?.state === row.state) continue
-    // la factory è passata a una nuova feature
-    if (run.active && row.id !== run.featureId && ACTIVE_STATES.has(row.state)) {
-      const cur = board.rows.find(r => r.id === run.featureId)
-      if (!cur || !ACTIVE_STATES.has(cur.state)) run = { ...run, featureId: row.id, ...(await loadTimes($, row.id)) }
-    }
-    if (row.id === run.featureId) {
-      run = shift(run, prev?.state, row.state, now)
-      await saveTimes($, run)
-    }
-    if (prev || row.id === run.featureId) {
-      const why = row.state === 'needs-human' ? needsHumanReason(lastLogOf(board.log, row.id)) : undefined
-      await notify($, onBoardChange(prev, row, why, t), row.id)
-    }
-  }
+  // righe cambiate rispetto all'ultima lettura; lastRows si aggiorna subito, così due Edit concorrenti non le contano due volte
+  const changes = board.rows
+    .map(row => ({ row, prev: lastRows.get(row.id) }))
+    .filter(c => c.prev?.state !== c.row.state)
   lastRows = new Map(board.rows.map(r => [r.id, r]))
-  const next = run
-  await update($, runAtom, () => next)
+  if (!changes.length) return redraw($)
+  const now = await $.clock.now()
+  // tempi delle feature in cui la factory potrebbe passare, letti prima: l'update deve essere sincrono e puro
+  const times = new Map<string, Awaited<ReturnType<typeof loadTimes>>>()
+  for (const c of changes) if (ACTIVE_STATES.has(c.row.state)) times.set(c.row.id, await loadTimes($, c.row.id))
+
+  // calcolato sul valore corrente: tocca solo featureId e tempi, mai waiting/gateRunning
+  const run = await update($, runAtom, cur => {
+    let featureId = cur.featureId
+    let phaseStarted = cur.phaseStarted, phaseEnded = cur.phaseEnded
+    for (const { row, prev } of changes) {
+      if (cur.active && row.id !== featureId && ACTIVE_STATES.has(row.state)) {
+        const current = board.rows.find(r => r.id === featureId)
+        const loaded = times.get(row.id)
+        if ((!current || !ACTIVE_STATES.has(current.state)) && loaded) {
+          featureId = row.id
+          phaseStarted = loaded.phaseStarted
+          phaseEnded = loaded.phaseEnded
+        }
+      }
+      if (row.id === featureId) ({ phaseStarted, phaseEnded } = shift({ ...cur, phaseStarted, phaseEnded }, prev?.state, row.state, now))
+    }
+    return { ...cur, featureId, phaseStarted, phaseEnded }
+  })
+  if (changes.some(c => c.row.id === run.featureId)) await saveTimes($, run)
+
+  // notifiche solo mentre la factory gira; un nuovo stato riapre le notifiche della riga
+  for (const { row, prev } of changes) {
+    notified.forget(`${row.id}:`)
+    if (!run.active || !(prev || row.id === run.featureId)) continue
+    const why = row.state === 'needs-human' ? needsHumanReason(lastLogOf(board.log, row.id)) : undefined
+    await notify($, onBoardChange(prev, row, why, t), row.id)
+  }
   redraw($)
 }
 
@@ -208,23 +225,28 @@ const boardChanged = async ($: $) => {
 const agentPhase = async ($: $, type: string, edge: 'start' | 'end', now: number) => {
   const p: PhaseId | undefined = phaseOfAgent(type)
   if (!p) return
-  const run = await read($, runAtom)
-  if (!run.active) return
   const agents = Object.values(await read($, agentsAtom))
-  const othersRunning = agents.some(a => a.status === 'running' && a.startedAt >= run.startedAt && phaseOfAgent(a.type) === p)
-  let changed: Run | undefined
-  if (edge === 'start') {
-    const s = run.phaseStarted[p], e = run.phaseEnded[p]
-    if (s === undefined || (e !== undefined && e >= s)) changed = { ...run, phaseStarted: { ...run.phaseStarted, [p]: now } }
-  } else if (!othersRunning) {
-    changed = { ...run, phaseEnded: { ...run.phaseEnded, [p]: now } }
-  }
-  if (changed) {
-    const c = changed
-    await update($, runAtom, () => c)
-    await saveTimes($, c)
-  }
+  let changed = false
+  const run = await update($, runAtom, cur => {
+    changed = false
+    if (!cur.active) return cur
+    if (edge === 'start') {
+      const s = cur.phaseStarted[p], e = cur.phaseEnded[p]
+      if (s !== undefined && (e === undefined || e < s)) return cur
+      changed = true
+      return { ...cur, phaseStarted: { ...cur.phaseStarted, [p]: now } }
+    }
+    const othersRunning = agents.some(a => a.status === 'running' && a.startedAt >= cur.startedAt && phaseOfAgent(a.type) === p)
+    if (othersRunning) return cur
+    changed = true
+    return { ...cur, phaseEnded: { ...cur.phaseEnded, [p]: now } }
+  })
+  if (changed) await saveTimes($, run)
 }
+
+/** Un comando Bash è del gate se uno dei suoi pezzi (`&&`, `||`, `;`, `|`) inizia con build/lint/test di config.md */
+export const isGateCommand = (command: string, gates: readonly string[]) =>
+  gates.length > 0 && command.split(/&&|\|\||;|\|/).map(c => c.trim()).some(seg => gates.some(g => seg === g || seg.startsWith(`${g} `)))
 
 const isBoard = (path: unknown) => typeof path === 'string' && /(^|[\\/])factory[\\/]board\.md$/i.test(path)
 
@@ -251,12 +273,14 @@ export const register: Register = (on, options) => {
         lastRows = new Map((await loadBoard($)).rows.map(r => [r.id, r]))
         await update($, runAtom, run => ({ ...run, active: false, waiting: false, gateRunning: false }))
         await quiet(() => $.command.register({ name: COMMAND, description: t.commandDescription }), undefined)
-        // Ridisegno ogni secondo (timer delle card) solo mentre la factory gira con un agente vivo
-        $.clock.every(1000, () => {
+        // Ridisegno ogni secondo (timer di card e tempo totale) solo mentre la factory gira e qualcosa avanza
+        try { ticker?.cancel() } catch { /* timer già fermo */ }
+        ticker = $.clock.every(1000, () => {
           void quiet(async () => {
             const run = await read($, runAtom)
             if (!run.active) return
-            const live = Object.values(await read($, agentsAtom)).some(a => a.status === 'running' && a.startedAt >= run.startedAt)
+            const live = run.gateRunning || run.waiting ||
+              Object.values(await read($, agentsAtom)).some(a => a.status === 'running' && a.startedAt >= run.startedAt)
             if (live) redraw($)
           }, undefined)
         })
@@ -325,7 +349,7 @@ export const register: Register = (on, options) => {
           ...r, featureId: r.featureId ?? featureId, waiting: true, questions: r.questions + (row?.state === 'interview' ? 1 : 0),
         }))
         redraw($)
-        if (row) await notify($, onQuestion(row, t), row.id)
+        if (row) void notify($, onQuestion(row, t), row.id)
       }, undefined)
       try {
         return await next(e)
@@ -336,7 +360,7 @@ export const register: Register = (on, options) => {
 
     if (e.tool === 'Bash') {
       const run = await quiet(() => read($, runAtom), emptyRun())
-      if (!run.active || !gateCommands.includes(e.command.trim())) return next(e)
+      if (!run.active || !isGateCommand(e.command, gateCommands)) return next(e)
       await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true })); redraw($) }, undefined)
       try {
         return await next(e)
@@ -428,18 +452,26 @@ export const register: Register = (on, options) => {
     const row = run.active && run.featureId ? board.rows.find(r => r.id === run.featureId) : undefined
 
     if (row) {
-      const now = await $.clock.now()
-      const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
-      const { gates, reviews } = await loadFeature($, row.id)
-      const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now })
-      const { source, height } = flowSvg(view, W, t, mode, now)
-      const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
-      const alt = shown.length ? `${flowAlt(view, t)}: ${shown.join(', ')}` : flowAlt(view, t)
-      return <Svg isInteractive source={source} alt={alt} width={W} height={height} />
+      try {
+        const now = await $.clock.now()
+        const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
+        const { gates, reviews } = await loadFeature($, row.id)
+        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now })
+        const { source, height } = flowSvg(view, W, t, mode, now)
+        const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
+        const alt = shown.length ? `${flowAlt(view, t)}: ${shown.join(', ')}` : flowAlt(view, t)
+        return <Svg isInteractive source={source} alt={alt} width={W} height={height} />
+      } catch {
+        // un errore nel diagramma lascia il riepilogo del board
+      }
     }
 
-    const summary = summarize(board)
-    const { source, height } = boardSvg(summary, W, t, mode)
-    return <Svg isInteractive source={source} alt={boardAlt(summary, t)} width={W} height={height} />
+    try {
+      const summary = summarize(board)
+      const { source, height } = boardSvg(summary, W, t, mode)
+      return <Svg isInteractive source={source} alt={boardAlt(summary, t)} width={W} height={height} />
+    } catch {
+      return next(e)
+    }
   })
 }

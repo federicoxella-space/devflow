@@ -27,4 +27,6 @@ export class Notified {
   private readonly keys = new Set<string>()
   has(key: string): boolean { return this.keys.has(key) }
   add(key: string): void { this.keys.add(key) }
+  /** Dimentica le chiavi che iniziano con `prefix` (es. `<id>:` quando la riga cambia stato) */
+  forget(prefix: string): void { for (const k of [...this.keys]) if (k.startsWith(prefix)) this.keys.delete(k) }
 }

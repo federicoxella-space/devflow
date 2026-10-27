@@ -30,3 +30,14 @@ test('Notified ricorda le chiavi', () => {
   n.add('a')
   expect(n.has('a')).toBe(true)
 })
+
+test('Notified dimentica per prefisso', () => {
+  const n = new Notified()
+  n.add('003-a:needs-human')
+  n.add('003-a:spec-review:q')
+  n.add('003-ab:pr-open')
+  n.forget('003-a:')
+  expect(n.has('003-a:needs-human')).toBe(false)
+  expect(n.has('003-a:spec-review:q')).toBe(false)
+  expect(n.has('003-ab:pr-open')).toBe(true)
+})
