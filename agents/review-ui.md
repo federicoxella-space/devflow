@@ -32,6 +32,9 @@ Close the browser when done.
 Blocking = broken layout, unreadable content, or clearly off the design system. Taste is non-blocking.
 Round > 1: verify your previous blocking items; no new issues on code that did not change.
 
+Repeats: in round > 1, prefix with `repeat:` every blocking item that is the same problem as a
+blocking item of your previous review, still unfixed (for example `- repeat: path/file.ext:42 — ...`).
+
 Checklist: for every Done checklist item with owner `ui`, record `ok` or `fail` with evidence
 (test name, `path:line`, page/step). Every `fail` is also a Blocking item. Round > 1: keep the
 table complete: re-check `fail` items and items touched by the new commits, copy the others from

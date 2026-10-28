@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import type { AgentCard, BoardRow, GateResult, ReviewResult, Run } from '../types'
-import { deriveView, phaseOfAgent, phaseOfState } from './flow'
+import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 
 const card = (type: string, over: Partial<AgentCard> = {}): AgentCard => ({
   id: `${type}-1`, type, description: 'UserRepo', startedAt: 1000, status: 'running', activity: '', ...over,
@@ -51,6 +51,9 @@ test('gate in corso senza agenti', () => {
 
 test('phaseOfAgent e phaseOfState', () => {
   expect(phaseOfAgent('spec-writer')).toBe('spec')
+  expect(phaseOfAgent('implementer')).toBe('build')
+  expect(phaseOfAgent('devflow:implementer')).toBe('build')
+  expect(phaseOfAgent('spec-checker')).toBe('spec')
   expect(phaseOfAgent('coder')).toBe('build')
   expect(phaseOfAgent('builder')).toBe('build')
   expect(phaseOfAgent('committer')).toBe('commit')
@@ -197,4 +200,32 @@ test('robusto: stato ignoto, nessun agente, round 0', () => {
   expect(v.reviews).toEqual([])
   expect(v.gate).toBeUndefined()
   expect(v.reentry).toBeUndefined()
+})
+
+const prevImpl = (over: Partial<AgentCard> = {}) =>
+  card('implementer', { id: 'i0', status: 'done', model: 'claude-sonnet-5-5', task: 'T2', startedAt: 2000, ...over })
+const spawnOf = (over: Partial<Parameters<typeof escalatedFrom>[1]> = {}) =>
+  ({ type: 'implementer', description: 'Parser', task: 'T2', model: 'claude-opus-5-5', runStartedAt: 1000, ...over })
+
+test('escalatedFrom: famiglia del modello precedente sullo stesso task', () => {
+  expect(escalatedFrom([prevImpl()], spawnOf())).toBe('sonnet')
+  // la più recente vince
+  expect(escalatedFrom([prevImpl({ model: 'haiku', startedAt: 1500 }), prevImpl({ id: 'i1', startedAt: 3000 })], spawnOf())).toBe('sonnet')
+  // famiglia sconosciuta: nome breve del modello
+  expect(escalatedFrom([prevImpl({ model: 'gpt-5' })], spawnOf())).toBe('gpt 5')
+  // alias coder/builder contano come fase build
+  expect(escalatedFrom([prevImpl({ type: 'coder' })], spawnOf({ type: 'builder' }))).toBe('sonnet')
+})
+test('escalatedFrom: descrizione identica se manca il task id', () => {
+  expect(escalatedFrom([prevImpl({ task: undefined, description: 'Parser' })], spawnOf({ task: undefined }))).toBe('sonnet')
+  expect(escalatedFrom([prevImpl({ task: undefined, description: 'Altro' })], spawnOf({ task: undefined }))).toBeUndefined()
+})
+test('escalatedFrom: nessun marcatore', () => {
+  expect(escalatedFrom([], spawnOf())).toBeUndefined()
+  expect(escalatedFrom([prevImpl()], spawnOf({ model: 'claude-sonnet-5-5' }))).toBeUndefined()
+  expect(escalatedFrom([prevImpl()], spawnOf({ task: 'T3' }))).toBeUndefined()
+  expect(escalatedFrom([prevImpl({ status: 'running' })], spawnOf())).toBeUndefined()
+  expect(escalatedFrom([prevImpl({ startedAt: 500 })], spawnOf())).toBeUndefined()
+  expect(escalatedFrom([prevImpl()], spawnOf({ model: undefined }))).toBeUndefined()
+  expect(escalatedFrom([card('review-code', { status: 'done', model: 'sonnet', task: 'T2', startedAt: 2000 })], spawnOf())).toBeUndefined()
 })

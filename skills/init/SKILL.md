@@ -28,7 +28,8 @@ file.
   fields of `factory/config.md`; Release = only step 1c, which also updates the release files after
   a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
   offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
-  `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty: nothing
+  `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty, without `implementer_model` as `sonnet / medium`, without
+  `escalation_model` as `opus / medium`: nothing
   to migrate.
   Never touch an existing `factory/board.md`.
 
@@ -147,6 +148,8 @@ ui_review: none        # none | static | browser
 dev_server: ""         # browser only, e.g. npm run dev
 base_url: ""           # browser only, e.g. http://localhost:5173
 max_rounds: 2          # rework rounds after the first review
+implementer_model: sonnet / medium  # <model> / <effort>: model of the implementers
+escalation_model: opus / medium     # <model> / <effort>: complex tasks and escalated tasks
 release: "off"         # auto | off — automatic tag + release on every merged PR (github, gitlab)
 workspace: ask         # ask | branch | worktree — where a new feature runs
 worktree_setup: ""     # worktree only: command run in a new worktree, e.g. npm ci (empty = none)

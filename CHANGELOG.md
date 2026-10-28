@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.18.0 — 2026-10-28
+- feat(factory): one sonnet implementer, opus checks and escalation (#16)
+
 ## v0.17.0 — 2026-10-28
 - feat(factory): allow changing a feature with an open PR (#14)
 

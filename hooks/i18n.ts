@@ -29,7 +29,7 @@ const en = {
     review: 'review', approver: 'approver', finish: 'pr',
   } as Record<PhaseId, string>,
   desc: {
-    interview: 'orchestrator · questions', spec: 'spec-writer · writes the spec', build: 'coder · builder',
+    interview: 'orchestrator · questions', spec: 'spec-writer · writes the spec', build: 'implementer',
     gate: 'orchestrator', commit: 'committer · Conventional Commits', review: 'reviewers · PASS or CHANGES',
     approver: 'verifies the evidence', finish: enFinish('github'),
   } as Record<PhaseId, string>,
@@ -84,7 +84,7 @@ const it: Strings = {
     review: 'review', approver: 'approver', finish: 'pr',
   },
   desc: {
-    interview: 'orchestratore · domande', spec: 'spec-writer · scrive la spec', build: 'coder · builder',
+    interview: 'orchestratore · domande', spec: 'spec-writer · scrive la spec', build: 'implementer',
     gate: 'orchestratore', commit: 'committer · Conventional Commits', review: 'reviewer · PASS o CHANGES',
     approver: 'verifica le prove', finish: itFinish('github'),
   },

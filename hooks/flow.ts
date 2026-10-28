@@ -1,3 +1,4 @@
+import { family, shortModel } from './palette'
 import type { AgentCard, BoardRow, FlowView, Forge, GateResult, PhaseId, PhaseStatus, ReviewResult, Run } from '../types'
 
 export const PHASES = ['interview', 'spec', 'build', 'gate', 'commit', 'review', 'approver', 'finish'] as const satisfies readonly PhaseId[]
@@ -7,11 +8,32 @@ const idx = (id: PhaseId) => PHASES.indexOf(id)
 export const phaseOfAgent = (type: string): PhaseId | undefined => {
   const t = type.replace(/^devflow:/, '')
   if (t === 'spec-writer') return 'spec'
-  if (t === 'coder' || t === 'builder') return 'build'
+  if (t === 'spec-checker') return 'spec'
+  if (t === 'implementer' || t === 'coder' || t === 'builder') return 'build'
   if (t === 'committer') return 'commit'
   if (t.startsWith('review-')) return 'review'
   if (t === 'approver') return 'approver'
   return undefined
+}
+
+/**
+ * Escalation di una card di fase build: la più recente card di build sullo stesso task (task id, altrimenti
+ * descrizione identica), conclusa e della run corrente, con famiglia di modello diversa da quella dello spawn.
+ * Restituisce la famiglia precedente (`shortModel` se `other`); nessun marcatore se manca il modello dello spawn.
+ */
+export const escalatedFrom = (
+  cards: AgentCard[],
+  spawn: { type: string; description: string; task?: string; model?: string; runStartedAt: number },
+): string | undefined => {
+  if (!spawn.model || phaseOfAgent(spawn.type) !== 'build') return undefined
+  const prev = cards
+    .filter(c => phaseOfAgent(c.type) === 'build' && c.status !== 'running' && c.startedAt >= spawn.runStartedAt &&
+      (spawn.task && c.task ? c.task === spawn.task : c.description === spawn.description))
+    .sort((a, b) => b.startedAt - a.startedAt)[0]
+  if (!prev) return undefined
+  const f = family(prev.model)
+  if (f === family(spawn.model)) return undefined
+  return f === 'other' ? shortModel(prev.model) : f
 }
 
 export const phaseOfState = (state: string): PhaseId | undefined => {
