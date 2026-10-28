@@ -12,6 +12,11 @@ the project's `CLAUDE.md` if present, then only the code the playbook does not a
 re-ask questions already answered in `## Interview`. Every item of `## Deferred` goes in
 `## Out of scope` with its issue or queued id; no task or criterion covers it.
 
+**Spec check.** If you also get the path of `spec-check.md`, the spec checker found gaps: task
+decisions the spec leaves open. Close each one by deciding it in the spec; if the decision belongs
+to the user (a requirement, not a design detail), write it in `## Open questions` instead. Reply with
+a one-line summary of what you decided.
+
 **Change.** If you also get `change: <n>`, the feature already has an approved spec and an open PR;
 the orchestrator saved `spec-c<n>.md` and `checklist-c<n>.md` before you. Read the `**Change <n>.**`
 line and the questions below it in `## Interview`. Always rewrite `## Tasks` with only the work of
@@ -91,11 +96,10 @@ Rules:
   fixtures/snapshots, lockfiles, migrations and generated files; shared files (DI
   registration, routing, ...) go in one task the others depend on. `complexity` defaults to
   `simple`: the implementer only executes what the spec decides, including additive migrations
-  (new table, column, index) and dependencies the spec names. `complex` only if the task needs a
-  design decision the spec cannot make up front, concurrency or security-sensitive logic, a
-  non-trivial algorithm, a destructive or data-transforming migration, or a change that cuts
-  across many modules. Aim for most tasks `simple`; when in doubt, decide in the spec and keep it
-  `simple`.
+  (new table, column, index) and dependencies the spec names. `complex` only for a task that is
+  security-sensitive, concurrent, or has a destructive or data-transforming migration; it starts on
+  the stronger escalation model. Everything else is decided in the spec and is `simple`, even a
+  non-trivial algorithm or a change across many modules.
 - **Rule proposals.** A convention or pattern you found that the project playbook lacks, one line
   each; the `<why>` says what you observed, where (path) and which problem the rule avoids. Omit
   the section if none.

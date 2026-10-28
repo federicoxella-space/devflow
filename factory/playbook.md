@@ -13,6 +13,8 @@
 - Run state that must survive a resume goes in `$.store` under a key with the session id; `$.state` covers only a hot reload.
 - A test rewritten because behaviour changed replaces each removed assertion with an equivalent one, so coverage is not lost silently.
 - In forge commands the PR title is passed in single quotes or from a file, never inside double quotes: a title derived from user text may contain `$(...)` or backticks.
+- Every new agent in `agents/` that the pane must show is added to `phaseOfAgent` in `hooks/flow.ts` with a test.
+- Tests with multi-line prompt strings build them with `[...].join('\n')`, never a literal line break inside quotes.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.

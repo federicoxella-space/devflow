@@ -23,22 +23,26 @@ The factory is one skill, `/devflow:factory`. Whichever Claude Code session runs
 flowchart TD
     feature[feature] --> interview{"interview<br>human, one question at a time"}
     interview --> specWriter["spec-writer<br>[opus]"]
-    specWriter --> human_spec{"human approves spec"}
+    specWriter --> specCheck["spec-checker<br>[opus]"]
+    specCheck --> |"GAPS (max 2)"| specWriter
+    specCheck --> |"PASS / open questions"| human_spec{"human approves spec"}
     human_spec --> |changes| specWriter
     human_spec --> |approve| route{"complexity<br>per task"}
     subgraph impl [implementers, parallel tasks]
-        coder["coder<br>[sonnet]"]
-        builder["builder<br>[opus]"]
-        coder --> |ESCALATE| builder
+        coder["implementer<br>[sonnet]"]
+        builder["implementer<br>[opus]"]
+        coder --> |"ESCALATE stuck / gate x2 / repeat"| builder
+        coder --> |"ESCALATE design"| specWriter
     end
     route --> |simple| coder
-    route --> |complex| builder
+    route --> |"complex (escalation_model)"| builder
+    builder --> |"ESCALATE stuck"| need
     impl --> gate{"gate<br>build · lint · test"}
     gate --> |"FAIL (max 2 per round)"| impl
     gate --> |PASS| committer["committer<br>[haiku]"]
     committer --> |"hook FAIL"| impl
     committer --> |OK| security["security<br>[opus]"]
-    committer --> |OK| code["code<br>[sonnet]"]
+    committer --> |OK| code["code<br>[opus]"]
     committer --> |"OK, if UI"| ux["ux<br>[sonnet]"]
     committer --> |"OK, if UI"| ui_design["ui design<br>[sonnet]"]
     security --> wait{"WAIT FOR ALL<br>reviews in"}
@@ -59,7 +63,8 @@ flowchart TD
 |---|---|---|---|
 | interview (orchestrator) | `feature.md`, playbook, codebase | feature `playbook.md`; deferred logic → issue or queued row + `factory/backlog.md` | asks until every criterion can be written without guessing; human chooses integrate or defer for new logic |
 | spec-writer | both playbooks, codebase | `spec.md`, done checklist | `kind`, tasks with owned files and `complexity`, `reviewers` list |
-| coder / builder | `spec.md`, one task, reviews | code + tests for owned files (no commits) | coder → `ESCALATE` to builder if not simple |
+| spec-checker | `spec.md`, playbooks, codebase | `spec-check.md` | `verdict: PASS \| GAPS`: every task executable without open design decisions |
+| implementer | `spec.md`, one task, reviews, optional `handover` | code + tests for owned files (no commits) | sonnet by default; `ESCALATE design` → spec-writer, `ESCALATE stuck` / gate failed twice / `repeat:` review item → new implementer on opus; pane card `implementer ← sonnet`. `coder` / `builder` are deprecated aliases |
 | gate (orchestrator) | `config.md` commands | `gate-rN.md` | exit codes |
 | committer | working tree, `## Tasks`, commit rules | Conventional Commits on `feature/<id>` or `hotfix/<id>`, one per task; PR title in round 1 | hook fail → stop (forbidden files are checked by the orchestrator first) |
 | reviewers | diff, `spec.md`, playbooks | `reviews/rN-<name>.md` with checklist table | `verdict: PASS \| CHANGES` (CHANGES only for blocking items) |
@@ -77,7 +82,7 @@ plugin (this folder)                     target project
 .mcp.json            (Playwright)        factory/playbook.md project rules + DoD (committed)
 skills/factory/SKILL.md (orchestrator)   factory/backlog.md  deferred logic queued on the board (committed)
 skills/init/SKILL.md (setup)             factory/features/<id>/
-agents/*.md          (9 agents)              feature.md, playbook.md, spec.md, rule-proposals.md,
+agents/*.md          (11 files)               feature.md, playbook.md, spec.md, rule-proposals.md,
                                              gate-rN.md, reviews/rN-*.md, decision.md
 hooks/               (flow pane mod, read-only)
 ```

@@ -7,7 +7,7 @@ import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewRe
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
 import { bindFeature, featureOfArg, parseBoard, soleActive, summarize } from './board'
 import { parseGate, parseReview } from './feature'
-import { deriveView, phaseOfAgent, phaseOfState } from './flow'
+import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
 import { parseCards, parseSession, reconcile, showsFlow } from './restore'
@@ -542,17 +542,17 @@ export const register: Register = (on, options) => {
         const task = taskIdOf(e.prompt)
         const run = await read($, runAtom)
         const all = await read($, agentsAtom)
-        // stesso task del coder concluso: dal task id del prompt, altrimenti dalla descrizione identica
-        const sameTask = (c: AgentCard) => (task && c.task ? c.task === task : c.description === e.description)
-        const escalated = type === 'builder' && Object.values(all).some(c =>
-          c.type === 'coder' && sameTask(c) && c.status !== 'running' && c.startedAt >= run.startedAt)
+        // escalation in base al modello dello spawn, non al tipo di agent
+        const escalated = escalatedFrom(Object.values(all), {
+          type, description: e.description, task, model: r.model ?? e.model, runStartedAt: run.startedAt,
+        })
         await update($, agentsAtom, cur => {
           const old = cur[id]
           const card: AgentCard = {
             id, type, description: e.description, model: r.model ?? old?.model, effort: old?.effort,
             startedAt: old?.startedAt ?? now, status: 'running', activity: '@starting',
             ...(task ?? old?.task ? { task: task ?? old?.task } : {}),
-            ...(escalated ? { escalatedFrom: 'coder' } : old?.escalatedFrom ? { escalatedFrom: old.escalatedFrom } : {}),
+            ...(escalated ? { escalatedFrom: escalated } : old?.escalatedFrom ? { escalatedFrom: old.escalatedFrom } : {}),
           }
           return { ...cur, [id]: card }
         })

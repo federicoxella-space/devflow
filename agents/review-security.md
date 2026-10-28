@@ -30,6 +30,9 @@ Blocking = an exploitable issue or a missing control in code this feature adds o
 ideas and pre-existing issues elsewhere are non-blocking (mention them once). Round > 1: verify your
 previous blocking items and check only the new commits.
 
+Repeats: in round > 1, prefix with `repeat:` every blocking item that is the same problem as a
+blocking item of your previous review, still unfixed (for example `- repeat: path/file.ext:42 — ...`).
+
 Checklist: for every Done checklist item with owner `security`, record `ok` or `fail` with evidence
 (test name, `path:line`, page/step). Every `fail` is also a Blocking item. Round > 1: keep the
 table complete: re-check `fail` items and items touched by the new commits, copy the others from

@@ -440,19 +440,21 @@ test('board scritto durante la factory: needs-human notificato col motivo dal lo
   expect(calls.toasts.length).toBe(1)
 })
 
-test('escalation: builder dopo un coder sullo stesso task', async ($, on) => {
+test('escalation: implementer su un altro modello dopo uno stesso task', async ($, on) => {
   stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const coder = await $.agent.spawn(spawn('Task parser', 'devflow:coder', 'haiku'))
-  await $.turn.complete({ reason: 'answer', answer: 'ESCALATE', durationMs: 10, isAborted: false, turnId: 't2', agentId: coder.agentId })
-  await $.agent.spawn(spawn('Task parser', 'devflow:builder', 'opus'))
-  await $.agent.spawn(spawn('Altro task', 'devflow:builder', 'opus'))
+  const first = await $.agent.spawn(spawn('Task parser', 'devflow:implementer', 'sonnet'))
+  await $.turn.complete({ reason: 'answer', answer: 'ESCALATE stuck: test rossi', durationMs: 10, isAborted: false, turnId: 't2', agentId: first.agentId })
+  await $.agent.spawn(spawn('Task parser', 'devflow:implementer', 'opus'))
+  // primo spawn su Opus di un altro task (complex): nessuna escalation
+  await $.agent.spawn(spawn('Altro task', 'devflow:implementer', 'opus'))
   // un agente non devflow non ha card
   await $.agent.spawn(spawn('Cerca file', 'Explore', 'haiku'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
-  expect(svg?.source.includes('builder ← coder')).toBe(true)
+  expect(svg?.source.includes('implementer ← sonnet')).toBe(true)
+  expect((svg?.source ?? '').split('implementer ← sonnet').length - 1).toBe(1)
   expect(svg?.alt.includes('Cerca file')).toBe(false)
   expect(svg?.alt.includes('2 agents')).toBe(true)
   await ui.unmount()
@@ -462,15 +464,15 @@ test('escalation riconosciuta dal task id del prompt, anche con descrizioni dive
   stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const coder = await $.agent.spawn(spawn('Parser CSV', 'devflow:coder', 'haiku', 'Feature dir: factory/features/003-reset\nSpec: spec.md\nTask id: T2\nparallel: false'))
-  await $.turn.complete({ reason: 'answer', answer: 'ESCALATE', durationMs: 10, isAborted: false, turnId: 't2', agentId: coder.agentId })
-  await $.agent.spawn(spawn('Parser CSV robusto', 'devflow:builder', 'opus', 'Feature dir: factory/features/003-reset\nTask id: T2\nCoder reply: ESCALATE'))
+  const first = await $.agent.spawn(spawn('Parser CSV', 'devflow:implementer', 'sonnet', ['Feature dir: factory/features/003-reset', 'Spec: spec.md', 'Task id: T2', 'parallel: false'].join('\n')))
+  await $.turn.complete({ reason: 'answer', answer: 'ESCALATE stuck: test rossi', durationMs: 10, isAborted: false, turnId: 't2', agentId: first.agentId })
+  await $.agent.spawn(spawn('Parser CSV robusto', 'devflow:implementer', 'opus', ['Feature dir: factory/features/003-reset', 'Task id: T2', 'handover: factory/features/003-reset/handover-T2-r1.md'].join('\n')))
   // stessa descrizione ma task diverso: nessuna escalation
-  await $.agent.spawn(spawn('Parser CSV', 'devflow:builder', 'opus', 'Task id: T3'))
+  await $.agent.spawn(spawn('Parser CSV', 'devflow:implementer', 'opus', 'Task id: T3'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
-  expect(source.split('builder ← coder').length - 1).toBe(1)
-  expect(/Parser CSV robusto<\/text><text class="d"[^>]*>builder ← coder/.test(source)).toBe(true)
+  expect(source.split('implementer ← sonnet').length - 1).toBe(1)
+  expect(/Parser CSV robusto<\/text><text class="d"[^>]*>implementer ← sonnet/.test(source)).toBe(true)
   await ui.unmount()
 })
 
