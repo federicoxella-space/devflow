@@ -61,30 +61,56 @@ On every state change update the row **and** append one log line (local time, `Y
 
 **Shared board.** Several sessions can run different features at once, each writing this board.
 Right before every write, re-read `board.md`, change only your own row, and append your log lines
-at the end. Compute the next free NNN from the board and `factory/features/` re-read at that moment.
+at the end. Compute the next free NNN at that moment, as the highest plus one of: the ids in the
+board and in `<main>/factory/features/` (re-read), the local and remote branches `*/NNN-*`
+(`git -C "<main>" branch -a --format=%(refname:short)`) and the basenames `NNN-*` of the paths in
+`git -C "<main>" worktree list --porcelain`.
 
-**Workspace.** A feature runs in `branch` mode (the main checkout, `git switch -c`) or in
-`worktree` mode (a separate git worktree). The mode is the single line under `## Workspace` in the
-feature playbook; a feature without that section (old format) is `branch`. The worktree path is
-`<parent of toplevel>/<repo>.worktrees/<id>` (`<repo>` = folder name of the toplevel, e.g.
-`F:/devflow.worktrees/001-worktree-or-branch`); below it is `<path>`. You always stay in the main
-checkout (`factory/` lives only there). In `worktree` mode git and project commands that concern
-the feature run in `<path>` (`git -C <path> ...`, `cd <path> && <cmd>`), and every implementer,
-committer, reviewer and approver gets the input `workdir: <path>`. Paths in the feature dir stay
-those of the main checkout.
+**Main checkout.** `<session>` = `git rev-parse --show-toplevel`. `<main>` = the parent folder of
+the output of `git rev-parse --path-format=absolute --git-common-dir`, if its last segment is
+`.git`; otherwise (bare repo, old git, error) `<main>` = `<session>`. A session opened in a git
+worktree of the repo therefore uses the same board as every other session. Every file of
+`factory/` (config, playbook, board, backlog, feature folders) is read and written in
+`<main>/factory/`, and agents get absolute paths under `<main>`. Git commands that concern no
+feature (pr-state, fetch, cleanup, updating `base_branch`, `worktree add/remove`, `branch -D`) run
+as `git -C "<main>" ...`. Where this file says "the main checkout" or `factory/`, it means
+`<main>`.
+
+**Workspace.** A feature runs in `branch` mode (`git switch -c`) or in `worktree` mode (a separate
+git worktree). The mode is the first line under `## Workspace` in the feature playbook; a feature
+without that section (old format) is `branch`. The worktree path is
+`<parent of <main>>/<repo>.worktrees/<id>` (`<repo>` = folder name of `<main>`, e.g.
+`F:/devflow.worktrees/001-worktree-or-branch`); below it is `<path>`.
+
+**Feature checkout `<dir>`.** The checkout where git, gate and agents of a feature run:
+`worktree` → `<path>`; `branch` with a line `checkout: <dir>` under `## Workspace` → that `<dir>`;
+`branch` without it → `<main>`. When `<dir>` is not `<main>`, git and project commands that concern
+the feature run there (`git -C "<dir>" ...`, `cd "<dir>" && <cmd>`), and every implementer,
+committer, reviewer and approver gets the input `workdir: <dir>`; for `<main>` no `workdir` is
+passed. Paths in the feature dir stay those of `<main>`. Below, "in `worktree` mode ... `<path>`"
+applies in the same way to a `branch` feature with `checkout: <dir>`, using `<dir>`. If `<dir>`
+does not exist when a feature is resumed → `needs-human` with the path.
 
 ## Entry point
 
-1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` or `factory/playbook.md`
+1. `git rev-parse --show-toplevel` must succeed; compute `<session>` and `<main>` (see **Main
+   checkout**). If `<main>/factory/config.md` or `<main>/factory/playbook.md`
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
-   Read `factory/config.md` once; its frontmatter drives the run. `implementer_model` and
+   Read `<main>/factory/config.md` once; its frontmatter drives the run. `implementer_model` and
    `escalation_model` have the form `<model> / <effort>` (effort missing → `medium`); a missing key
    uses its default, `sonnet / medium` and `opus / medium`. Then read the **forge file**
    `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
    commands of the six forge operations `auth`, `open-pr`, `update-pr`, `pr-state`,
    `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
-2. Read `factory/board.md`. If there are `pr-open` rows, `git fetch --prune` once, then run
-   **pr-state** for each (PR reference from the PR column, branch from the branch column):
+   **Local state in a worktree.** If `<session>` ≠ `<main>`: the local features are the ids of the
+   rows of `<session>/factory/board.md` and the folders `<session>/factory/features/*`. If at least
+   one is not in the board of `<main>` (full id): list ids and titles, explain the manual move
+   (copy the folder into `<main>/factory/features/`; if its id is already used, renumber it to the
+   next free NNN, branch included; copy its row and log lines into the main board; then delete
+   `<session>/factory/board.md` and the copied folders) and stop without writing anything. Local
+   features already in the main board do not block; suggest in one line to delete them.
+2. Read `<main>/factory/board.md`. If there are `pr-open` rows, `git -C "<main>" fetch --prune`
+   once, then run **pr-state** for each (PR reference from the PR column, branch from the branch column):
    - `MERGED` → state `merged`.
    - `CLOSED` → state `closed`; keep the branch. Tell the user in one line: to resume it, set the
      state by hand (e.g. `approve`) and reopen the PR; otherwise they can delete the branch.
@@ -94,16 +120,21 @@ those of the main checkout.
 
    **Cleanup** of every `merged` row whose local branch still exists, including rows the user set
    `merged` by hand:
-   0. If the row's worktree `<path>` exists: `git worktree remove <path>` (never `--force`), then
-      `git branch -D <kind>/<id>` and log "worktree and branch deleted". If the removal fails
-      (e.g. local changes), keep both and say so in one line. Skip step 1 for this row.
-   1. Without a worktree, if the branch is not the current branch: `git branch -D <kind>/<id>` and log "branch
-      deleted". `-D` because after a squash or rebase merge `-d` refuses; it is safe because
-      pr-state, or the user editing the board, has confirmed the merge. If it is the current
-      branch, keep it and tell the user.
-   2. If at least one branch was deleted or one row became `merged`, update the base branch: if the
-      current branch is `base_branch`, `git pull --ff-only`; else
-      `git fetch origin <base_branch>:<base_branch>`. If it fails (local commits, conflicting
+   0. If the row's checkout folder exists (the worktree `<path>`, or `<dir>` of a `checkout:` line):
+      if it is `<session>` or `<main>`, skip the removal and say so in one line. Otherwise
+      `git -C "<main>" worktree remove "<folder>"` (never `--force`), then
+      `git -C "<main>" branch -D "<kind>/<id>"` and log "worktree and branch deleted". If the
+      removal fails (e.g. local changes), keep both and say so in one line. Skip step 1 for this
+      row.
+   1. Without such a folder, if the branch is not checked out in any worktree
+      (`git -C "<main>" worktree list --porcelain`): `git -C "<main>" branch -D "<kind>/<id>"` and
+      log "branch deleted". `-D` because after a squash or rebase merge `-d` refuses; it is safe
+      because pr-state, or the user editing the board, has confirmed the merge. If it is checked
+      out somewhere, keep it and tell the user in one line.
+   2. If at least one branch was deleted or one row became `merged`, update the base branch in
+      `<main>`: if the branch checked out in `<main>` is `base_branch`,
+      `git -C "<main>" pull --ff-only`; else `git -C "<main>" fetch origin
+      <base_branch>:<base_branch>`. If it fails (local commits, conflicting
       changes), tell the user in one line and go on.
 3. Pick the feature to work on. Active = state `interview`, `spec`, `spec-review`, `build`,
    `review` or `approve`.
@@ -117,12 +148,12 @@ those of the main checkout.
    - No argument: exactly one active row → resume it; several → AskUserQuestion with the active
      rows (id, title, state) and **New feature** (then ask for its description); none → the oldest
      `queued` row; if none, show the board and stop.
-   - Creating a feature: next free NNN, slug from the text, write `feature.md`, add the row as
-     `interview`.
+   - Creating a feature: next free NNN (see **Shared board**), slug from the text, write
+     `feature.md` in `<main>/factory/features/<id>/`, add the row as `interview`.
    - Resuming: if it has no `features/<id>/playbook.md` (old format), set it back to `interview`
      with the log note "restarted: old format".
-4. Preconditions before `build`: `git status --porcelain` is empty (in `worktree` mode, run it in
-   `<path>`), **auth** succeeds. If not, tell the user what is wrong and stop.
+4. Preconditions before `build`: `git status --porcelain` is empty (run it in `<dir>`), **auth**
+   succeeds. If not, tell the user what is wrong and stop.
 
 ## The loop
 
@@ -140,15 +171,16 @@ already run pr-state for it.
   ignored and resume as usual. On `merged`/`closed` rows: as above.
 
 **Start of a change.**
-1. In `branch` mode `git status --porcelain` must be empty; otherwise say so and stop, registering
+1. In `branch` mode `git -C "<dir>" status --porcelain` must be empty; otherwise say so and stop, registering
    nothing.
 2. `n` = number of lines in the feature playbook's `## Changes` + 1. Append to `## Changes` (create
    it after `## Deferred` if missing) `- Change <n> — <text> — from round <board round + 1> — in
    progress`, and to `## Interview` the line `**Change <n>.** <text>`. Set state `interview`, log
    `pr-open → interview · change <n>`.
-3. Align the branch: `branch` mode → `git switch "<branch>"` (if the local branch is missing:
-   `git switch -c "<branch>" --track "origin/<branch>"`), then `git pull --ff-only`; `worktree` mode
-   → `git -C "<path>" pull --ff-only`, and a missing `<path>` → `needs-human`. Any error →
+3. Align the branch: `branch` mode → `git -C "<dir>" switch "<branch>"` (if the local branch is
+   missing: `git -C "<dir>" switch -c "<branch>" --track "origin/<branch>"`), then
+   `git -C "<dir>" pull --ff-only`; `worktree` mode → `git -C "<path>" pull --ff-only`. A missing
+   `<dir>` or `<path>` → `needs-human`. Any error →
    `needs-human` with the output; the user fixes it and sets the state back to `interview`. The base
    branch is not merged in.
 
@@ -164,7 +196,8 @@ You run it (agents cannot talk to the user). Goal: nothing in the spec is guesse
    **Branch / Worktree**, with the short context: a worktree lets other sessions work on other
    features in parallel, at the cost of a separate folder and its setup. Write the value under
    `## Workspace` in the feature playbook, before `## Interview` (also when the interview is
-   "No questions needed.").
+   "No questions needed."). If the mode is `branch` and `<session>` ≠ `<main>`, also write the line
+   `checkout: <session>` right below it.
 1. Read `feature.md`, `factory/playbook.md` and the code the request touches.
 2. List for yourself the gaps: everything that cannot be derived from the request, the playbook or
    the code, plus missing details (error behaviour, edge cases, permissions, visible text, data,
@@ -266,22 +299,26 @@ AskUserQuestion: **Approve / Request changes / Reject**.
   agent id, or a fresh spawn with the feedback), run the spec check, and ask again.
 - Reject on a change → restore `spec.md` and the checklist from `spec-c<n>.md` and
   `checklist-c<n>.md`, mark the change `rejected` in `## Changes`, state `pr-open`, log
-  `spec-review → pr-open · change <n> rejected`, in `branch` mode `git switch "<base_branch>"`; the
-  PR is not touched.
+  `spec-review → pr-open · change <n> rejected`, in `branch` mode without `checkout:`
+  `git switch "<base_branch>"` (with `checkout:` `<dir>` stays on the branch); the PR is not
+  touched.
 - Approve on a change → state `build`, round = board round + 1; no new branch or worktree (skip
   the two Approve items below).
 - Reject → state `needs-human`, note "rejected", stop. If `factory/backlog.md` has uncommitted
   changes, tell the user to commit it.
-- Approve, `branch` mode → `git switch <base_branch> && git pull --ff-only && git switch -c
-  <kind>/<id>` (`feature/<id>` or `hotfix/<id>`), write the branch in the board. If
+- Approve, `branch` mode without `checkout:` → `git switch <base_branch> && git pull --ff-only &&
+  git switch -c <kind>/<id>` (`feature/<id>` or `hotfix/<id>`), write the branch in the board.
+  With `checkout: <dir>`: update `base_branch` in `<main>` as in worktree step 1 below, then
+  `git -C "<dir>" switch -c "<kind>/<id>" "<base_branch>"`, write the branch in the board, and move
+  the feature's backlog lines into `<dir>` as in worktree step 5 (with `<dir>` for `<path>`). If
   `factory/backlog.md` has uncommitted changes, add `!factory/backlog.md` to `.gitignore` if
   missing, then `git add factory/backlog.md .gitignore && git commit -m "docs(factory): update
   backlog"` with the footer `Factory: <id>` (a hook rejection → `needs-human` with the output).
   Set state `build`, round `1`.
 - Approve, `worktree` mode:
-  1. Update `base_branch` without switching branch in the main checkout: `git pull --ff-only` if it
-     is the current branch, else `git fetch origin <base_branch>:<base_branch>`.
-  2. `git worktree add -b "<kind>/<id>" "<path>" <base_branch>`; the branch column is
+  1. Update `base_branch` without switching branch in `<main>`: `git -C "<main>" pull --ff-only` if
+     it is the current branch, else `git -C "<main>" fetch origin <base_branch>:<base_branch>`.
+  2. `git -C "<main>" worktree add -b "<kind>/<id>" "<path>" <base_branch>`; the branch column is
      `<kind>/<id>`, as in `branch` mode; log `spec-review → build · worktree <path>`.
   3. If `worktree_setup` in config is not empty, run it in `<path>`.
   4. An error → `needs-human` with the output. In 1-2 no worktree exists: the user fixes the cause
@@ -414,8 +451,8 @@ round (and `workdir` in `worktree` mode). Read `decision.md` frontmatter:
   spec goal + done checklist table from `decision.md` + non-blocking review notes + footer
   `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
   `pr-open` with the reference open-pr returned in the PR column (`-` with forge `git`: pass on its
-  message to the user), then, in `branch` mode only, `git switch <base_branch>`; a worktree stays
-until the merge (cleanup). If open-pr fails, `needs-human` with the
+  message to the user), then, in `branch` mode without `checkout:` only, `git switch <base_branch>`;
+a worktree or a `checkout:` folder stays on its branch until the merge (cleanup). If open-pr fails, `needs-human` with the
   output.
 
 **With a change `in progress`** (also on resume in `approve`) use **update-pr** instead of
@@ -427,8 +464,8 @@ board even if `kind` changed. Write `change-<n>.md` in the language of `feature.
 `gate-r<N>.md`), footer `Factory: <id>`. Call update-pr (reference from the PR column, head =
 branch column, title, body file `pr.md`, comment file `change-<n>.md`). Push or title/body failure
 → `needs-human` with the output; comment failure → one line to the user, go on. Then mark the
-change `approved`, state `pr-open`, PR column unchanged, and in `branch` mode `git switch
-"<base_branch>"`. With forge `git`, pass on update-pr's message to the user.
+change `approved`, state `pr-open`, PR column unchanged, and in `branch` mode without `checkout:`
+`git switch "<base_branch>"`. With forge `git`, pass on update-pr's message to the user.
 
 ### 6b. Rule proposals — still state `approve`
 `rule-proposals.md` collects, in order, the `## Rule proposals` of spec-writer, implementers and
@@ -467,9 +504,9 @@ Mark each line
 section of `factory/playbook.md` (Definition of Done items as `- [<owner>] <item>`, appended at the
 end so existing `DoD-<n>` ids do not move). Only if at least one rule was approved, commit it on the
 feature branch: `git add factory/playbook.md && git commit -m "docs(factory): update playbook"` with
-the footer `Factory: <id>`. In `worktree` mode add the rules to `<path>/factory/playbook.md` and
-commit in `<path>`; never edit `factory/playbook.md` in the main checkout, which other sessions
-share. If a commit hook rejects it, `needs-human` with the output. The rules
+the footer `Factory: <id>`. When `<dir>` is not `<main>` (`worktree` mode or `checkout:`) add the
+rules to `<dir>/factory/playbook.md` and commit in `<dir>`; never edit `factory/playbook.md` in
+`<main>`, which other sessions share. If a commit hook rejects it, `needs-human` with the output. The rules
 reach the base branch with the PR. If the feature goes to `needs-human`, the file stays and its open lines are
 shown when the feature is back in `approve`.
 
