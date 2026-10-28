@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.15.0 — 2026-10-28
+- feat(pane): keep flow pane state across reload and resume (#12)
+
 ## v0.14.0 — 2026-10-28
 - feat(spec): show expected result before spec approval (#11)
 
