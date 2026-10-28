@@ -39,11 +39,11 @@ ${log.map(l => `- 2026-10-27 10:00 · 003-reset · ${l}`).join('\n')}
 `
 const BOARD_BUILD = board('build', '', ['spec-review → build'])
 
-type Calls = { toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
+type Calls = { reads: string[]; toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
 
 /** Sta al posto del motore: file in memoria, store, clock, UI registrata */
 const stubEngine = (on: On, { files, bash, surfaces = ['terminal'], store = {} }: { files: Record<string, string>; bash?: (command: string) => Promise<void>; surfaces?: string[]; store?: Record<string, unknown> }) => {
-  const calls: Calls = { toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
+  const calls: Calls = { reads: [], toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
   const clock = mock.clock(on, { now: 1_000_000 })
   // store in memoria, leggibile dal test (un resume si simula precaricandolo)
   const kv = new Map<string, unknown>(Object.entries(store))
@@ -63,6 +63,7 @@ const stubEngine = (on: On, { files, bash, surfaces = ['terminal'], store = {} }
   on('config.list', () => ({ value: [] }))
   on('fs.exists', (_, e) => ({ value: norm(e.path) in files }))
   on('fs.read', (_, e) => {
+    calls.reads.push(e.path)
     const text = files[norm(e.path)]
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: text }
@@ -860,4 +861,61 @@ test('persistenza della run', async ($, on) => {
   kv.set(`agents:${SID}`, {})
   await $.turn.step({ agentId: a.agentId, model: 'sonnet' } as never)
   expect(kv.get(`agents:${SID}`)).toEqual({})
+})
+
+const MAIN_FILES = (state: string) => ({
+  'factory/config.md': CONFIG,
+  'factory/board.md': board(state),
+  'factory/features/003-reset/gate-r1.md': ['# Gate r1', '', 'Result: pass', ''].join('\n'),
+})
+
+const GIT = (exitCode: number, stdout: string) =>
+  ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } as never })
+
+/** Percorsi letti, con separatori normalizzati (il motore risolve i relativi sulla cartella di lavoro) */
+const readPaths = (calls: Calls) => calls.reads.map(p => p.replaceAll('\\', '/'))
+
+test('sessione in un worktree: config, board e feature si leggono dal checkout principale', async ($, on) => {
+  const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
+  on('process.run', (_, e) => {
+    expect(e.argv).toEqual(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
+    return GIT(0, ['F:\\main\\.git', ''].join('\n'))
+  })
+  await $.session.start({ cwd: '/wt', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('003-reset')).toBe(true)
+  await ui.unmount()
+  expect(calls.reads.length > 0).toBe(true)
+  expect(readPaths(calls).every(p => p.startsWith('F:/main/factory/'))).toBe(true)
+  expect(readPaths(calls)).toContain('F:/main/factory/config.md')
+  expect(readPaths(calls)).toContain('F:/main/factory/board.md')
+  expect(readPaths(calls)).toContain('F:/main/factory/features/003-reset/gate-r1.md')
+})
+
+test('git che rifiuta: percorsi relativi come prima', async ($, on) => {
+  const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
+  on('process.run', () => { throw new Error('git missing') })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('003-reset')).toBe(true)
+  await ui.unmount()
+  expect(calls.reads.length > 0).toBe(true)
+  expect(readPaths(calls).some(p => p.startsWith('F:/main'))).toBe(false)
+  expect(readPaths(calls).some(p => p.endsWith('/factory/board.md'))).toBe(true)
+})
+
+test('git con exit code diverso da 0: percorsi relativi come prima', async ($, on) => {
+  const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
+  on('process.run', () => GIT(128, ['F:/main/.git', ''].join('\n')))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('003-reset')).toBe(true)
+  await ui.unmount()
+  expect(calls.reads.length > 0).toBe(true)
+  expect(readPaths(calls).some(p => p.startsWith('F:/main'))).toBe(false)
+  expect(readPaths(calls).some(p => p.endsWith('/factory/board.md'))).toBe(true)
 })
