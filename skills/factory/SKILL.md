@@ -1,7 +1,7 @@
 ---
 name: factory
 description: Run the devflow software factory - interview, spec, parallel build, gate, parallel reviews, approval, pull request - one feature at a time per session, guided by a project playbook.
-argument-hint: "[<feature id> | <feature description>]"
+argument-hint: "[<feature id> [<change>] | <feature description>]"
 disable-model-invocation: true
 ---
 
@@ -29,12 +29,15 @@ factory/
     ├── feature.md             the request, as given by the user
     ├── playbook.md            request, workspace, interview, agent decisions, done checklist
     ├── spec.md                spec-writer
+    ├── spec-c<n>.md           snapshot of spec.md before change <n>, written by you
+    ├── checklist-c<n>.md      snapshot of the Done checklist before change <n>, written by you
     ├── rule-proposals.md      rules proposed by agents, collected by you
     ├── out-of-scope.md        changed files outside the tasks' owned files, written by you
     ├── gate-r<N>.md           gate output (tail only)
     ├── reviews/r<N>-<reviewer>.md
     ├── decision.md            approver
-    └── pr.md                  PR title (first line) and body, written by you
+    ├── pr.md                  PR title (first line) and body, written by you
+    └── change-<n>.md          PR comment for change <n>, written by you
 ```
 
 `board.md`:
@@ -74,8 +77,8 @@ those of the main checkout.
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
    Read `factory/config.md` once; its frontmatter drives the run. Then read the **forge file**
    `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
-   commands of the five forge operations `auth`, `open-pr`, `pr-state`, `issues-enabled`,
-   `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
+   commands of the six forge operations `auth`, `open-pr`, `update-pr`, `pr-state`,
+   `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
 2. Read `factory/board.md`. If there are `pr-open` rows, `git fetch --prune` once, then run
    **pr-state** for each (PR reference from the PR column, branch from the branch column):
    - `MERGED` → state `merged`.
@@ -101,7 +104,9 @@ those of the main checkout.
 3. Pick the feature to work on. Active = state `interview`, `spec`, `spec-review`, `build`,
    `review` or `approve`.
    - The argument is an existing id (full, or `NNN` matching `NNN-*`) → **resume that feature**,
-     in any active state.
+     in any active state. The first token is the id, the rest (if any) is the change text; see
+     **Changing a feature with an open PR** for `pr-open`, `merged` and `closed` rows and for the
+     text on active rows.
    - The argument is not an id → new feature. With `workspace: branch` keep the old behaviour: an
      active row is resumed and the argument is added as a `queued` feature (tell the user); with
      no active row, create it.
@@ -116,6 +121,37 @@ those of the main checkout.
    `<path>`), **auth** succeeds. If not, tell the user what is wrong and stop.
 
 ## The loop
+
+### Changing a feature with an open PR
+Entry: `/devflow:factory <id> <text>` or `<id>` alone, on a row in state `pr-open`. Step 2 has
+already run pr-state for it.
+- `MERGED` or `CLOSED` → explain that the feature can no longer be changed, suggest
+  `/devflow:factory <text>` to open a new feature with the same text, stop without changing anything.
+- `UNKNOWN` → say the PR state cannot be verified and why, stop.
+- `OPEN`, `<id>` alone → show the state and the PR link, ask in plain text which change to make; an
+  empty answer → stop without changing anything.
+- `OPEN`, with text → start the change.
+- `<id> <text>` on an active row: state `interview` → append `**Note.** <text>` to `## Interview`
+  and resume; any other active state, `queued` or `needs-human` → tell the user the text is
+  ignored and resume as usual. On `merged`/`closed` rows: as above.
+
+**Start of a change.**
+1. In `branch` mode `git status --porcelain` must be empty; otherwise say so and stop, registering
+   nothing.
+2. `n` = number of lines in the feature playbook's `## Changes` + 1. Append to `## Changes` (create
+   it after `## Deferred` if missing) `- Change <n> — <text> — from round <board round + 1> — in
+   progress`, and to `## Interview` the line `**Change <n>.** <text>`. Set state `interview`, log
+   `pr-open → interview · change <n>`.
+3. Align the branch: `branch` mode → `git switch "<branch>"` (if the local branch is missing:
+   `git switch -c "<branch>" --track "origin/<branch>"`), then `git pull --ff-only`; `worktree` mode
+   → `git -C "<path>" pull --ff-only`, and a missing `<path>` → `needs-human`. Any error →
+   `needs-human` with the output; the user fixes it and sets the state back to `interview`. The base
+   branch is not merged in.
+
+The interview of a change follows step 0 limited to the change, without the workspace question;
+questions continue the `Q<n>` numbering under the `**Change <n>.**` line, and it can end with
+"No questions needed."; Deferring logic is unchanged. A change `in progress` found at resume is
+the one with the highest `<n>` in that state.
 
 ### 0. Interview — state `interview`
 You run it (agents cannot talk to the user). Goal: nothing in the spec is guessed.
@@ -188,7 +224,15 @@ Only behaviour and requirements; project conventions go through rule proposals (
 
 ### 1. Spec — state `spec`
 Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, project playbook path,
-`ui_review` value. After this and every later spec-writer run, append the new lines of its
+`ui_review` value.
+
+For a change `<n>`, first copy `spec.md` to `spec-c<n>.md` and the `## Done checklist` section to
+`checklist-c<n>.md` (feature dir), and pass also `change: <n>`. The spec-writer rewrites `## Tasks`
+always, the rest of the spec and the checklist only if the behaviour changes. If the spec outside
+`## Tasks` or the checklist differ from the snapshots → state `spec-review`; otherwise go straight
+to `build` with round = board round + 1 and log `spec → build · change <n> spec unchanged`.
+
+ After this and every later spec-writer run, append the new lines of its
 `## Rule proposals` (from `spec.md`) to `rule-proposals.md` (see 6b). Set state `spec-review`.
 
 ### 2. Human approval — state `spec-review`
@@ -203,6 +247,12 @@ Show the user: first the spec's `## Expected result`, then title, `kind` and why
 AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
   agent id, or a fresh spawn with the feedback) and ask again.
+- Reject on a change → restore `spec.md` and the checklist from `spec-c<n>.md` and
+  `checklist-c<n>.md`, mark the change `rejected` in `## Changes`, state `pr-open`, log
+  `spec-review → pr-open · change <n> rejected`, in `branch` mode `git switch "<base_branch>"`; the
+  PR is not touched.
+- Approve on a change → state `build`, round = board round + 1; no new branch or worktree (skip
+  the two Approve items below).
 - Reject → state `needs-human`, note "rejected", stop. If `factory/backlog.md` has uncommitted
   changes, tell the user to commit it.
 - Approve, `branch` mode → `git switch <base_branch> && git pull --ff-only && git switch -c
@@ -311,8 +361,10 @@ After the reviews, append their `## Rule proposals` to `rule-proposals.md`.
 Agent types: `devflow:review-security`, `devflow:review-code`, `devflow:review-ux`, `devflow:review-ui`.
 
 Read only the frontmatter `verdict` of each file:
-- any `CHANGES` and `round <= max_rounds` → round + 1, state `build`, go to 3 (rework).
-- any `CHANGES` and `round > max_rounds` → `needs-human` ("reviews still blocking after N rounds").
+Rounds are counted per change: `start` = 1, or the `from` round of the change `in progress`. File
+numbering (`gate-r<N>`, `reviews/r<N>`) keeps growing.
+- any `CHANGES` and `round - start + 1 <= max_rounds` → round + 1, state `build`, go to 3 (rework).
+- any `CHANGES` and `round - start + 1 > max_rounds` → `needs-human` ("reviews still blocking after N rounds").
 - all `PASS` → state `approve`.
 
 ### 6. Approval — state `approve`
@@ -331,6 +383,18 @@ round (and `workdir` in `worktree` mode). Read `decision.md` frontmatter:
   message to the user), then, in `branch` mode only, `git switch <base_branch>`; a worktree stays
 until the merge (cleanup). If open-pr fails, `needs-human` with the
   output.
+
+**With a change `in progress`** (also on resume in `approve`) use **update-pr** instead of
+open-pr. Rewrite `pr.md` as above (footer with the total number of rounds); the title is the
+first line of the existing `pr.md`, unless `title` or `kind` of the spec differ from
+`spec-c<n>.md`: then rebuild it with the fallback rule above. The branch stays the one in the
+board even if `kind` changed. Write `change-<n>.md` in the language of `feature.md`: `Change <n>:
+<text>`, whether the spec was updated (yes/no), the commits of the change's rounds (from
+`gate-r<N>.md`), footer `Factory: <id>`. Call update-pr (reference from the PR column, head =
+branch column, title, body file `pr.md`, comment file `change-<n>.md`). Push or title/body failure
+→ `needs-human` with the output; comment failure → one line to the user, go on. Then mark the
+change `approved`, state `pr-open`, PR column unchanged, and in `branch` mode `git switch
+"<base_branch>"`. With forge `git`, pass on update-pr's message to the user.
 
 ### 6b. Rule proposals — still state `approve`
 `rule-proposals.md` collects, in order, the `## Rule proposals` of spec-writer, implementers and
