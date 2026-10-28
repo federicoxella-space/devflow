@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.17.0 — 2026-10-28
+- feat(factory): allow changing a feature with an open PR (#14)
+
 ## v0.16.0 — 2026-10-28
 - feat(skills): approve playbook rule proposals in one batch (#13)
 
