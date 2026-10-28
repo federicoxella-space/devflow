@@ -66,7 +66,8 @@ git commit -m "chore: set up devflow factory"
    (here or at spec approval) is either integrated, if it fits the feature, or deferred: an issue on
    the forge (labels `devflow`, `deferred`, `enhancement`; tags on Azure DevOps) when the repo
    accepts issues, otherwise a queued feature on the board, recorded in `factory/backlog.md`.
-2. **Spec**: you approve the spec, the done checklist (acceptance criteria + Definition of Done)
+2. **Spec**: you first read the expected result (a usage scenario with a concrete example), then
+   you approve the spec, the done checklist (acceptance criteria + Definition of Done)
    and whether it is a `feature/` or a `hotfix/` branch.
 3. **Build**: independent tasks are implemented in parallel (sonnet for simple tasks, opus for
    complex ones), then build, lint and tests must pass. The factory refuses to commit secrets,

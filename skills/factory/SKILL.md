@@ -197,8 +197,9 @@ If the spec's `## Open questions` is not empty, ask them **one at a time**, appe
 before going on. New logic that comes up here or in a "Request changes" is handled as in
 **Deferring logic** (step 0). Check that every checklist owner other than `n/a` and `gate` is in `reviewers`;
 if not, resume the spec-writer to fix it.
-Show the user: title, `kind` and why, tasks, the `## Done checklist`, `## Agent decisions`,
-reviewers, out of scope. Ask with AskUserQuestion: **Approve / Request changes / Reject**.
+Show the user: first the spec's `## Expected result`, then title, `kind` and why, tasks, the
+`## Done checklist`, `## Agent decisions`, reviewers, out of scope. If the spec has no `## Expected
+result` (written before this section existed), show the rest as usual. Ask with AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
   agent id, or a fresh spawn with the feedback) and ask again.
 - Reject → state `needs-human`, note "rejected", stop. If `factory/backlog.md` has uncommitted
