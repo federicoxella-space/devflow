@@ -43,3 +43,5 @@ export type FlowView = {
   forge?: Forge
 }
 export type Forge = 'github' | 'gitlab' | 'azure' | 'git'
+/** Legame sessione-feature persistito in `$.store` (chiave `session:<sessionId>`) */
+export type SessionRecord = { featureId: string; startedAt: number; asks: number; questions: number; lastAsk?: string }
