@@ -1,6 +1,6 @@
 # devflow
 
-A small software factory for Claude Code, built from one orchestrator skill, nine subagents and
+A small software factory for Claude Code, built from one orchestrator skill, nine subagents (plus two deprecated aliases) and
 markdown files. You describe a feature; devflow interviews you, writes a spec, builds it (in
 parallel when it can), runs build/lint/test, reviews it and opens a pull request. It never merges
 to your base branch on its own.
@@ -66,14 +66,22 @@ git commit -m "chore: set up devflow factory"
    (here or at spec approval) is either integrated, if it fits the feature, or deferred: an issue on
    the forge (labels `devflow`, `deferred`, `enhancement`; tags on Azure DevOps) when the repo
    accepts issues, otherwise a queued feature on the board, recorded in `factory/backlog.md`.
-2. **Spec**: you first read the expected result (a usage scenario with a concrete example), then
+2. **Spec**: before you see it, a spec check (opus) verifies that every task can be executed without
+   open design decisions; gaps go back to the spec-writer (at most twice) and the remaining ones are
+   asked to you as open questions. You first read the expected result (a usage scenario with a concrete example), then
    you approve the spec, the done checklist (acceptance criteria + Definition of Done)
    and whether it is a `feature/` or a `hotfix/` branch.
-3. **Build**: independent tasks are implemented in parallel (sonnet for simple tasks, opus for
-   complex ones), then build, lint and tests must pass. The factory refuses to commit secrets,
+3. **Build**: independent tasks are implemented in parallel by one agent, the implementer, on
+   sonnet (`implementer_model` in `config.md`, default `sonnet / medium`). If an implementer stops
+   for a missing design decision, the spec-writer completes the spec and the work resumes. If it
+   cannot get build, lint and tests green, if the gate fails twice in the same round, or if a
+   reviewer flags the same blocking item again, the task goes to a new implementer on opus
+   (`escalation_model`, default `opus / medium`) with a handover of the previous attempt; if that
+   fails too, the factory stops and asks you. `complex` tasks (security-sensitive, concurrent,
+   destructive migrations) start directly on opus. Then build, lint and tests must pass. The factory refuses to commit secrets,
    `.env` files, build output or large unowned binaries; the changes are committed as
    Conventional Commits, one commit per task.
-4. **Reviews**: code, security, UX and UI reviewers run in parallel; blocking findings go back to
+4. **Reviews**: code (opus), security, UX and UI reviewers run in parallel; blocking findings go back to
    the implementers.
 5. **Approval**: the approver checks evidence for every checklist item.
 6. **Rule proposals**: conventions the agents discovered are shown in a single list, each with the
@@ -130,7 +138,7 @@ with a `factory/config.md`.
   model · effort, the tool it is using and its elapsed time.
 - **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
   e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
-  shows on its builder card as `builder ← coder`.
+  shows on its implementer card as `implementer ← sonnet` (the model of the previous attempt).
 - **Header**: current phase, active agents, round (of `max_rounds`) and total time.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,

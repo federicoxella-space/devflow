@@ -29,11 +29,13 @@ factory/
     ├── feature.md             the request, as given by the user
     ├── playbook.md            request, workspace, interview, agent decisions, done checklist
     ├── spec.md                spec-writer
+    ├── spec-check.md          spec-checker: verdict PASS | GAPS and the gaps
     ├── spec-c<n>.md           snapshot of spec.md before change <n>, written by you
     ├── checklist-c<n>.md      snapshot of the Done checklist before change <n>, written by you
     ├── rule-proposals.md      rules proposed by agents, collected by you
     ├── out-of-scope.md        changed files outside the tasks' owned files, written by you
     ├── gate-r<N>.md           gate output (tail only)
+    ├── handover-<task>-r<N>.md  escalation of a task to `escalation_model`, written by you
     ├── reviews/r<N>-<reviewer>.md
     ├── decision.md            approver
     ├── pr.md                  PR title (first line) and body, written by you
@@ -75,7 +77,9 @@ those of the main checkout.
 
 1. `git rev-parse --show-toplevel` must succeed. If `factory/config.md` or `factory/playbook.md`
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
-   Read `factory/config.md` once; its frontmatter drives the run. Then read the **forge file**
+   Read `factory/config.md` once; its frontmatter drives the run. `implementer_model` and
+   `escalation_model` have the form `<model> / <effort>` (effort missing → `medium`); a missing key
+   uses its default, `sonnet / medium` and `opus / medium`. Then read the **forge file**
    `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
    commands of the six forge operations `auth`, `open-pr`, `update-pr`, `pr-state`,
    `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
@@ -224,7 +228,8 @@ Only behaviour and requirements; project conventions go through rule proposals (
 
 ### 1. Spec — state `spec`
 Spawn `devflow:spec-writer` (foreground) with: feature dir, config path, project playbook path,
-`ui_review` value.
+`ui_review` value. After every spec-writer run (first write, change, Request changes, answers to
+open questions, `ESCALATE design`) run the **spec check** below before going on.
 
 For a change `<n>`, first copy `spec.md` to `spec-c<n>.md` and the `## Done checklist` section to
 `checklist-c<n>.md` (feature dir), and pass also `change: <n>`. The spec-writer rewrites `## Tasks`
@@ -232,13 +237,25 @@ always, the rest of the spec and the checklist only if the behaviour changes. If
 `## Tasks` or the checklist differ from the snapshots → state `spec-review`; otherwise go straight
 to `build` with round = board round + 1 and log `spec → build · change <n> spec unchanged`.
 
- After this and every later spec-writer run, append the new lines of its
+After this and every later spec-writer run, append the new lines of its
 `## Rule proposals` (from `spec.md`) to `rule-proposals.md` (see 6b). Set state `spec-review`.
+
+**Spec check.** Spawn `devflow:spec-checker` (foreground) with feature dir, config path, project
+playbook path, output path `<feature dir>/spec-check.md`, `workdir` if the worktree exists, and in
+the spawn `model: opus`, `effort: low` (the spawn parameter is what guarantees the model; `review-code`
+stays `model: opus` with no fixed effort). Read only the frontmatter `verdict`:
+- `PASS` → go on.
+- `GAPS` → resume the spec-writer (SendMessage, or a fresh spawn) with the path of `spec-check.md`,
+  then check again. At most 2 corrections per spec-writer run.
+- Still `GAPS` after the second correction → append each remaining gap to the spec's
+  `## Open questions` as `- T<n> — <gap> (spec check)`; `spec-review` asks them to the user.
+In a change, the comparison with the snapshots (above) and the jump to `build` happen only after a
+`PASS`; with `GAPS` left over the state is `spec-review`.
 
 ### 2. Human approval — state `spec-review`
 If the spec's `## Open questions` is not empty, ask them **one at a time**, append the answers to
 `## Interview` in the feature playbook, and resume the spec-writer (it removes answered questions)
-before going on. New logic that comes up here or in a "Request changes" is handled as in
+and run the spec check again before going on. New logic that comes up here or in a "Request changes" is handled as in
 **Deferring logic** (step 0). Check that every checklist owner other than `n/a` and `gate` is in `reviewers`;
 if not, resume the spec-writer to fix it.
 Show the user: first the spec's `## Expected result`, then title, `kind` and why, tasks, the
@@ -246,7 +263,7 @@ Show the user: first the spec's `## Expected result`, then title, `kind` and why
 `## Expected result` (written before this section existed), show the rest as usual. Ask with
 AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
-  agent id, or a fresh spawn with the feedback) and ask again.
+  agent id, or a fresh spawn with the feedback), run the spec check, and ask again.
 - Reject on a change → restore `spec.md` and the checklist from `spec-c<n>.md` and
   `checklist-c<n>.md`, mark the change `rejected` in `## Changes`, state `pr-open`, log
   `spec-review → pr-open · change <n> rejected`, in `branch` mode `git switch "<base_branch>"`; the
@@ -280,15 +297,30 @@ AskUserQuestion: **Approve / Request changes / Reject**.
   Set state `build`, round `1`. A rejected spec never creates a worktree.
 
 ### 3. Build — state `build`
-Each task in the spec's `## Tasks` has its own implementer: `complexity: simple` → `devflow:coder`
-(sonnet), `complex` → `devflow:builder` (opus). Each gets: feature dir, spec path, task id, its
-`files (owned)`, `parallel`, config path, project playbook path, and `workdir` in `worktree` mode.
+Each task in the spec's `## Tasks` has its own `devflow:implementer`. The spawn passes `model` and
+`effort` from `implementer_model` for `complexity: simple` and from `escalation_model` for `complex`.
+Each gets: feature dir, spec path, task id, its `files (owned)`, `parallel`, config path, project
+playbook path, `workdir` in `worktree` mode, and `handover` only after an escalation. Record for
+each task its current model and its agent id.
 - One task → spawn it (foreground) with `parallel: false`: the same flow as a single implementer.
 - Several tasks → spawn **in one message** (foreground) every task whose `depends on` tasks are
   done, with `parallel: true`; when they finish, spawn the tasks they unblocked; repeat.
-- A coder that replies `ESCALATE` → log the reason and spawn the builder for that task on the same
-  working tree with the coder's reply; from then on the builder is the task's **current
-  implementer**.
+- `ESCALATE design: <reason>` → log it, resume the spec-writer with the reason, then run the spec
+  check. Tell the user the spec-writer's summary line, and ask the new open questions (as in step
+  2). State `build`, then resume the same implementer. A second `ESCALATE design` on the same task
+  in the same round → `needs-human`.
+- **Escalation to `escalation_model`.** Triggers: `ESCALATE stuck`; the gate failing for the second
+  time in the same round (also for a commit hook); a blocking item prefixed `repeat:` on a file of
+  the task (items with no path go to the implementer chosen for them, see Rework). If the task's
+  current implementer runs on `implementer_model`: write
+  `<feature dir>/handover-<task>-r<round>.md` with the reason (or the `ESCALATE` reply), the paths
+  of the round's `gate-r<N>.md` and `reviews/r<N>-*.md`, and the output of `git diff HEAD -- <owned
+  files>` redirected into the file with the paths quoted (in `worktree` mode `git -C "<path>"`).
+  Spawn a new implementer on `escalation_model` with the same inputs plus `handover: <path>`; from
+  then on it is the task's **current implementer**.
+- With the implementer already on `escalation_model`: `ESCALATE stuck` → `needs-human` with the
+  reason; gate failing twice → `needs-human` ("gate keeps failing"); `repeat:` → normal rework,
+  limited by `max_rounds`. The round number never triggers an escalation.
 - An implementer that stops because it needs a file it does not own: if another task owns the
   file, send that change to the other task's implementer once both are idle; if no task owns it,
   resume the spec-writer to add the file to a task in `## Tasks`, then resume the implementer.
@@ -301,7 +333,8 @@ changed without owning it (`<path> — <task or "unknown">`), and log one line p
 block; the approver gets the file.
 
 **Rework.** Resume implementers with SendMessage (if you no longer have an agent id, new session,
-spawn a fresh implementer of the same type with the same inputs and the instruction "rework").
+spawn a fresh `devflow:implementer` with the task's current model (`implementer_model` if unknown)
+and the same inputs, and the instruction "rework").
 - Review items: group the `## Blocking` items of the reviews with `verdict: CHANGES` by `path` and
   send each group to the current implementer of the task that owns that file; several
   implementers at once → in one message with `parallel: true`. Items with no path (a page, a flow)
@@ -315,8 +348,8 @@ spawn a fresh implementer of the same type with the same inputs and the instruct
 Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at first failure; in
 `worktree` mode run them in `<path>`.
 Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the failing one.
-- Fail → rework (step 3). At most 2 gate retries per round, then `needs-human` ("gate keeps
-  failing").
+- Fail → rework (step 3). The second failure in the same round escalates the task (step 3), or
+  gives `needs-human` ("gate keeps failing") if its implementer is already on `escalation_model`.
 - Pass → append to `gate-r<round>.md` one line `<item id> ok` per checklist item with owner `gate`, then
   commit (4b).
 
@@ -355,7 +388,7 @@ false`), so you wait for all of them. Exception: in `browser` mode ux and ui sha
 
 Each reviewer gets: feature dir, round number, base branch, `ui_review` mode, output path
 `reviews/r<round>-<reviewer>.md`, `workdir` in `worktree` mode, and for round > 1 its own previous
-review path. With `ui_review: browser` in `worktree` mode, start `dev_server` in `<path>`. It reads the
+review path (it marks repeated blocking items with `repeat:`). With `ui_review: browser` in `worktree` mode, start `dev_server` in `<path>`. It reads the
 project playbook and the feature playbook's `## Done checklist` itself.
 After the reviews, append their `## Rule proposals` to `rule-proposals.md`.
 Agent types: `devflow:review-security`, `devflow:review-code`, `devflow:review-ux`, `devflow:review-ui`.
@@ -363,7 +396,8 @@ Agent types: `devflow:review-security`, `devflow:review-code`, `devflow:review-u
 Read only the frontmatter `verdict` of each file:
 Rounds are counted per change: `start` = 1, or the `from` round of the change `in progress`. File
 numbering (`gate-r<N>`, `reviews/r<N>`) keeps growing.
-- any `CHANGES` and `round - start + 1 <= max_rounds` → round + 1, state `build`, go to 3 (rework).
+- any `CHANGES` and `round - start + 1 <= max_rounds` → round + 1, state `build`, go to 3 (rework;
+  a `repeat:` item on a file of a task escalates it there).
 - any `CHANGES` and `round - start + 1 > max_rounds` → `needs-human` ("reviews still blocking after N rounds").
 - all `PASS` → state `approve`.
 
