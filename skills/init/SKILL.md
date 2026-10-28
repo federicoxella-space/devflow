@@ -24,11 +24,12 @@ file.
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
   `!factory/playbook.md` and `!factory/backlog.md` lines to `.gitignore` if missing);
 - both present → ask what to redo, with AskUserQuestion `multiSelect`: **Config**, **Forge**,
-  **Release**, **Playbook** (none selected = nothing). Forge = only step 1b, then update the forge
+  **Release**, **Playbook** (none selected = nothing). Config = steps 1, 1a and 2. Forge = only step 1b, then update the forge
   fields of `factory/config.md`; Release = only step 1c, which also updates the release files after
   a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
   offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
-  `release` as `off`: nothing to migrate.
+  `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty: nothing
+  to migrate.
   Never touch an existing `factory/board.md`.
 
 ## 1. Stack and commands
@@ -56,6 +57,16 @@ Change**. From the approved stack, derive the commands and `ui_review` as in the
 Write the questions, the answers and the chosen stack with its reason in the notes of `config.md`
 and, as the first rules, in `## Conventions` of the playbook draft. Init does not create the
 project: step 4 queues a feature that scaffolds it.
+
+## 1a. Workspace
+
+Ask with AskUserQuestion which `workspace` the factory uses for new features: **Ask**
+(recommended) / **Branch** / **Worktree**. Context in 2-3 lines: a worktree is a separate folder
+with its own branch, so several sessions can build different features in parallel; a branch runs
+in the main checkout, one feature at a time; Ask decides per feature. Then propose
+`worktree_setup`, the command that prepares a fresh worktree, from the stack: `npm ci` with
+`package-lock.json`, `dotnet restore` for .NET, empty when nothing is needed; the user confirms or
+edits it.
 
 ## 1b. Forge
 
@@ -137,6 +148,8 @@ dev_server: ""         # browser only, e.g. npm run dev
 base_url: ""           # browser only, e.g. http://localhost:5173
 max_rounds: 2          # rework rounds after the first review
 release: "off"         # auto | off — automatic tag + release on every merged PR (github, gitlab)
+workspace: ask         # ask | branch | worktree — where a new feature runs
+worktree_setup: ""     # worktree only: command run in a new worktree, e.g. npm ci (empty = none)
 ---
 Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
 
