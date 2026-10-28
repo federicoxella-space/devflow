@@ -14,6 +14,16 @@ gh pr create --base <base> --head <head> --title "<title>" --body-file <body fil
 ```
 Reference = the URL printed by `gh pr create`.
 
+## update-pr
+Input: reference, head, title, body file, comment file.
+```
+git push origin "<head>"
+gh pr edit "<reference>" --title "<title>" --body-file "<body file>"
+gh pr comment "<reference>" --body-file "<comment file>"
+```
+Push or `gh pr edit` fails → `needs-human` with the output. `gh pr comment` fails → tell the user in
+one line and go on.
+
 ## pr-state
 `gh pr view <reference> --json state -q .state` → `MERGED`, `CLOSED` or `OPEN`, as is. Command
 fails → `UNKNOWN`.

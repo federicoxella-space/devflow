@@ -15,6 +15,16 @@ glab mr create --source-branch <head> --target-branch <base> --title "<title>" -
 ```
 Reference = the MR URL in the output (the line containing `/-/merge_requests/`).
 
+## update-pr
+Input: reference, head, title, body file, comment file.
+```
+git push origin "<head>"
+glab mr update <IID> --title "<title>" --description "$(cat "<body file>")"
+glab mr note <IID> --message "$(cat "<comment file>")"
+```
+Push or `glab mr update` fails → `needs-human` with the output. `glab mr note` fails → tell the user
+in one line and go on.
+
 ## pr-state
 `glab mr view <IID> -F json`, field `state`: `merged` → `MERGED`, `closed` → `CLOSED`, `opened` or
 `locked` → `OPEN`. Command fails → `UNKNOWN`.

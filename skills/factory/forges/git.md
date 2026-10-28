@@ -16,6 +16,14 @@ Reference = `-`. The orchestrator keeps the title and body in `features/<id>/pr.
 first line). Tell the user: "Branch `<head>` pushed: open the pull request into `<base>` on your
 platform, with the title and description in `factory/features/<id>/pr.md`."
 
+## update-pr
+```
+git push origin "<head>"
+```
+Push fails → `needs-human` with the output. Then tell the user: "Branch `<head>` updated: update the
+title and description of the pull request by hand from `factory/features/<id>/pr.md`, and add the
+comment from `factory/features/<id>/change-<n>.md`."
+
 ## pr-state
 After `git fetch --prune`: `bash <this skill's base directory>/scripts/git-merged.sh <branch> <base>`
 (branch from the board's branch column) → `merged` or `squashed` → `MERGED`, `open` → `OPEN`;

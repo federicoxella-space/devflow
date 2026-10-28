@@ -25,6 +25,25 @@ az repos pr create --source-branch <head> --target-branch <base> --title "<title
 ```
 Reference = `<repository.webUrl>/pullrequest/<pullRequestId>` from the JSON output.
 
+## update-pr
+Input: reference, head, title, body file, comment file.
+```
+git push origin "<head>"
+az repos pr update --id <id> --title "<title>" --description "$(cat "<body file>")" --output json <org flag>
+```
+Push or `az repos pr update` fails → `needs-human` with the output.
+
+Comment: `az repos pr show --id <id> --output json <org flag>` gives `repository.id` and
+`repository.project.name`. Write the JSON file in the scratch area, with the comment file content
+escaped as a JSON string:
+```
+{"comments":[{"parentCommentId":0,"content":"<comment, JSON-escaped>","commentType":1}],"status":1}
+```
+```
+az devops invoke --area git --resource pullRequestThreads --route-parameters project="<project>" repositoryId="<repo id>" pullRequestId=<id> --http-method POST --in-file "<json file>" --api-version 7.1 <org flag>
+```
+Any comment step fails → tell the user in one line and go on.
+
 ## pr-state
 `az repos pr show --id <id> --output json <org flag>`, field `status`: `completed` → `MERGED`,
 `abandoned` → `CLOSED`, `active` → `OPEN`. Command fails → `UNKNOWN`.
