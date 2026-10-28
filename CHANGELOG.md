@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.13.0 — 2026-10-28
+- feat(factory): run features in a branch or in a git worktree (#10)
+
 ## v0.12.0 — 2026-10-27
 - feat(pane): show the factory flow in a live pane (#9)
 
