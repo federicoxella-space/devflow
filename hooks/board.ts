@@ -63,3 +63,30 @@ export function summarize(board: { rows: BoardRow[]; log: LogLine[] }): BoardSum
     .slice(0, 3)
   return { queued, open, stuck, merged }
 }
+
+/** Stati in cui una riga è lavoro in corso della factory */
+export const ACTIVE_STATES = new Set(['interview', 'spec', 'spec-review', 'build', 'review', 'approve'])
+
+/** Id della feature indicata dall'argomento di `/devflow:factory`: id completo o `NNN`; testo libero o id assente → undefined */
+export function featureOfArg(arg: string | undefined, rows: BoardRow[]): string | undefined {
+  const a = (arg ?? '').trim()
+  if (!a) return undefined
+  const exact = rows.find(r => r.id === a)
+  if (exact) return exact.id
+  if (/^\d+$/.test(a)) return rows.find(r => r.id.startsWith(`${a}-`))?.id
+  return undefined
+}
+
+/** L'id della sola riga attiva; con zero o più righe attive nessuno */
+export function soleActive(rows: BoardRow[]): string | undefined {
+  const active = rows.filter(r => ACTIVE_STATES.has(r.state))
+  return active.length === 1 ? active[0]?.id : undefined
+}
+
+/** Feature a cui legare la sessione: la sola riga cambiata, o tra le cambiate quella il cui id compare nell'input della chiamata */
+export function bindFeature(changed: BoardRow[], input: string | undefined): string | undefined {
+  if (changed.length === 1) return changed[0]?.id
+  const text = input ?? ''
+  const named = changed.filter(r => r.id !== '' && text.includes(r.id))
+  return named.length === 1 ? named[0]?.id : undefined
+}

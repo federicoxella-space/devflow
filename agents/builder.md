@@ -10,6 +10,11 @@ files the task owns, `parallel: true|false`, the paths of `factory/config.md` an
 `factory/playbook.md`. You are already on the branch `<kind>/<id>`; never switch branch, push, or
 touch `factory/`.
 
+When you get an input `workdir: <path>` (a git worktree), run every git and project command there
+(`git -C <path> ...`, `cd <path> && <cmd>`) and read and write code files under `<path>`; paths in the feature
+dir and `factory/` stay those of the main checkout. Without `workdir`, work in the current
+directory.
+
 1. Read the project playbook first, then the spec, the `## Done checklist` in
    `<feature dir>/playbook.md`, `config.md` (commands and notes) and the project's `CLAUDE.md` if
    present. Follow the playbook and existing patterns; read the files listed in the spec's Context

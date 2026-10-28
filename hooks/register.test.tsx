@@ -687,3 +687,43 @@ test('spawn devflow a run inattiva: la run riparte sulla fase commit', async ($,
   expect(alt).not.toContain('Stuck')
   expect(calls.opened.length).toBe(1)
 })
+
+const TWO = (a: string, b: string) => `# Factory board
+
+| id | feature | state | round | branch | PR |
+|----|---------|-------|-------|--------|----|
+| 002-two | Second thing | ${b} | 1 | feat/002-two | |
+| 001-one | First thing | ${a} | 1 | feat/001-one | |
+
+## Log
+- 2026-10-27 10:00 · 001-one · spec-review → ${a}
+- 2026-10-27 10:01 · 002-two · spec-review → ${b}
+`
+
+test('sessione avviata con un id: segue quella feature e ignora le altre', async ($, on) => {
+  const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': TWO('build', 'build') }
+  const { calls } = stubEngine(on, { files })
+  on('prompt.submit', (_, e) => ({ text: e.text }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.prompt.submit({ text: '/devflow:factory 001', wait: false, origin: { kind: 'composer' } })
+  expect(await flowAlt($)).toContain('001-one')
+  // l'altra feature cambia stato (es. un'altra sessione): niente cambio di feature, niente notifica
+  files['factory/board.md'] = TWO('build', 'needs-human')
+  await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'a', new_string: 'needs-human' })
+  expect(await flowAlt($)).toContain('001-one')
+  expect(calls.toasts).toEqual([])
+})
+
+test('senza argomento e con più righe attive: si lega alla prima riga che la sessione cambia', async ($, on) => {
+  const files: Record<string, string> = { 'factory/config.md': CONFIG, 'factory/board.md': TWO('build', 'build') }
+  stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  files['factory/board.md'] = TWO('build', 'review')
+  await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'a', new_string: '002-two review' })
+  expect(await flowAlt($)).toContain('002-two')
+  // un cambio successivo di un'altra riga non sposta il legame
+  files['factory/board.md'] = TWO('review', 'review')
+  await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'a', new_string: '001-one review' })
+  expect(await flowAlt($)).toContain('002-two')
+})

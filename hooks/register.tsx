@@ -5,7 +5,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
-import { parseBoard, summarize } from './board'
+import { bindFeature, featureOfArg, parseBoard, soleActive, summarize } from './board'
 import { parseGate, parseReview } from './feature'
 import { deriveView, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
@@ -93,7 +93,6 @@ export const needsHumanReason = (text: string | undefined): string | undefined =
 
 const lastLogOf = (log: LogLine[], id: string) => [...log].reverse().find(l => l.id === id)?.text
 
-const ACTIVE_STATES = new Set(['interview', 'spec', 'spec-review', 'build', 'review', 'approve'])
 /** Stati in cui la fine del turno principale è una domanda all'utente in testo semplice */
 const WAIT_STATES = new Set(['interview', 'spec', 'spec-review', 'approve'])
 
@@ -104,12 +103,12 @@ export const taskIdOf = (prompt: unknown): string | undefined => {
   return (named?.[1] ?? /\b(T\d+)\b/.exec(prompt)?.[1])?.toUpperCase()
 }
 
-/** La feature su cui lavora la factory: una riga in uno stato di lavoro, la più recente nel log */
-const pickFeature = (rows: BoardRow[], log: LogLine[]): string | undefined => {
-  const working = rows.filter(r => ACTIVE_STATES.has(r.state))
-  if (!working.length) return undefined
-  const lastIdx = (id: string) => log.map(l => l.id).lastIndexOf(id)
-  return [...working].sort((a, b) => lastIdx(b.id) - lastIdx(a.id))[0]?.id
+/** Argomento di `/devflow:factory` dal testo del prompt (o dagli args del comando); vuoto se assente */
+export const argOfPrompt = (text: unknown, command?: unknown): string => {
+  const m = typeof text === 'string' ? /^\/devflow:factory(?:\s+([\s\S]*))?$/.exec(text.trim()) : null
+  if (m) return (m[1] ?? '').trim()
+  const args = (command as { args?: unknown } | undefined)?.args
+  return typeof args === 'string' ? args.trim() : ''
 }
 
 const paletteMode = async ($: $): Promise<PaletteMode> =>
@@ -168,11 +167,15 @@ const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; rev
 
 // ───────────── transizioni ─────────────
 
-const startRun = async ($: $) => {
+/** Avvia la run e lega la sessione alla sua feature: da `arg` (id o NNN), altrimenti dalla sola riga attiva.
+ *  `keep`: riavvio senza nuovo `/devflow:factory`, resta il legame attuale */
+const startRun = async ($: $, arg?: string, keep = false) => {
   mode = await paletteMode($)
   const now = await $.clock.now()
   const board = await loadBoard($)
-  const featureId = pickFeature(board.rows, board.log)
+  const before = await quiet(() => read($, runAtom), emptyRun())
+  const named = featureOfArg(arg, board.rows)
+  const featureId = named ?? (keep ? before.featureId : (arg ?? '').trim() ? undefined : soleActive(board.rows))
   const times = await loadTimes($, featureId)
   const phase = phaseOfState(board.rows.find(r => r.id === featureId)?.state ?? '')
   if (phase && times.phaseStarted[phase] === undefined) times.phaseStarted[phase] = now
@@ -204,7 +207,7 @@ const shift = (run: Run, from: string | undefined, to: string, now: number): Run
   return { ...run, phaseStarted, phaseEnded }
 }
 
-const boardChanged = async ($: $) => {
+const boardChanged = async ($: $, input?: string) => {
   const board = await loadBoard($)
   // righe cambiate rispetto all'ultima lettura; lastRows si aggiorna subito, così due Edit concorrenti non le contano due volte
   const changes = board.rows
@@ -213,24 +216,21 @@ const boardChanged = async ($: $) => {
   lastRows = new Map(board.rows.map(r => [r.id, r]))
   if (!changes.length) return redraw($)
   const now = await $.clock.now()
-  // tempi delle feature in cui la factory potrebbe passare, letti prima: l'update deve essere sincrono e puro
-  const times = new Map<string, Awaited<ReturnType<typeof loadTimes>>>()
-  for (const c of changes) if (ACTIVE_STATES.has(c.row.state)) times.set(c.row.id, await loadTimes($, c.row.id))
+  // la sessione senza legame si lega alla riga che cambia; con un legame la feature non cambia più
+  const now0 = await quiet(() => read($, runAtom), emptyRun())
+  const bindId = now0.active && !now0.featureId ? bindFeature(changes.map(c => c.row), input) : undefined
+  const bound = bindId ? await loadTimes($, bindId) : undefined
 
   // calcolato sul valore corrente: tocca solo featureId e tempi, mai waiting/gateRunning
   const run = await update($, runAtom, cur => {
     let featureId = cur.featureId
     let phaseStarted = cur.phaseStarted, phaseEnded = cur.phaseEnded
+    if (cur.active && !featureId && bindId && bound) {
+      featureId = bindId
+      phaseStarted = bound.phaseStarted
+      phaseEnded = bound.phaseEnded
+    }
     for (const { row, prev } of changes) {
-      if (cur.active && row.id !== featureId && ACTIVE_STATES.has(row.state)) {
-        const current = board.rows.find(r => r.id === featureId)
-        const loaded = times.get(row.id)
-        if ((!current || !ACTIVE_STATES.has(current.state)) && loaded) {
-          featureId = row.id
-          phaseStarted = loaded.phaseStarted
-          phaseEnded = loaded.phaseEnded
-        }
-      }
       if (row.id === featureId) ({ phaseStarted, phaseEnded } = shift({ ...cur, phaseStarted, phaseEnded }, prev?.state, row.state, now))
     }
     return { ...cur, featureId, phaseStarted, phaseEnded }
@@ -240,7 +240,7 @@ const boardChanged = async ($: $) => {
   // notifiche solo mentre la factory gira; un nuovo stato riapre le notifiche della riga
   for (const { row, prev } of changes) {
     notified.forget(`${row.id}:`)
-    if (!run.active || !(prev || row.id === run.featureId)) continue
+    if (!run.active || row.id !== run.featureId) continue
     const why = row.state === 'needs-human' ? needsHumanReason(lastLogOf(board.log, row.id)) : undefined
     await notify($, onBoardChange(prev, row, why, t), row.id)
   }
@@ -294,7 +294,7 @@ const shellCall = async <E extends { agentId?: string; command: string }, R>($: 
   if (gate) await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: true, activitySinceAnswer: true })); redraw($) }, undefined)
   try {
     const r = await next(e)
-    await quiet(() => boardChanged($), undefined)
+    await quiet(() => boardChanged($, e.command), undefined)
     return r
   } finally {
     if (gate) await quiet(async () => { await update($, runAtom, r => ({ ...r, gateRunning: false })); redraw($) }, undefined)
@@ -389,7 +389,7 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     if (!enabled && (isFactory(e.command?.name) || /^\/devflow:factory(\s|$)/.test(e.text.trim()))) await ensureActive($, options)
     if (enabled && (isFactory(e.command?.name) || /^\/devflow:factory(\s|$)/.test(e.text.trim()))) {
-      await quiet(() => startRun($), undefined)
+      await quiet(() => startRun($, argOfPrompt(e.text, e.command)), undefined)
     } else if (enabled && fromPerson(e.origin) && e.command?.name !== COMMAND && !/^\/devflow-panel(\s|$)/.test(e.text.trim())) {
       // la risposta della persona a una domanda in testo semplice: tocca di nuovo alla factory.
       // Notifiche, peer, trigger e il comando del pane non sono una risposta.
@@ -421,14 +421,20 @@ export const register: Register = (on, options) => {
     await quiet(() => markActivity($), undefined)
     if (!isBoard(input.file_path)) return next(e)
     const r = await next(e)
-    await quiet(() => boardChanged($), undefined)
+    const written = typeof input.new_string === 'string' ? input.new_string : typeof input.content === 'string' ? input.content : undefined
+    await quiet(() => boardChanged($, written), undefined)
     return r
   })
 
   on('tool.call', { tool: 'Skill' }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
     if (!enabled && e.agentId === undefined && (isFactory(input.skill) || isFactory(input.command))) await ensureActive($, options)
-    if (enabled && e.agentId === undefined && (isFactory(input.skill) || isFactory(input.command))) await quiet(() => startRun($), undefined)
+    if (enabled && e.agentId === undefined && (isFactory(input.skill) || isFactory(input.command))) await quiet(async () => {
+      const arg = typeof input.args === 'string' ? input.args.trim() : ''
+      // la run già legata da `/devflow:factory <arg>` non si rilegge dalla Skill senza argomento
+      const cur = await quiet(() => read($, runAtom), emptyRun())
+      await startRun($, arg, !arg && cur.active)
+    }, undefined)
     return next(e)
   })
 
@@ -439,7 +445,7 @@ export const register: Register = (on, options) => {
     await quiet(async () => {
       const board = await loadBoard($)
       // senza feature nota (factory appena partita su una riga in coda), quella su cui si lavora ora
-      const featureId = run.featureId ?? pickFeature(board.rows, board.log)
+      const featureId = run.featureId ?? soleActive(board.rows)
       const row = board.rows.find(r => r.id === featureId)
       // la stessa chiamata rielaborata non è una domanda nuova
       const isNew = e.tool_use_id === undefined || e.tool_use_id !== lastAsk
@@ -469,7 +475,7 @@ export const register: Register = (on, options) => {
     if (r.deny === undefined && r.agentId) {
       const id = r.agentId
       // run già partita e poi finita, ma la factory lancia ancora agenti: la run riparte (tempi di fase ripristinati da startRun)
-      await quiet(async () => { const cur = await read($, runAtom); if (!cur.active && cur.startedAt > 0) await startRun($) }, undefined)
+      await quiet(async () => { const cur = await read($, runAtom); if (!cur.active && cur.startedAt > 0) await startRun($, undefined, true) }, undefined)
       await quiet(async () => {
         const now = await $.clock.now()
         const type = e.subagentType.replace(/^devflow:/, '')
@@ -552,7 +558,7 @@ export const register: Register = (on, options) => {
           // una domanda in testo semplice chiude il turno: la factory aspetta la risposta, non è finita.
           // Solo se il turno ha lavorato per la factory: un turno su altro vuol dire intervista abbandonata
           const board = await loadBoard($)
-          const featureId = run.featureId ?? pickFeature(board.rows, board.log)
+          const featureId = run.featureId ?? soleActive(board.rows)
           const row = board.rows.find(r => r.id === featureId)
           if (row && WAIT_STATES.has(row.state) && run.activitySinceAnswer) {
             const cur = await update($, runAtom, r => ({

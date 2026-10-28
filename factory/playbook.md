@@ -8,6 +8,8 @@
 - Every pure module has a `<name>.test.ts` next to it, using `claude-code/testing` (`hooks/board.test.ts`).
 - User-facing pane texts go through `hooks/i18n.ts`: add every new key to both `en` and `it`.
 - The plugin version, `CHANGELOG.md` and tags are written only by `.github/workflows/release.yml`.
+- Agents that run git or project commands use the `workdir` they receive (`git -C <workdir>`), never the implicit cwd: worktree features do not run in the main checkout.
+- Placeholders derived from feature ids or user text (`<path>`, `<kind>/<id>`) are quoted in every shell command the skills prescribe.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
@@ -17,6 +19,7 @@
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).
 - Forge parsing and names: `hooks/i18n.ts` (`parseForge`, `FORGE_NAME`).
 - Colours: `hooks/palette.ts`; never hard-code colours in `svg.ts` or `terminal.tsx`.
+- Board-level selection helpers (`featureOfArg`, `soleActive`, `bindFeature`) live in `hooks/board.ts`, not in `register.tsx`.
 ## Don'ts
 - Do not touch `vault/`, `.superpowers/`, `node_modules/`, `.claude/`.
 - Do not edit the version in `.claude-plugin/plugin.json` or `CHANGELOG.md` by hand.
