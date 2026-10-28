@@ -63,7 +63,7 @@ On every state change update the row **and** append one log line (local time, `Y
 Right before every write, re-read `board.md`, change only your own row, and append your log lines
 at the end. Compute the next free NNN at that moment, as the highest plus one of: the ids in the
 board and in `<main>/factory/features/` (re-read), the local and remote branches `*/NNN-*`
-(`git -C "<main>" branch -a --format=%(refname:short)`) and the basenames `NNN-*` of the paths in
+(`git -C "<main>" branch -a --format='%(refname:short)'`) and the basenames `NNN-*` of the paths in
 `git -C "<main>" worktree list --porcelain`.
 
 **Main checkout.** `<session>` = `git rev-parse --show-toplevel`. `<main>` = the parent folder of
@@ -84,10 +84,10 @@ without that section (old format) is `branch`. The worktree path is
 
 **Feature checkout `<dir>`.** The checkout where git, gate and agents of a feature run:
 `worktree` → `<path>`; `branch` with a line `checkout: <dir>` under `## Workspace` → that `<dir>`;
-`branch` without it → `<main>`. When `<dir>` is not `<main>`, git and project commands that concern
-the feature run there (`git -C "<dir>" ...`, `cd "<dir>" && <cmd>`), and every implementer,
-committer, reviewer and approver gets the input `workdir: <dir>`; for `<main>` no `workdir` is
-passed. Paths in the feature dir stay those of `<main>`. Below, "in `worktree` mode ... `<path>`"
+`branch` without it → `<main>`. Git and project commands that concern the feature always run in
+`<dir>` (`git -C "<dir>" ...`, `cd "<dir>" && <cmd>`), in every mode, even when `<dir>` is `<main>`;
+every implementer, committer, reviewer and approver gets the input `workdir: <dir>` whenever
+`<dir>` ≠ `<session>` (when `<session>` = `<main>` and `<dir>` = `<main>`, no `workdir`). Paths in the feature dir stay those of `<main>`. Below, "in `worktree` mode ... `<path>`"
 applies in the same way to a `branch` feature with `checkout: <dir>`, using `<dir>`. If `<dir>`
 does not exist when a feature is resumed → `needs-human` with the path.
 
@@ -152,7 +152,7 @@ does not exist when a feature is resumed → `needs-human` with the path.
      `feature.md` in `<main>/factory/features/<id>/`, add the row as `interview`.
    - Resuming: if it has no `features/<id>/playbook.md` (old format), set it back to `interview`
      with the log note "restarted: old format".
-4. Preconditions before `build`: `git status --porcelain` is empty (run it in `<dir>`), **auth**
+4. Preconditions before `build`: `git -C "<dir>" status --porcelain` is empty, **auth**
    succeeds. If not, tell the user what is wrong and stop.
 
 ## The loop
@@ -300,21 +300,24 @@ AskUserQuestion: **Approve / Request changes / Reject**.
 - Reject on a change → restore `spec.md` and the checklist from `spec-c<n>.md` and
   `checklist-c<n>.md`, mark the change `rejected` in `## Changes`, state `pr-open`, log
   `spec-review → pr-open · change <n> rejected`, in `branch` mode without `checkout:`
-  `git switch "<base_branch>"` (with `checkout:` `<dir>` stays on the branch); the PR is not
-  touched.
+  `git -C "<main>" switch "<base_branch>"` (with `checkout:` `<dir>` stays on the branch); the PR
+  is not touched.
 - Approve on a change → state `build`, round = board round + 1; no new branch or worktree (skip
   the two Approve items below).
 - Reject → state `needs-human`, note "rejected", stop. If `factory/backlog.md` has uncommitted
   changes, tell the user to commit it.
-- Approve, `branch` mode without `checkout:` → `git switch <base_branch> && git pull --ff-only &&
-  git switch -c <kind>/<id>` (`feature/<id>` or `hotfix/<id>`), write the branch in the board.
-  With `checkout: <dir>`: update `base_branch` in `<main>` as in worktree step 1 below, then
-  `git -C "<dir>" switch -c "<kind>/<id>" "<base_branch>"`, write the branch in the board, and move
-  the feature's backlog lines into `<dir>` as in worktree step 5 (with `<dir>` for `<path>`). If
-  `factory/backlog.md` has uncommitted changes, add `!factory/backlog.md` to `.gitignore` if
-  missing, then `git add factory/backlog.md .gitignore && git commit -m "docs(factory): update
-  backlog"` with the footer `Factory: <id>` (a hook rejection → `needs-human` with the output).
-  Set state `build`, round `1`.
+- Approve, `branch` mode without `checkout:` → `git -C "<main>" switch "<base_branch>" && git -C
+  "<main>" pull --ff-only && git -C "<main>" switch -c "<kind>/<id>"` (`feature/<id>` or
+  `hotfix/<id>`), write the branch in the board. If `factory/backlog.md` has uncommitted changes,
+  add `!factory/backlog.md` to `.gitignore` if missing, then
+  `git -C "<main>" add factory/backlog.md .gitignore && git -C "<main>" commit -m "docs(factory):
+  update backlog"` with the footer `Factory: <id>` (a hook rejection → `needs-human` with the
+  output). Set state `build`, round `1`.
+- Approve, `branch` mode with `checkout: <dir>` → update `base_branch` in `<main>` as in worktree
+  step 1 below, then `git -C "<dir>" switch -c "<kind>/<id>" "<base_branch>"`, write the branch in
+  the board, and move the feature's backlog lines into `<dir>` as in worktree step 5 (with `<dir>`
+  for `<path>`); only that step applies to the backlog, no commit of `factory/backlog.md` in
+  `<main>`. Set state `build`, round `1`.
 - Approve, `worktree` mode:
   1. Update `base_branch` without switching branch in `<main>`: `git -C "<main>" pull --ff-only` if
      it is the current branch, else `git -C "<main>" fetch origin <base_branch>:<base_branch>`.
@@ -451,7 +454,7 @@ round (and `workdir` in `worktree` mode). Read `decision.md` frontmatter:
   spec goal + done checklist table from `decision.md` + non-blocking review notes + footer
   `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
   `pr-open` with the reference open-pr returned in the PR column (`-` with forge `git`: pass on its
-  message to the user), then, in `branch` mode without `checkout:` only, `git switch <base_branch>`;
+  message to the user), then, in `branch` mode without `checkout:` only, `git -C "<main>" switch "<base_branch>"`;
 a worktree or a `checkout:` folder stays on its branch until the merge (cleanup). If open-pr fails, `needs-human` with the
   output.
 
@@ -465,7 +468,7 @@ board even if `kind` changed. Write `change-<n>.md` in the language of `feature.
 branch column, title, body file `pr.md`, comment file `change-<n>.md`). Push or title/body failure
 → `needs-human` with the output; comment failure → one line to the user, go on. Then mark the
 change `approved`, state `pr-open`, PR column unchanged, and in `branch` mode without `checkout:`
-`git switch "<base_branch>"`. With forge `git`, pass on update-pr's message to the user.
+`git -C "<main>" switch "<base_branch>"`. With forge `git`, pass on update-pr's message to the user.
 
 ### 6b. Rule proposals — still state `approve`
 `rule-proposals.md` collects, in order, the `## Rule proposals` of spec-writer, implementers and
@@ -503,9 +506,9 @@ Mark each line
 `[x]` approved (with the final text if rewritten) or `[-]` discarded. Add the approved rules to their
 section of `factory/playbook.md` (Definition of Done items as `- [<owner>] <item>`, appended at the
 end so existing `DoD-<n>` ids do not move). Only if at least one rule was approved, commit it on the
-feature branch: `git add factory/playbook.md && git commit -m "docs(factory): update playbook"` with
-the footer `Factory: <id>`. When `<dir>` is not `<main>` (`worktree` mode or `checkout:`) add the
-rules to `<dir>/factory/playbook.md` and commit in `<dir>`; never edit `factory/playbook.md` in
+feature branch, in `<dir>`: `git -C "<dir>" add factory/playbook.md && git -C "<dir>" commit -m
+"docs(factory): update playbook"` with the footer `Factory: <id>`. When `<dir>` is not `<main>`
+(`worktree` mode or `checkout:`) add the rules to `<dir>/factory/playbook.md`; never edit `factory/playbook.md` in
 `<main>`, which other sessions share. If a commit hook rejects it, `needs-human` with the output. The rules
 reach the base branch with the PR. If the feature goes to `needs-human`, the file stays and its open lines are
 shown when the feature is back in `approve`.
