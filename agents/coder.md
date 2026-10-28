@@ -48,4 +48,5 @@ Run the commands again (same rule as step 4).
 Reply to the orchestrator in at most 10 lines: what changed (files), how each checklist item of your
 task is covered, anything you could not do and why. Then, only if you found a convention or pattern
 the project playbook lacks, a `## Rule proposals` section with lines `- <playbook section>: <rule> —
-<why>` (not counted in the 10 lines).
+<why>` (not counted in the 10 lines). The `<why>` says what you observed, where (path) and which
+problem the rule avoids, on the same line.

@@ -76,8 +76,10 @@ git commit -m "chore: set up devflow factory"
 4. **Reviews**: code, security, UX and UI reviewers run in parallel; blocking findings go back to
    the implementers.
 5. **Approval**: the approver checks evidence for every checklist item.
-6. **Rule proposals**: conventions the agents discovered are shown to you one at a time; approved
-   ones are added to the project playbook.
+6. **Rule proposals**: conventions the agents discovered are shown in a single list, each with the
+   reason it came up, and you approve them in one answer (`1,3`, `all`, `none`, or `2: new text` to
+   rewrite one). Conflicting rules are asked before the list, rules that depend on another after
+   it. Approved ones are added to the project playbook.
 7. **Pull request** on the configured forge (merge request on GitLab), titled in Conventional
    Commits format (`feat(scope): ...`), so a squash merge leaves a conventional commit on the base
    branch. In git only mode the branch is pushed and the title and description are in
