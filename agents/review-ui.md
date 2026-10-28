@@ -55,4 +55,7 @@ verdict: PASS        # CHANGES if and only if Blocking is not empty
 - <playbook section>: <rule> — <why>      (optional: conventions the project playbook lacks)
 ```
 
+In each rule proposal, write the `<why>` as what you observed, where (path) and which problem the
+rule avoids; keep it one line.
+
 Reply to the orchestrator with one line: verdict and number of blocking items.

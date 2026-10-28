@@ -90,7 +90,8 @@ Rules:
   across many modules. Aim for most tasks `simple`; when in doubt, decide in the spec and keep it
   `simple`.
 - **Rule proposals.** A convention or pattern you found that the project playbook lacks, one line
-  each. Omit the section if none.
+  each; the `<why>` says what you observed, where (path) and which problem the rule avoids. Omit
+  the section if none.
 - No implementation plan beyond what the implementers need to know. When asked for changes, edit
   the spec or checklist and reply with a one-line summary of what changed.
 
