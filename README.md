@@ -66,7 +66,8 @@ git commit -m "chore: set up devflow factory"
    (here or at spec approval) is either integrated, if it fits the feature, or deferred: an issue on
    the forge (labels `devflow`, `deferred`, `enhancement`; tags on Azure DevOps) when the repo
    accepts issues, otherwise a queued feature on the board, recorded in `factory/backlog.md`.
-2. **Spec**: you approve the spec, the done checklist (acceptance criteria + Definition of Done)
+2. **Spec**: you first read the expected result (a usage scenario with a concrete example), then
+   you approve the spec, the done checklist (acceptance criteria + Definition of Done)
    and whether it is a `feature/` or a `hotfix/` branch.
 3. **Build**: independent tasks are implemented in parallel (sonnet for simple tasks, opus for
    complex ones), then build, lint and tests must pass. The factory refuses to commit secrets,
@@ -112,7 +113,15 @@ with a `factory/config.md`.
   e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
   shows on its builder card as `builder ← coder`.
 - **Header**: current phase, active agents, round (of `max_rounds`) and total time.
-- **Board summary**: with no feature running, the pane shows a summary of the board instead.
+- **Board summary**: when the session has no feature of its own (a new session that has not run
+  `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
+  closed), the pane shows a summary of the board instead.
+- **Reload and resume**: the pane survives `/reload-plugins` and `claude --resume`. The session's
+  feature, phase times and running agents are rebuilt from the board, the feature files and the
+  state the mod keeps for the session. After a resume, or when the factory stops (Esc, error, end
+  of turn), the pane keeps showing the flow of the session's feature, with no running agents, while
+  it is in progress (interview to approve). Agents that no longer run are shown as ended without
+  success. Reloading sends no new toasts or notifications.
 - **Your turn**: a toast when the factory needs you (a system notification too, from the terminal only; the desktop app's own banners cover questions and turn ends while the app is in the background): each interview
   question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
   the PR is opened.

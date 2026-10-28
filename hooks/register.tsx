@@ -3,13 +3,14 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run } from '../types'
+import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run, SessionRecord } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
 import { bindFeature, featureOfArg, parseBoard, soleActive, summarize } from './board'
 import { parseGate, parseReview } from './feature'
 import { deriveView, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
+import { parseCards, parseSession, reconcile, showsFlow } from './restore'
 import { boardAlt, boardSvg, flowAlt, flowSvg } from './svg'
 import { boardTerminal, flowTerminal } from './terminal'
 
@@ -148,6 +149,32 @@ const loadTimes = async ($: $, id: string | undefined): Promise<Pick<Run, 'phase
   }
 }
 
+/** Id della sessione (nome del transcript, lo stesso del resume); `undefined` se non si legge */
+const sessionId = ($: $) =>
+  quiet(async () => { const id = await $.session.id(); return typeof id === 'string' && id ? id : undefined }, undefined as string | undefined)
+
+/** Legame sessione-feature in `$.store`, per il resume; senza feature o senza session id non scrive */
+const persistSession = async ($: $, run: Run) => {
+  if (!run.featureId) return
+  const sid = await sessionId($)
+  if (!sid) return
+  const record: SessionRecord = {
+    featureId: run.featureId, startedAt: run.startedAt, asks: run.asks ?? 0, questions: run.questions,
+    ...(lastAsk !== undefined ? { lastAsk } : {}),
+  }
+  await quiet(() => $.store.set(`session:${sid}`, record), undefined)
+}
+
+/** Card della run in corso in `$.store` (non a ogni turn.step) */
+const persistAgents = async ($: $, run: Run) => {
+  if (!run.featureId) return
+  const sid = await sessionId($)
+  if (!sid) return
+  const cards = Object.fromEntries(Object.entries(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
+    .filter(([, c]) => c.startedAt >= run.startedAt))
+  await quiet(() => $.store.set(`agents:${sid}`, cards), undefined)
+}
+
 /** Gate e review della feature, riletti a ogni render (file piccoli, nessuna cache) */
 const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[] }> => {
   const dir = `factory/features/${id}`
@@ -184,6 +211,7 @@ const startRun = async ($: $, arg?: string, keep = false) => {
     ...emptyRun(), featureId, active: true, startedAt: now, ...times, asks: cur.asks ?? 0, activitySinceAnswer: true,
   }))
   await saveTimes($, run)
+  await persistSession($, run)
   lastRows = new Map(board.rows.map(r => [r.id, r]))
   if (!openedOnce) {
     openedOnce = true
@@ -236,6 +264,7 @@ const boardChanged = async ($: $, input?: string) => {
     return { ...cur, featureId, phaseStarted, phaseEnded }
   })
   if (changes.some(c => c.row.id === run.featureId)) await saveTimes($, run)
+  if (bindId && run.featureId === bindId) await persistSession($, run)
 
   // notifiche solo mentre la factory gira; un nuovo stato riapre le notifiche della riga
   for (const { row, prev } of changes) {
@@ -323,6 +352,36 @@ const loadConfig = async ($: $) => {
 
 let commandRegistered = false
 
+/** Ricostruisce run e card dopo reload (atom intatto) o resume (atom vuoto, record in `$.store`) */
+const restore = async ($: $) => {
+  const sid = await sessionId($)
+  const record = sid ? parseSession(await quiet(() => $.store.get(`session:${sid}`), undefined)) : undefined
+  const cur = await quiet(() => read($, runAtom), emptyRun())
+  let run: Run
+  let cards: Record<string, AgentCard>
+  if (cur.startedAt > 0) {
+    // hot reload: lo stato in memoria è quello giusto
+    run = { ...cur, gateRunning: false }
+    cards = await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>)
+    lastAsk = record?.featureId === cur.featureId ? record?.lastAsk : undefined
+  } else if (record) {
+    run = {
+      ...emptyRun(), featureId: record.featureId, startedAt: record.startedAt, asks: record.asks, questions: record.questions,
+      ...(await loadTimes($, record.featureId)), active: false,
+    }
+    lastAsk = record.lastAsk
+    cards = parseCards(await quiet(() => $.store.get(`agents:${sid}`), undefined))
+  } else {
+    run = emptyRun()
+    cards = {}
+  }
+  const list = await quiet(async () => (await $.agent.list()).map(a => ({ id: a.id, status: String(a.status) })), [] as { id: string; status: string }[])
+  cards = reconcile(cards, list, await $.clock.now())
+  run.active = Object.values(cards).some(c => c.status === 'running' && c.startedAt >= run.startedAt)
+  await update($, agentsAtom, () => cards)
+  await update($, runAtom, () => run)
+}
+
 /** Attiva la mod (idempotente): config.md esiste ma la sessione era partita senza, o rilettura dopo una sua modifica */
 const activate = async ($: $, options: { language?: unknown }, fresh = false) => {
   await loadConfig($)
@@ -337,7 +396,7 @@ const activate = async ($: $, options: { language?: unknown }, fresh = false) =>
   notified = new Notified()
   lastAsk = undefined
   lastRows = new Map((await loadBoard($)).rows.map(r => [r.id, r]))
-  await update($, runAtom, run => ({ ...run, active: false, waiting: false, gateRunning: false }))
+  await restore($)
   if (!commandRegistered) {
     commandRegistered = true
     await quiet(() => $.command.register({ name: COMMAND, description: t.commandDescription }), undefined)
@@ -455,6 +514,7 @@ export const register: Register = (on, options) => {
         asks: (r.asks ?? 0) + (isNew ? 1 : 0),
         questions: r.questions + (isNew && row?.state === 'interview' ? 1 : 0),
       }))
+      await persistSession($, cur)
       redraw($)
       if (row) void notify($, onQuestion(row, t, cur.asks ?? 0), row.id)
     }, undefined)
@@ -497,6 +557,7 @@ export const register: Register = (on, options) => {
           return { ...cur, [id]: card }
         })
         await agentPhase($, type, 'start', now)
+        await persistAgents($, await read($, runAtom))
         redraw($)
       }, undefined)
     }
@@ -546,6 +607,7 @@ export const register: Register = (on, options) => {
           return a ? { ...all, [id]: { ...a, endedAt: now, status } } : all
         })
         await agentPhase($, card.type, 'end', now)
+        await persistAgents($, await read($, runAtom))
         redraw($)
       } else {
         const run = await read($, runAtom)
@@ -565,6 +627,7 @@ export const register: Register = (on, options) => {
               ...r, featureId: r.featureId ?? featureId, waiting: true, gateRunning: false, activitySinceAnswer: false,
               asks: (r.asks ?? 0) + 1, questions: r.questions + (row.state === 'interview' ? 1 : 0),
             }))
+            await persistSession($, cur)
             redraw($)
             await notify($, onQuestion(row, t, cur.asks ?? 0), row.id)
             return
@@ -587,7 +650,8 @@ export const register: Register = (on, options) => {
     const W = Math.max(MIN_W, Math.floor((e.props.bodyColumns ?? 60) * CELL_W))
     const board = await loadBoard($)
     const run = await quiet(() => read($, runAtom), emptyRun())
-    const row = run.active && run.featureId ? board.rows.find(r => r.id === run.featureId) : undefined
+    const bound = run.featureId ? board.rows.find(r => r.id === run.featureId) : undefined
+    const row = showsFlow(run, bound) ? bound : undefined
 
     if (row) {
       try {

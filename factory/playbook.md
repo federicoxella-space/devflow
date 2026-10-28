@@ -10,6 +10,8 @@
 - The plugin version, `CHANGELOG.md` and tags are written only by `.github/workflows/release.yml`.
 - Agents that run git or project commands use the `workdir` they receive (`git -C <workdir>`), never the implicit cwd: worktree features do not run in the main checkout.
 - Placeholders derived from feature ids or user text (`<path>`, `<kind>/<id>`) are quoted in every shell command the skills prescribe.
+- Run state that must survive a resume goes in `$.store` under a key with the session id; `$.state` covers only a hot reload.
+- A test rewritten because behaviour changed replaces each removed assertion with an equivalent one, so coverage is not lost silently.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.

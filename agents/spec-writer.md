@@ -28,6 +28,10 @@ reviewers: [code, security, ux, ui]   # code always; security if it touches auth
                                       # secrets, deps, network; ux/ui only if user-facing and ui_review != none
 ui_pages: [/path]                     # browser mode only: pages reviewers must open
 ---
+## Expected result
+A few short paragraphs: what the user sees and does once the feature is done. Then a concrete
+example in numbered steps.
+
 ## Goal
 One or two sentences: what changes for the user and why. One line on why it is a feature or a hotfix.
 
@@ -65,6 +69,11 @@ question once its answer is in the feature playbook; leave the section empty whe
 ```
 
 Rules:
+- **Expected result.** The first section, read by the user before anything else. Write it for
+  someone who does not know the code: a usage scenario in a few short paragraphs, then one concrete
+  example in numbered steps. No file names, no implementation details. For a `hotfix`, describe the
+  correct behaviour after the fix. Keep it consistent with `## Behaviour` and the checklist; when you
+  edit the spec on request, update it too if needed.
 - **Checklist.** First the feature's criteria `AC<n>`: each checkable by a test or a precise manual
   step, written in `verified by`. Then every item of the project playbook's `## Definition of Done`
   as `DoD-<n>` (n = its position there), with the owner from its `[tag]`, or `n/a` and the reason.

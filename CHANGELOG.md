@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.14.0 — 2026-10-28
+- feat(spec): show expected result before spec approval (#11)
+
 ## v0.13.0 — 2026-10-28
 - feat(factory): run features in a branch or in a git worktree (#10)
 
