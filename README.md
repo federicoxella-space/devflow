@@ -91,6 +91,23 @@ become `closed` and keep their branch. In git only mode merges are detected from
 commit, fast-forward, rebase, squash); a squash merge with resolved conflicts is not detected, so
 you set that row to `merged` on the board by hand.
 
+**Changing a feature with an open PR.** If something is missing after a feature is done, do not
+open a new one: run `/devflow:factory <id> <change>` (for example `/devflow:factory 003 the link
+must expire after 30 minutes`). The factory checks that the PR is still open, goes back to the
+feature branch and syncs it with the remote (`git pull --ff-only`; the base branch is not merged
+in), and asks only the questions the change needs. With just `<id>` it shows the PR state and link
+and asks which change to make; an empty answer stops without changing anything. If the PR is
+already merged or closed, it tells you the feature cannot be changed and suggests a new feature
+with the same text.
+
+The spec is updated only if the behaviour changes; in that case you approve it again (Approve,
+Request changes or Reject). Rejecting restores the previous spec, the feature goes back to
+`pr-open` and the PR is not touched. Then build, gate, review and approval run as usual, with
+round numbers continuing after the ones already done and `max_rounds` counted again for each
+change. The result goes to the same PR: new commits, updated title and description, and a comment
+`Change <n>: <change>` that summarises the change. In git only mode the branch is pushed and you
+update the PR by hand from `pr.md` and `change-<n>.md`.
+
 **Worktrees and parallel sessions.** In worktree mode the spec approval creates
 `../<repo>.worktrees/<id>` on the branch `<kind>/<id>`, runs `worktree_setup` there, and the build,
 commits and reviews happen in it, so your checkout stays free. The worktree stays until the PR is
