@@ -87,9 +87,10 @@ without that section (old format) is `branch`. The worktree path is
 `branch` without it → `<main>`. Git and project commands that concern the feature always run in
 `<dir>` (`git -C "<dir>" ...`, `cd "<dir>" && <cmd>`), in every mode, even when `<dir>` is `<main>`;
 every implementer, committer, reviewer and approver gets the input `workdir: <dir>` whenever
-`<dir>` ≠ `<session>` (when `<session>` = `<main>` and `<dir>` = `<main>`, no `workdir`). Paths in the feature dir stay those of `<main>`. Below, "in `worktree` mode ... `<path>`"
-applies in the same way to a `branch` feature with `checkout: <dir>`, using `<dir>`. If `<dir>`
-does not exist when a feature is resumed → `needs-human` with the path.
+`<dir>` ≠ `<session>` (when `<session>` = `<main>` and `<dir>` = `<main>`, no `workdir`). Paths in
+the feature dir stay those of `<main>`. Below, "in `<dir>`" and "`workdir` as in Feature checkout"
+refer to this rule, in every mode. If `<dir>` does not exist when a feature is resumed →
+`needs-human` with the path.
 
 ## Entry point
 
@@ -274,9 +275,10 @@ After this and every later spec-writer run, append the new lines of its
 `## Rule proposals` (from `spec.md`) to `rule-proposals.md` (see 6b). Set state `spec-review`.
 
 **Spec check.** Spawn `devflow:spec-checker` (foreground) with feature dir, config path, project
-playbook path, output path `<feature dir>/spec-check.md`, `workdir` if the worktree exists, and in
-the spawn `model: opus`, `effort: low` (the spawn parameter is what guarantees the model; `review-code`
-stays `model: opus` with no fixed effort). Read only the frontmatter `verdict`:
+playbook path, output path `<feature dir>/spec-check.md`, `workdir: <dir>` if `<dir>` exists and
+≠ `<session>`, and in the spawn `model: opus`, `effort: low` (the spawn parameter is what
+guarantees the model; `review-code` stays `model: opus` with no fixed effort).
+Read only the frontmatter `verdict`:
 - `PASS` → go on.
 - `GAPS` → resume the spec-writer (SendMessage, or a fresh spawn) with the path of `spec-check.md`,
   then check again. At most 2 corrections per spec-writer run.
@@ -340,7 +342,7 @@ AskUserQuestion: **Approve / Request changes / Reject**.
 Each task in the spec's `## Tasks` has its own `devflow:implementer`. The spawn passes `model` and
 `effort` from `implementer_model` for `complexity: simple` and from `escalation_model` for `complex`.
 Each gets: feature dir, spec path, task id, its `files (owned)`, `parallel`, config path, project
-playbook path, `workdir` in `worktree` mode, and `handover` only after an escalation. Record for
+playbook path, `workdir` as in Feature checkout, and `handover` only after an escalation. Record for
 each task its current model and its agent id.
 - One task → spawn it (foreground) with `parallel: false`: the same flow as a single implementer.
 - Several tasks → spawn **in one message** (foreground) every task whose `depends on` tasks are
@@ -355,7 +357,7 @@ each task its current model and its agent id.
   current implementer runs on `implementer_model`: write
   `<feature dir>/handover-<task>-r<round>.md` with the reason (or the `ESCALATE` reply), the paths
   of the round's `gate-r<N>.md` and `reviews/r<N>-*.md`, and the output of `git diff HEAD -- <owned
-  files>` redirected into the file with the paths quoted (in `worktree` mode `git -C "<path>"`).
+  files>` redirected into the file with the paths quoted (`git -C "<dir>"`).
   Spawn a new implementer on `escalation_model` with the same inputs plus `handover: <path>`; from
   then on it is the task's **current implementer**.
 - With the implementer already on `escalation_model`: `ESCALATE stuck` → `needs-human` with the
@@ -367,7 +369,7 @@ each task its current model and its agent id.
 - Keep each task's agent id. Append each reply's `## Rule proposals` to `rule-proposals.md`.
 
 When all tasks are done, compare the changed files with the `files (owned)` columns: the files each
-implementer lists in its reply, and `git status --porcelain -uall` for the whole tree (in `worktree` mode in `<path>`). Write
+implementer lists in its reply, and `git -C "<dir>" status --porcelain -uall` for the whole tree. Write
 `out-of-scope.md` in the feature dir with one line per file that no task owns or that a task
 changed without owning it (`<path> — <task or "unknown">`), and log one line per file. It does not
 block; the approver gets the file.
@@ -385,8 +387,8 @@ and the same inputs, and the instruction "rework").
   else the current implementer of a `complex` task if any, else the current implementer of `T1`.
 
 ### 4. Gate — you run it, never trust the implementer's word
-Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at first failure; in
-`worktree` mode run them in `<path>`.
+Run `build`, `lint`, `test` from config (skip empty ones), in order, stop at first failure; run
+them in `<dir>` (`cd "<dir>" && <cmd>`).
 Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the failing one.
 - Fail → rework (step 3). The second failure in the same round escalates the task (step 3), or
   gives `needs-human` ("gate keeps failing") if its implementer is already on `escalation_model`.
@@ -395,7 +397,7 @@ Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the 
 
 ### 4b. Commit
 First check for **forbidden files** yourself: list the changed paths with
-`git status --porcelain -uall` (in `worktree` mode in `<path>`). Forbidden:
+`git -C "<dir>" status --porcelain -uall`. Forbidden:
 - secrets or credentials, `.env*` (except `.env.example`);
 - build output: any path segment `bin/`, `obj/`, `dist/`, `build/`, `target/`, `node_modules/`,
   `__pycache__/`;
@@ -406,7 +408,7 @@ A pattern that `## Commit rules` in `config.md` explicitly allows (e.g. "commit 
 forbidden. Any forbidden file → `needs-human` with the list of paths; do not spawn the committer.
 
 Then spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path
-(and `workdir` in `worktree` mode). It
+(and `workdir` as in Feature checkout). It
 makes one commit per task, following `## Tasks` in the spec.
 - `OK` → append the commit list (and, in round 1, the `PR title:` line) to `gate-r<round>.md`,
   state `review`.
@@ -427,9 +429,10 @@ false`), so you wait for all of them. Exception: in `browser` mode ux and ui sha
 `ui` with the others and `ux` right after.
 
 Each reviewer gets: feature dir, round number, base branch, `ui_review` mode, output path
-`reviews/r<round>-<reviewer>.md`, `workdir` in `worktree` mode, and for round > 1 its own previous
-review path (it marks repeated blocking items with `repeat:`). With `ui_review: browser` in `worktree` mode, start `dev_server` in `<path>`. It reads the
-project playbook and the feature playbook's `## Done checklist` itself.
+`reviews/r<round>-<reviewer>.md`, `workdir` as in Feature checkout, and for round > 1 its own
+previous review path (it marks repeated blocking items with `repeat:`). With `ui_review: browser`,
+start `dev_server` in `<dir>`. It reads the project playbook and the feature playbook's
+`## Done checklist` itself.
 After the reviews, append their `## Rule proposals` to `rule-proposals.md`.
 Agent types: `devflow:review-security`, `devflow:review-code`, `devflow:review-ux`, `devflow:review-ui`.
 
@@ -444,7 +447,7 @@ numbering (`gate-r<N>`, `reviews/r<N>`) keeps growing.
 ### 6. Approval — state `approve`
 If `decision.md` already says `APPROVE` for this round (resume after an interrupted 6b or PR step),
 skip the approver. Otherwise spawn `devflow:approver` (foreground) with feature dir, base branch,
-round (and `workdir` in `worktree` mode). Read `decision.md` frontmatter:
+round (and `workdir` as in Feature checkout). Read `decision.md` frontmatter:
 - `ESCALATE` → `needs-human` with the approver's reason.
 - `APPROVE` → rule proposals (6b), then write the title (first line) and the body to
   `features/<id>/pr.md` and open the PR with **open-pr** (base `<base_branch>`, head `<kind>/<id>`,
