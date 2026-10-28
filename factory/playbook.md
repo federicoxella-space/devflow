@@ -12,10 +12,12 @@
 - Placeholders derived from feature ids or user text (`<path>`, `<kind>/<id>`) are quoted in every shell command the skills prescribe.
 - Run state that must survive a resume goes in `$.store` under a key with the session id; `$.state` covers only a hot reload.
 - A test rewritten because behaviour changed replaces each removed assertion with an equivalent one, so coverage is not lost silently.
+- In forge commands the PR title is passed in single quotes or from a file, never inside double quotes: a title derived from user text may contain `$(...)` or backticks.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
 - Shell script: `set -u`, a sibling `test-<name>.sh` against a temp repo with stubbed CLIs (`.github/scripts/test-release.sh`).
+- New forge operation: add a `## <operation>` section to all four files in `skills/factory/forges/` (`git.md` with a manual fallback) and list it in step 1 of the factory entry point, without a count that goes stale.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).
