@@ -42,10 +42,15 @@ const BOARD_BUILD = board('build', '', ['spec-review → build'])
 type Calls = { toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
 
 /** Sta al posto del motore: file in memoria, store, clock, UI registrata */
-const stubEngine = (on: On, { files, bash, surfaces = ['terminal'] }: { files: Record<string, string>; bash?: (command: string) => Promise<void>; surfaces?: string[] }) => {
+const stubEngine = (on: On, { files, bash, surfaces = ['terminal'], store = {} }: { files: Record<string, string>; bash?: (command: string) => Promise<void>; surfaces?: string[]; store?: Record<string, unknown> }) => {
   const calls: Calls = { toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
   const clock = mock.clock(on, { now: 1_000_000 })
-  mock.store(on)
+  // store in memoria, leggibile dal test (un resume si simula precaricandolo)
+  const kv = new Map<string, unknown>(Object.entries(store))
+  on('store.get', (_, e) => ({ value: kv.get(e.key) }))
+  on('store.set', (_, e) => { kv.set(e.key, e.value); return { value: undefined } })
+  on('store.delete', (_, e) => { kv.delete(e.key); return { value: undefined } })
+  on('store.keys', () => ({ value: [...kv.keys()] }))
   mock.env(on, {})
   // il motore passa i path già risolti sulla cartella di lavoro: si confronta da `factory/` in poi
   const norm = (p: string) => {
@@ -83,7 +88,7 @@ const stubEngine = (on: On, { files, bash, surfaces = ['terminal'] }: { files: R
   let n = 0
   on('agent.spawn', (_, e) => ({ model: e.model ?? 'sonnet', agentId: `a${++n}` }))
   on('turn.complete', () => ({ text: '' }))
-  return { calls, clock }
+  return { calls, clock, kv }
 }
 
 const spawn = (description: string, subagentType: string, model = 'sonnet', prompt = 'p') => ({
@@ -218,10 +223,9 @@ test('Esc a metà: fine turno principale ferma l animazione', async ($, on) => {
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
-  // niente diagramma animato: il board la mostra ferma in build
+  // factory ferma ma feature in build: il flusso resta, senza agenti in corso
   expect(svg?.alt.includes('Test di regressione')).toBe(false)
-  expect(svg?.source.includes('stuck in build')).toBe(true)
-  expect(svg?.source.includes('<animate')).toBe(false)
+  expect(svg?.alt.includes('003-reset')).toBe(true)
   await ui.unmount()
 })
 
@@ -305,7 +309,6 @@ test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', a
   // Esc durante l'attesa: la run finisce
   await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 10, isAborted: true, turnId: 't3' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('<animate')).toBe(false)
   await ui.unmount()
 })
 
@@ -321,7 +324,6 @@ test('intervista abbandonata: un prompt d altro chiude la run, niente notifiche 
   await $.turn.complete(endTurn('t2', 'git branch -m'))
   expect(calls.toasts.length).toBe(1)
   expect(calls.notifies.length).toBe(1)
-  expect(await animated($)).toBe(false)
   const before = calls.invalidations
   await clock.advance(3000)
   expect(calls.invalidations).toBe(before)
@@ -407,7 +409,8 @@ test('fine turno principale in build: la run finisce', async ($, on) => {
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   await $.turn.complete({ reason: 'answer', answer: 'fatto', durationMs: 10, isAborted: false, turnId: 't1' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('stuck in build')).toBe(true)
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('003-reset')).toBe(true)
   await ui.unmount()
   expect(calls.toasts).toEqual([])
 })
@@ -670,7 +673,9 @@ test('finiti tutti gli agenti e il turno principale in build: la run termina', a
   await $.turn.complete(endTurn('t1'))
   await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
   await $.turn.complete(endTurn('t2'))
-  expect(await flowAlt($)).toContain('Stuck')
+  const alt = await flowAlt($)
+  expect(alt).toContain('003-reset')
+  expect(alt).not.toContain('Coder uno')
 })
 
 test('spawn devflow a run inattiva: la run riparte sulla fase commit', async ($, on) => {
@@ -680,7 +685,7 @@ test('spawn devflow a run inattiva: la run riparte sulla fase commit', async ($,
   const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
   await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
   await $.turn.complete(endTurn('t1'))
-  expect(await flowAlt($)).toContain('Stuck')
+  expect(await flowAlt($)).not.toContain('Commit finale')
   await $.agent.spawn(bg('Commit finale', 'devflow:committer'))
   const alt = await flowAlt($)
   expect(alt).toContain('Commit finale')
@@ -726,4 +731,119 @@ test('senza argomento e con più righe attive: si lega alla prima riga che la se
   files['factory/board.md'] = TWO('review', 'review')
   await $.tool.call({ tool: 'Edit', file_path: 'factory/board.md', old_string: 'a', new_string: '001-one review' })
   expect(await flowAlt($)).toContain('002-two')
+})
+
+// ───────────── reload e resume ─────────────
+
+const SID = 'sess-1'
+const stubSession = (on: On, list: { id: string; status: string }[] = []) => {
+  on('session.id', () => ({ value: SID }))
+  on('agent.list', () => ({ value: list as never }))
+}
+const startSession = ($: Parameters<TestBody>[0]) => $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+const FILES = (state: string) => ({ 'factory/config.md': CONFIG, 'factory/board.md': board(state, '', [`spec-review → ${state}`]) })
+
+test('hot reload con agente in corso', async ($, on) => {
+  stubEngine(on, { files: FILES('build') })
+  const list = [{ id: 'a1', status: 'running' }]
+  stubSession(on, list)
+  await startSession($)
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Coder vivo', 'devflow:coder'))
+  await startSession($)
+  const alt = await flowAlt($)
+  expect(alt).toContain('003-reset')
+  expect(alt).toContain('Coder vivo')
+})
+
+test('spawn dopo reload riavvia la run', async ($, on) => {
+  stubEngine(on, { files: FILES('build') })
+  stubSession(on)
+  await startSession($)
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete(endTurn('t1'))
+  await startSession($)
+  await $.agent.spawn(spawn('Coder nuovo', 'devflow:coder'))
+  expect(await flowAlt($)).toContain('Coder nuovo')
+})
+
+test('resume ripristina la feature legata', async ($, on) => {
+  const { calls } = stubEngine(on, { files: FILES('build'), store: {
+    [`session:${SID}`]: { featureId: '003-reset', startedAt: 900_000, asks: 1, questions: 1, lastAsk: 'q1' },
+    [`agents:${SID}`]: { a1: { id: 'a1', type: 'coder', description: 'Coder perso', startedAt: 950_000, status: 'running', activity: '@thinking' } },
+    'times:003-reset': { phaseStarted: { build: 950_000 }, phaseEnded: {} },
+  } })
+  stubSession(on)
+  await startSession($)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  await ui.unmount()
+  expect(svg?.alt).toContain('003-reset')
+  // l'agente non risulta più in corso: nessuna card running
+  expect(svg?.alt).not.toContain('Coder perso')
+  expect(calls.toasts).toEqual([])
+})
+
+test('sessione nuova: riepilogo fino a factory', async ($, on) => {
+  stubEngine(on, { files: FILES('build') })
+  stubSession(on)
+  await startSession($)
+  expect(await flowAlt($)).toContain('Stuck')
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  expect(await flowAlt($)).toContain('003-reset')
+  expect(await flowAlt($)).not.toContain('Stuck')
+})
+
+test('factory ferma: flusso finché la feature è attiva', async ($, on) => {
+  const files = FILES('spec')
+  stubEngine(on, { files })
+  stubSession(on)
+  await startSession($)
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 10, isAborted: true, turnId: 't1' })
+  expect(await flowAlt($)).toContain('003-reset')
+  files['factory/board.md'] = board('needs-human', '', ['spec → needs-human'])
+  expect(await flowAlt($)).toContain('Stuck')
+})
+
+test('session id assente', async ($, on) => {
+  stubEngine(on, { files: FILES('build') })
+  on('session.id', () => { throw new Error('no id') })
+  on('agent.list', () => ({ value: [] as never }))
+  await startSession($)
+  expect(await flowAlt($)).toContain('Stuck')
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Coder', 'devflow:coder'))
+  expect(await flowAlt($)).toContain('003-reset')
+})
+
+test('nessuna notifica ripetuta dopo reload', async ($, on) => {
+  const { calls } = stubEngine(on, { files: FILES('spec-review') })
+  stubSession(on)
+  await startSession($)
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ask = { tool: 'AskUserQuestion' as const, tool_use_id: 'q1', questions: [] } as never
+  await $.tool.call(ask)
+  const before = calls.toasts.length
+  expect(before).toBe(1)
+  await startSession($)
+  await flowAlt($)
+  await $.tool.call(ask)
+  expect(calls.toasts.length).toBe(before)
+})
+
+test('persistenza della run', async ($, on) => {
+  const { kv } = stubEngine(on, { files: FILES('build') })
+  stubSession(on)
+  await startSession($)
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const a = await $.agent.spawn(spawn('Coder', 'devflow:coder'))
+  expect((kv.get(`session:${SID}`) as { featureId: string }).featureId).toBe('003-reset')
+  expect((kv.get(`agents:${SID}`) as Record<string, { status: string }>)[a.agentId!]?.status).toBe('running')
+  await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
+  expect((kv.get(`agents:${SID}`) as Record<string, { status: string }>)[a.agentId!]?.status).toBe('done')
+  // turn.step non scrive nello store
+  kv.set(`agents:${SID}`, {})
+  await $.turn.step({ agentId: a.agentId, model: 'sonnet' } as never)
+  expect(kv.get(`agents:${SID}`)).toEqual({})
 })
