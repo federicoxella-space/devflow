@@ -12,6 +12,13 @@ the project's `CLAUDE.md` if present, then only the code the playbook does not a
 re-ask questions already answered in `## Interview`. Every item of `## Deferred` goes in
 `## Out of scope` with its issue or queued id; no task or criterion covers it.
 
+**Change.** If you also get `change: <n>`, the feature already has an approved spec and an open PR;
+the orchestrator saved `spec-c<n>.md` and `checklist-c<n>.md` before you. Read the `**Change <n>.**`
+line and the questions below it in `## Interview`. Always rewrite `## Tasks` with only the work of
+the change (ids from `T1`). Edit the rest of the spec and the checklist only if the behaviour
+changes; otherwise leave them byte for byte as they are, because the orchestrator compares them
+with the snapshots to decide whether the user must approve again.
+
 Write `<feature dir>/spec.md` and the `## Done checklist` section of `<feature dir>/playbook.md`.
 Do not touch the other sections of the feature playbook.
 
