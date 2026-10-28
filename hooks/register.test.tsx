@@ -108,6 +108,14 @@ const animated = async ($: Parameters<TestBody>[0]) => {
   return source.includes('<animate')
 }
 
+// il flusso disegna sempre l'icona animata della legenda: una run ferma si riconosce dal badge senza fase attiva
+const idle = async ($: Parameters<TestBody>[0]) => {
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  await ui.unmount()
+  return source.includes('— · R')
+}
+
 test('card di un coder durante la factory', async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
@@ -226,6 +234,7 @@ test('Esc a metà: fine turno principale ferma l animazione', async ($, on) => {
   // factory ferma ma feature in build: il flusso resta, senza agenti in corso
   expect(svg?.alt.includes('Test di regressione')).toBe(false)
   expect(svg?.alt.includes('003-reset')).toBe(true)
+  expect(svg?.source.includes('— · R')).toBe(true)
   await ui.unmount()
 })
 
@@ -309,6 +318,7 @@ test('seconda domanda in testo semplice: seconda notifica; Esc chiude la run', a
   // Esc durante l'attesa: la run finisce
   await $.turn.complete({ reason: 'aborted', answer: '', durationMs: 10, isAborted: true, turnId: 't3' })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('— · R')).toBe(true)
   await ui.unmount()
 })
 
@@ -324,6 +334,7 @@ test('intervista abbandonata: un prompt d altro chiude la run, niente notifiche 
   await $.turn.complete(endTurn('t2', 'git branch -m'))
   expect(calls.toasts.length).toBe(1)
   expect(calls.notifies.length).toBe(1)
+  expect(await idle($)).toBe(true)
   const before = calls.invalidations
   await clock.advance(3000)
   expect(calls.invalidations).toBe(before)
@@ -411,6 +422,7 @@ test('fine turno principale in build: la run finisce', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('003-reset')).toBe(true)
+  expect(svg?.source.includes('— · R')).toBe(true)
   await ui.unmount()
   expect(calls.toasts).toEqual([])
 })
