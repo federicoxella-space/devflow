@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.18.2 — 2026-10-29
+- fix(pane): show round counter as max_rounds + 1 per change (#19)
+
 ## v0.18.1 — 2026-10-29
 - fix(factory): use main checkout board from worktree sessions (#17)
 
