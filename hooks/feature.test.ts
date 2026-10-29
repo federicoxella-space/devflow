@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { parseGate, parseReview } from './feature'
+import { changeStart, parseGate, parseReview } from './feature'
 
 const REVIEW_CHANGES = `---
 verdict: CHANGES        # CHANGES if and only if Blocking is not empty
@@ -119,4 +119,24 @@ test('gate: testo non riconosciuto', () => {
 test('gate: nome non valido', () => {
   expect(parseGate('gate.md', GATE_OK)).toBeUndefined()
   expect(parseGate('gate-r1.md', undefined as unknown as string)).toBeUndefined()
+})
+
+const playbook = (...changes: string[]) => ['# P', '', '## Changes', ...changes, '', '## Done checklist', '- Change 9 — z — from round 9 — in progress'].join('\n')
+test('changeStart: round della change in progress', () => {
+  expect(changeStart(playbook('- Change 1 — x — from round 4 — in progress'))).toBe(4)
+})
+test('changeStart: vince il numero di change piu alto', () => {
+  expect(changeStart(playbook('- Change 2 — y — from round 7 — in progress', '- Change 1 — x — from round 4 — in progress'))).toBe(7)
+})
+test('changeStart: testo con from round, vale l ultima occorrenza', () => {
+  expect(changeStart(playbook('- Change 1 — redo from round 2 — from round 5 — in progress'))).toBe(5)
+})
+test('changeStart: default 1', () => {
+  expect(changeStart(undefined)).toBe(1)
+  expect(changeStart('')).toBe(1)
+  expect(changeStart('# P\n- Change 1 — x — from round 4 — in progress')).toBe(1)
+  expect(changeStart(playbook('- Change 1 — x — from round 4 — rejected'))).toBe(1)
+  expect(changeStart(playbook('- Change 1 — x — from round abc — in progress'))).toBe(1)
+  expect(changeStart(playbook('- Change 1 — x — from round 0 — in progress'))).toBe(1)
+  expect(changeStart(playbook('Change 1 from round 4 in progress'))).toBe(1)
 })

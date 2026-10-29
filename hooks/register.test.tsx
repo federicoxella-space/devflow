@@ -129,8 +129,8 @@ test('card di un coder durante la factory', async ($, on) => {
   expect(svg?.alt.includes('003-reset')).toBe(true)
   expect(svg?.isInteractive).toBeUndefined()
   expect(svg?.source.includes('Test di regressione')).toBe(true)
-  // max_rounds dal frontmatter di config.md
-  expect(svg?.source.includes('R1/3')).toBe(true)
+  // max_rounds dal frontmatter di config.md, tetto = max_rounds + 1
+  expect(svg?.source.includes('R1/4')).toBe(true)
   await ui.unmount()
 })
 
@@ -181,7 +181,7 @@ test('init a metà sessione: la Write di config.md attiva la mod', async ($, on)
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('Test di regressione')).toBe(true)
   expect(svg?.alt.includes('003-reset')).toBe(true)
-  expect(svg?.source.includes('R1/3')).toBe(true)
+  expect(svg?.source.includes('R1/4')).toBe(true)
   await ui.unmount()
 })
 
@@ -210,7 +210,7 @@ test('config.md riscritto con la mod attiva: rilegge max_rounds, comando registr
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/5')).toBe(true)
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/6')).toBe(true)
   await ui.unmount()
   expect(calls.commands).toEqual(['devflow-panel'])
 })
@@ -918,4 +918,34 @@ test('git con exit code diverso da 0: percorsi relativi come prima', async ($, o
   expect(calls.reads.length > 0).toBe(true)
   expect(readPaths(calls).some(p => p.startsWith('F:/main'))).toBe(false)
   expect(readPaths(calls).some(p => p.endsWith('/factory/board.md'))).toBe(true)
+})
+
+test('max_rounds assente o non valido: tetto 3 (default 2 + 1)', async ($, on) => {
+  const config = CONFIG.replace('max_rounds: 3          # rework rounds\n', 'max_rounds: boh\n')
+  stubEngine(on, { files: { 'factory/config.md': config, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/3')).toBe(true)
+  await ui.unmount()
+})
+
+test('change in corso: round relativo alla change, gate col numero del file', async ($, on) => {
+  const files: Record<string, string> = {
+    'factory/config.md': CONFIG,
+    'factory/board.md': BOARD_BUILD.replace('| build | 1 |', '| build | 4 |'),
+    'factory/features/003-reset/gate-r4.md': ['# Gate r4', '', 'Result: pass', ''].join('\n'),
+    'factory/features/003-reset/playbook.md': ['# P', '', '## Changes', '- Change 1 — x — from round 4 — in progress', ''].join('\n'),
+  }
+  stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  expect(source.includes('R1/4')).toBe(true)
+  expect(source.includes('R4/4')).toBe(false)
+  expect(source.includes('r4')).toBe(true)
+  await ui.unmount()
 })

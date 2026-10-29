@@ -6,7 +6,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run, SessionRecord } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
 import { bindFeature, featureOfArg, mainCheckoutOf, parseBoard, soleActive, summarize } from './board'
-import { parseGate, parseReview } from './feature'
+import { changeStart, parseGate, parseReview } from './feature'
 import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
@@ -187,8 +187,8 @@ const persistAgents = async ($: $, run: Run) => {
   await quiet(() => $.store.set(`agents:${sid}`, cards), undefined)
 }
 
-/** Gate e review della feature, riletti a ogni render (file piccoli, nessuna cache) */
-const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[] }> => {
+/** Gate, review e round di partenza della change, riletti a ogni render (file piccoli, nessuna cache) */
+const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[]; start: number }> => {
   const dir = fromRoot(`factory/features/${id}`)
   const files = async (path: string) => quiet(async () => (await $.fs.list(path)).filter(f => f.kind === 'file').map(f => f.name), [] as string[])
   const gates: GateResult[] = []
@@ -201,7 +201,8 @@ const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; rev
     const r = parseReview(name, (await readText($, `${dir}/reviews/${name}`)) ?? '')
     if (r) reviews.push(r)
   }
-  return { gates, reviews }
+  const start = changeStart((await readText($, `${dir}/playbook.md`)) ?? undefined)
+  return { gates, reviews, start }
 }
 
 // ───────────── transizioni ─────────────
@@ -670,8 +671,8 @@ export const register: Register = (on, options) => {
       try {
         const now = await $.clock.now()
         const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
-        const { gates, reviews } = await loadFeature($, row.id)
-        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge })
+        const { gates, reviews, start } = await loadFeature($, row.id)
+        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge, start })
         if (!Svg) return flowTerminal(els, view, t, now)
         const { source, height } = flowSvg(view, W, t, mode, now)
         const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
