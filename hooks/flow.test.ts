@@ -15,7 +15,7 @@ const codePassR1: ReviewResult = { reviewer: 'code', round: 1, verdict: 'PASS' }
 type Sc = {
   state?: string; round?: number; active?: boolean; waiting?: boolean; gateRunning?: boolean
   agents?: AgentCard[]; reviews?: ReviewResult[]; gates?: GateResult[]
-  phaseStarted?: Run['phaseStarted']; phaseEnded?: Run['phaseEnded']; now?: number; startedAt?: number; questions?: number
+  phaseStarted?: Run['phaseStarted']; phaseEnded?: Run['phaseEnded']; now?: number; startedAt?: number; questions?: number; start?: number
 }
 const scenario = (o: Sc = {}) => {
   const row: BoardRow = { id: '003-x', feature: 'Password reset', state: o.state ?? 'build', round: o.round ?? 1, branch: 'feature/003-x', pr: '' }
@@ -23,7 +23,7 @@ const scenario = (o: Sc = {}) => {
     featureId: row.id, active: o.active ?? true, startedAt: o.startedAt ?? 1000, waiting: o.waiting ?? false,
     gateRunning: o.gateRunning ?? false, phaseStarted: o.phaseStarted ?? {}, phaseEnded: o.phaseEnded ?? {}, questions: o.questions ?? 0,
   }
-  return { run, row, agents: o.agents ?? [], reviews: o.reviews ?? [], gates: o.gates ?? [], maxRounds: 3, now: o.now ?? 61000 }
+  return { run, row, agents: o.agents ?? [], reviews: o.reviews ?? [], gates: o.gates ?? [], maxRounds: 3, now: o.now ?? 61000, start: o.start }
 }
 const st = (o: Sc) => deriveView(scenario(o)).phases.map(p => p.status)
 
@@ -191,7 +191,7 @@ test('agenti solo nella fase attiva, solo running', () => {
 })
 test('campi di testata dal board', () => {
   const v = deriveView(scenario({ state: 'build', round: 2 }))
-  expect(v).toMatchObject({ featureId: '003-x', title: 'Password reset', branch: 'feature/003-x', round: 2, maxRounds: 3 })
+  expect(v).toMatchObject({ featureId: '003-x', title: 'Password reset', branch: 'feature/003-x', round: 2, maxRounds: 4 })
 })
 test('robusto: stato ignoto, nessun agente, round 0', () => {
   const v = deriveView(scenario({ state: 'boh', round: 0 }))
@@ -228,4 +228,22 @@ test('escalatedFrom: nessun marcatore', () => {
   expect(escalatedFrom([prevImpl({ startedAt: 500 })], spawnOf())).toBeUndefined()
   expect(escalatedFrom([prevImpl()], spawnOf({ model: undefined }))).toBeUndefined()
   expect(escalatedFrom([card('review-code', { status: 'done', model: 'sonnet', task: 'T2', startedAt: 2000 })], spawnOf())).toBeUndefined()
+})
+
+test('round relativo alla change: round - start + 1, mai sotto 0', () => {
+  expect(deriveView(scenario({ round: 4, start: 4 })).round).toBe(1)
+  expect(deriveView(scenario({ round: 3, start: 4 })).round).toBe(0)
+  expect(deriveView(scenario({ round: 5, start: 4 })).round).toBe(2)
+  expect(deriveView(scenario({ round: 3 })).round).toBe(3)
+})
+test('con start > 1 review, gate e reentry restano sul round assoluto', () => {
+  const v = deriveView(scenario({
+    state: 'build', round: 5, start: 4,
+    reviews: [{ ...secChangesR1, round: 4 }],
+    gates: [{ round: 5, pass: false, reason: 'npm test: exit 1' }, { round: 4, pass: true }],
+  }))
+  expect(v.round).toBe(2)
+  expect(v.gate).toMatchObject({ round: 5, pass: false })
+  expect(v.reviews.map(r => r.round)).toEqual([4])
+  expect(v.reentry?.from).toBe('gate')
 })

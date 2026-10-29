@@ -149,7 +149,8 @@ with a `factory/config.md`.
 - **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
   e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
   shows on its implementer card as `implementer ← sonnet` (the model of the previous attempt).
-- **Header**: current phase, active agents, round (of `max_rounds`) and total time.
+- **Header**: current phase, active agents, round (of `max_rounds + 1`: the first round plus the rework rounds) and total time. In a change the
+  round counts from the first round of the change; review and gate lines keep the file's round number.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
   closed), the pane shows a summary of the board instead.
