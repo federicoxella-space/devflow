@@ -15,11 +15,15 @@
 - In forge commands the PR title is passed in single quotes or from a file, never inside double quotes: a title derived from user text may contain `$(...)` or backticks.
 - Every new agent in `agents/` that the pane must show is added to `phaseOfAgent` in `hooks/flow.ts` with a test.
 - Tests with multi-line prompt strings build them with `[...].join('\n')`, never a literal line break inside quotes.
+- Every git command the factory skill prescribes for a feature uses an explicit `git -C "<dir>"`, never the session cwd: once a session can live in a worktree, commands without `-C` run in the wrong checkout.
+- Git `--format=%(...)` arguments in skill commands are single-quoted: bash rejects an unquoted `%(refname:short)`.
+- When the factory skill states a general rule for a mode (workdir, checkout), per-step text refers to that rule instead of restating a narrower condition.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
 - Shell script: `set -u`, a sibling `test-<name>.sh` against a temp repo with stubbed CLIs (`.github/scripts/test-release.sh`).
 - New forge operation: add a `## <operation>` section to all four files in `skills/factory/forges/` (`git.md` with a manual fallback) and list it in step 1 of the factory entry point, without a count that goes stale.
+- Before a `git worktree remove` or `git branch -D` on a path read from a feature file, check that the path is listed in `git worktree list --porcelain` on the expected branch: an edited or stale `checkout:` line must not remove an unrelated clean worktree.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).

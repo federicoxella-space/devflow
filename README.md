@@ -122,6 +122,16 @@ commits and reviews happen in it, so your checkout stays free. The worktree stay
 merged; the next run then removes it (never with `--force`: if it has local changes it is kept and
 you are told). Each session runs its own feature against the shared board.
 
+A session opened inside a git worktree of the repo (for example one created by Claude Desktop) uses
+the board and the features of the main checkout, like every other session; a new feature gets an id
+not used by the board, the branches or the existing worktrees. If that worktree already has its own
+local `factory/` board with features the main board does not know, the factory lists them, explains
+how to move them by hand and stops until you have. In branch mode the feature branch is created and
+worked on in the folder of the session, recorded as `checkout: <folder>` under `## Workspace`, so a
+resume from another session works in the right folder. After the merge, the cleanup removes that
+worktree and its branch if it is clean and is neither the current session's folder nor the main
+checkout; otherwise it keeps it and tells you in one line.
+
 `/devflow:factory <id>` (or just `<NNN>`) resumes that feature. With no argument it resumes the
 only active feature; with several it asks which one, or **New feature**; with none it starts the
 oldest queued one. Any other argument is a new feature description. When something needs a human,
