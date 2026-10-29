@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.18.1 — 2026-10-29
+- fix(factory): use main checkout board from worktree sessions (#17)
+
 ## v0.18.0 — 2026-10-28
 - feat(factory): one sonnet implementer, opus checks and escalation (#16)
 
