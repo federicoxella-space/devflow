@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.19.0 — 2026-10-30
+- feat(pane): remove deprecated coder and builder agent aliases (#33)
+
 ## v0.18.3 — 2026-10-30
 - fix(init): detect more stacks and never scaffold an existing project (#20)
 
