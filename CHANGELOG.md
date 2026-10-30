@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.20.0 — 2026-10-30
+- feat(mcp): pin playwright mcp to version 0.0.83 (#34)
+
 ## v0.19.0 — 2026-10-30
 - feat(pane): remove deprecated coder and builder agent aliases (#33)
 
