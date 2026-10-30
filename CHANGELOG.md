@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.21.0 — 2026-10-30
+- feat: copy mod types into factory worktrees (#35)
+
 ## v0.20.0 — 2026-10-30
 - feat(mcp): pin playwright mcp to version 0.0.83 (#34)
 
