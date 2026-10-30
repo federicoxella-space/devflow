@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.18.3 — 2026-10-30
+- fix(init): detect more stacks and never scaffold an existing project (#20)
+
 ## v0.18.2 — 2026-10-29
 - fix(pane): show round counter as max_rounds + 1 per change (#19)
 
