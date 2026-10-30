@@ -20,7 +20,7 @@ interview → spec → parallel build → gate → parallel reviews → approve 
     prepared but not verified
   - any other platform: nothing, in **git only** mode the factory pushes the branch and you open
     the pull request by hand
-- Node.js (`npx`), only for browser UI reviews (Playwright MCP, bundled in `.mcp.json`)
+- Node.js (`npx`), only for browser UI reviews (Playwright MCP `0.0.83`, pinned in `.mcp.json`)
 
 ## Install
 
@@ -251,6 +251,16 @@ For every change you want to try:
 
 Before opening the pull request, set the version back to the released one (the last tag): the
 test bumps never reach `main`, and the release workflow computes the new version from the PR title.
+
+### Updating Playwright MCP
+
+The Playwright MCP version is pinned in `.mcp.json` and does not follow `latest`, so a new upstream
+release never changes the browser reviews by itself. To update it:
+
+1. Change the exact version in `.mcp.json` (never `latest` or a range).
+2. Check that every `browser_*` tool listed in `tools` of `agents/review-ui.md` and
+   `agents/review-ux.md` still exists in the new version; update the agents if a name changed.
+3. Update the version cited in the requirements at the top of this README.
 
 ## More
 
