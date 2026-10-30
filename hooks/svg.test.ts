@@ -8,7 +8,7 @@ import { boardSvg, flowAlt, flowSvg, loop } from './svg'
 const NOW = 1_000_000
 
 const card = (id: string, over: Partial<AgentCard> = {}): AgentCard => ({
-  id, type: 'builder', description: 'Parametrizza query in UserRepo', model: 'claude-opus-5-5', effort: 'high',
+  id, type: 'implementer', description: 'Parametrizza query in UserRepo', model: 'claude-opus-5-5', effort: 'high',
   startedAt: NOW - 134_000, status: 'running', activity: 'Edit src/repo/UserRepo.ts', ...over,
 })
 
@@ -17,8 +17,8 @@ const phase = (id: PhaseId, status: FlowView['phases'][number]['status'], agents
 
 const build = [
   card('b1'),
-  card('c1', { type: 'coder', description: 'Test di regressione per il login', model: 'claude-sonnet-5-5', effort: 'medium', activity: 'Bash npm test -- login' }),
-  card('b2', { description: "Messaggio d'errore sul form reset", escalatedFrom: 'coder', activity: '@thinking', startedAt: NOW - 52_000 }),
+  card('c1', { type: 'implementer', description: 'Test di regressione per il login', model: 'claude-sonnet-5-5', effort: 'medium', activity: 'Bash npm test -- login' }),
+  card('b2', { description: "Messaggio d'errore sul form reset", escalatedFrom: 'sonnet', activity: '@thinking', startedAt: NOW - 52_000 }),
 ]
 
 const VIEW: FlowView = {
@@ -53,7 +53,7 @@ test('scenario del mockup', () => {
   expect(source.includes('Build · round 2')).toBe(true)
   expect(source.includes('stroke:var(--op)')).toBe(true)
   expect(source.includes('stroke:var(--so)')).toBe(true)
-  expect(source.includes('builder ← coder')).toBe(true)
+  expect(source.includes('implementer ← sonnet')).toBe(true)
   expect(source.includes('to="-22"')).toBe(true)
 })
 test('freccia di rientro al centro dell esagono di destinazione', () => {

@@ -6,8 +6,8 @@ import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 const card = (type: string, over: Partial<AgentCard> = {}): AgentCard => ({
   id: `${type}-1`, type, description: 'UserRepo', startedAt: 1000, status: 'running', activity: '', ...over,
 })
-const builderRunning = card('builder', { id: 'b1', description: 'AuthService' })
-const coderRunning = card('coder', { id: 'c1', description: 'UserRepo' })
+const builderRunning = card('implementer', { id: 'b1', description: 'AuthService' })
+const coderRunning = card('implementer', { id: 'c1', description: 'UserRepo' })
 const approverDone = card('approver', { status: 'done', endedAt: 5000 })
 const secChangesR1: ReviewResult = { reviewer: 'security', round: 1, verdict: 'CHANGES', reason: 'SQL injection in UserRepo' }
 const codePassR1: ReviewResult = { reviewer: 'code', round: 1, verdict: 'PASS' }
@@ -54,8 +54,8 @@ test('phaseOfAgent e phaseOfState', () => {
   expect(phaseOfAgent('implementer')).toBe('build')
   expect(phaseOfAgent('devflow:implementer')).toBe('build')
   expect(phaseOfAgent('spec-checker')).toBe('spec')
-  expect(phaseOfAgent('coder')).toBe('build')
-  expect(phaseOfAgent('builder')).toBe('build')
+  expect(phaseOfAgent('coder')).toBeUndefined()
+  expect(phaseOfAgent('builder')).toBeUndefined()
   expect(phaseOfAgent('committer')).toBe('commit')
   expect(phaseOfAgent('review-security')).toBe('review')
   expect(phaseOfAgent('approver')).toBe('approver')
@@ -138,7 +138,7 @@ test('durationMs assente per fasi todo anche con entrambi i timestamp', () => {
   expect(v.phases[5]?.durationMs).toBeUndefined()
 })
 test('card di una run precedente: running ignorato', () => {
-  const stale = card('coder', { startedAt: 500 })
+  const stale = card('implementer', { startedAt: 500 })
   const v = deriveView(scenario({ state: 'interview', startedAt: 1000, agents: [stale] }))
   expect(v.phases[2]?.status).toBe('todo')
   expect(v.phases[0]?.status).toBe('active')
@@ -213,8 +213,8 @@ test('escalatedFrom: famiglia del modello precedente sullo stesso task', () => {
   expect(escalatedFrom([prevImpl({ model: 'haiku', startedAt: 1500 }), prevImpl({ id: 'i1', startedAt: 3000 })], spawnOf())).toBe('sonnet')
   // famiglia sconosciuta: nome breve del modello
   expect(escalatedFrom([prevImpl({ model: 'gpt-5' })], spawnOf())).toBe('gpt 5')
-  // alias coder/builder contano come fase build
-  expect(escalatedFrom([prevImpl({ type: 'coder' })], spawnOf({ type: 'builder' }))).toBe('sonnet')
+  // i tipi coder/builder non sono più card di build
+  expect(escalatedFrom([prevImpl({ type: 'coder' })], spawnOf())).toBeUndefined()
 })
 test('escalatedFrom: descrizione identica se manca il task id', () => {
   expect(escalatedFrom([prevImpl({ task: undefined, description: 'Parser' })], spawnOf({ task: undefined }))).toBe('sonnet')

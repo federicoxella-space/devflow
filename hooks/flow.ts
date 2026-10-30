@@ -9,7 +9,7 @@ export const phaseOfAgent = (type: string): PhaseId | undefined => {
   const t = type.replace(/^devflow:/, '')
   if (t === 'spec-writer') return 'spec'
   if (t === 'spec-checker') return 'spec'
-  if (t === 'implementer' || t === 'coder' || t === 'builder') return 'build'
+  if (t === 'implementer') return 'build'
   if (t === 'committer') return 'commit'
   if (t.startsWith('review-')) return 'review'
   if (t === 'approver') return 'approver'

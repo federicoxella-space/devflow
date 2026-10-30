@@ -1,6 +1,6 @@
 # devflow
 
-A small software factory for Claude Code, built from one orchestrator skill, nine subagents (plus two deprecated aliases) and
+A small software factory for Claude Code, built from one orchestrator skill, nine subagents and
 markdown files. You describe a feature; devflow interviews you, writes a spec, builds it (in
 parallel when it can), runs build/lint/test, reviews it and opens a pull request. It never merges
 to your base branch on its own.
