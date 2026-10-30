@@ -2,7 +2,7 @@
 
 ## Conventions
 - Skills, agents, forges, README and CHANGELOG are written in English; code comments in `hooks/` are in Italian.
-- Skills and agents are imperative markdown prompts, short paragraphs, wrapped at ~100 columns: follow `skills/factory/SKILL.md` and `agents/coder.md`.
+- Skills and agents are imperative markdown prompts, short paragraphs, wrapped at ~100 columns: follow `skills/factory/SKILL.md` and `agents/implementer.md`.
 - Mod logic lives in pure modules (`hooks/board.ts`, `flow.ts`, `feature.ts`, `attention.ts`, `svg.ts`); only `hooks/register.tsx` talks to the engine (`claude-code` hooks, atoms, panes).
 - Shared types go in `types/index.d.ts`, not in the modules.
 - Every pure module has a `<name>.test.ts` next to it, using `claude-code/testing` (`hooks/board.test.ts`).
