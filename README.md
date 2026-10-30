@@ -204,6 +204,29 @@ protected base branch is fine; on GitLab the job token is enough.
 - Two merges close together get two releases in commit order; re-running a job does nothing.
 - After a plugin update, re-run `/devflow:init` → **Release** to refresh the files.
 
+## Developing devflow
+
+Only the type check needs the mod types: the factory's `build` (`npx -y -p typescript tsc -p .`)
+fails on a clean clone because `tsconfig.json` extends `.claude-plugin/types/tsconfig.json`, which
+does not exist yet. `claude plugin validate .` and `claude plugin test .` work from a clean clone.
+
+The types live in `.claude-plugin/types/` (ignored by git). Claude Code writes them when an
+interactive session loads the repo as a mod. Once, run:
+
+```bash
+claude --plugin-dir <repo>
+```
+
+wait until the mod has loaded, then exit. Where you cannot pass the flag, set
+`CLAUDE_CODE_PLUGIN_DIRS=<repo>` instead. `claude -p` and the plugin installed from a marketplace do
+not write the types, and there is no dedicated command to generate them.
+
+Regenerate the types after a Claude Code update: the first line of
+`.claude-plugin/types/claude-code/index.d.ts` reports the version that wrote them.
+
+In worktrees created by the factory, `worktree_setup` (in `factory/config.md`) copies the types from
+the main checkout. It fails, and the feature goes to `needs-human`, if they are missing there.
+
 ## devflow's own versions
 
 Every pull request merged into this repo is released automatically: the version in

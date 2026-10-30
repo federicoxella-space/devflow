@@ -12,13 +12,15 @@ dev_server: ""         # browser only, e.g. npm run dev
 base_url: ""           # browser only, e.g. http://localhost:5173
 max_rounds: 2          # rework rounds after the first review
 release: "off"         # auto | off — automatic tag + release on every merged PR (github, gitlab)
+worktree_setup: 'main="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")"; if [ -f "$main/.claude-plugin/types/tsconfig.json" ]; then cp -R "$main/.claude-plugin/types" .claude-plugin/; else echo "Missing .claude-plugin/types/ in $main: open claude --plugin-dir there once (README, Developing devflow)" >&2; false; fi'
 ---
 This repo is the devflow Claude Code plugin itself: skills (`skills/`), subagents (`agents/`) and
 the flow pane mod (`hooks/`, TypeScript on the `claude-code` mod API, types in `types/`).
 
-- No `package.json`: `node_modules/` holds only the `claude-code*` type packages; the mod is
-  type-checked with `tsc` (config from `.claude-plugin/types/tsconfig.json`) and tested with
-  `claude plugin test`.
+- No `package.json`: `node_modules/` holds only the caches of `claude plugin test` (`.vite`,
+  `.vitest-cache`). The mod types are in `.claude-plugin/types/` (ignored), written by an
+  interactive `claude --plugin-dir .` session (see README, `Developing devflow`); type check with
+  `tsc`, tests with `claude plugin test`.
 - The pane has no dev server: UI review is static (read `hooks/svg.ts`, `hooks/terminal.tsx`).
 - Releases are made by this repo's own `.github/workflows/release.yml` on every merged PR (version
   bump in `.claude-plugin/plugin.json`, `CHANGELOG.md`, tag). Never edit the version or the
