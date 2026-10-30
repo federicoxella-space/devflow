@@ -18,6 +18,8 @@
 - Every git command the factory skill prescribes for a feature uses an explicit `git -C "<dir>"`, never the session cwd: once a session can live in a worktree, commands without `-C` run in the wrong checkout.
 - Git `--format=%(...)` arguments in skill commands are single-quoted: bash rejects an unquoted `%(refname:short)`.
 - When the factory skill states a general rule for a mode (workdir, checkout), per-step text refers to that rule instead of restating a narrower condition.
+- External tools started by `.mcp.json` are pinned to an exact version (never `latest` or a range), and that version is cited in the README.
+- Updating a tool pinned in `.mcp.json` includes reading its upstream changelog, not only checking that the tool names used by the agents still exist.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
