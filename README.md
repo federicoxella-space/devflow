@@ -35,8 +35,10 @@ interview → spec → parallel build → gate → parallel reviews → approve 
 
 Run once in each repo you want to use the factory in.
 
-- **Existing project**: detects the stack (React, Angular, .NET, Maven, Gradle, Python) and
-  proposes the `build`, `lint` and `test` commands for you to confirm.
+- **Existing project**: detects the stack (Node and its frontends, Angular, .NET, Maven, Gradle,
+  Python, Go, Rust, PHP, Ruby, Makefile/justfile; monorepos and several apps) and proposes the
+  `build`, `lint` and `test` commands for you to confirm, preferring the project's own scripts.
+  An existing project with an unknown stack is asked for its commands, never scaffolded.
 - **Empty repo**: interviews you one question at a time (what you are building, constraints,
   preferences), recommends a stack for you to approve, and queues a feature that scaffolds the
   project.
