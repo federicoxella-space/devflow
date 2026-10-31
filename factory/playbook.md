@@ -2,7 +2,7 @@
 
 ## Conventions
 - Skills, agents, forges, README and CHANGELOG are written in English; code comments in `hooks/` are in Italian.
-- Skills and agents are imperative markdown prompts, short paragraphs, wrapped at ~100 columns: follow `skills/factory/SKILL.md` and `agents/coder.md`.
+- Skills and agents are imperative markdown prompts, short paragraphs, wrapped at ~100 columns: follow `skills/factory/SKILL.md` and `agents/implementer.md`.
 - Mod logic lives in pure modules (`hooks/board.ts`, `flow.ts`, `feature.ts`, `attention.ts`, `svg.ts`); only `hooks/register.tsx` talks to the engine (`claude-code` hooks, atoms, panes).
 - Shared types go in `types/index.d.ts`, not in the modules.
 - Every pure module has a `<name>.test.ts` next to it, using `claude-code/testing` (`hooks/board.test.ts`).
@@ -15,11 +15,22 @@
 - In forge commands the PR title is passed in single quotes or from a file, never inside double quotes: a title derived from user text may contain `$(...)` or backticks.
 - Every new agent in `agents/` that the pane must show is added to `phaseOfAgent` in `hooks/flow.ts` with a test.
 - Tests with multi-line prompt strings build them with `[...].join('\n')`, never a literal line break inside quotes.
+- Every git command the factory skill prescribes for a feature uses an explicit `git -C "<dir>"`, never the session cwd: once a session can live in a worktree, commands without `-C` run in the wrong checkout.
+- Git `--format=%(...)` arguments in skill commands are single-quoted: bash rejects an unquoted `%(refname:short)`.
+- When the factory skill states a general rule for a mode (workdir, checkout), per-step text refers to that rule instead of restating a narrower condition.
+- External tools started by `.mcp.json` are pinned to an exact version (never `latest` or a range), and that version is cited in the README.
+- Updating a tool pinned in `.mcp.json` includes reading its upstream changelog, not only checking that the tool names used by the agents still exist.
+- Notes in `factory/config.md` about what the repo contains are checked on a clean clone before they are written.
+- In `.github/workflows/` user-written event fields (PR title, body, branch) reach steps only through `env` and are used quoted, never as `${{ ... }}` inside `run:`: a PR title must not be able to inject shell code.
+- After a Claude Code update, the types in `.claude-plugin/types/` are regenerated and committed in the same PR: CI installs the version written on their first line, so types and CLI always change together.
+- CI steps that must run even after an earlier failure use `if: ${{ !cancelled() && steps.<setup>.outcome == 'success' }}`, gated on the setup step: one failing test does not hide the others, and nothing runs on a broken setup.
+- Workflows on PR events use `pull_request`, never `pull_request_target`, unless the job checks out no PR code: fork code must not get secrets or write tokens.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
 - Shell script: `set -u`, a sibling `test-<name>.sh` against a temp repo with stubbed CLIs (`.github/scripts/test-release.sh`).
 - New forge operation: add a `## <operation>` section to all four files in `skills/factory/forges/` (`git.md` with a manual fallback) and list it in step 1 of the factory entry point, without a count that goes stale.
+- Before a `git worktree remove` or `git branch -D` on a path read from a feature file, check that the path is listed in `git worktree list --porcelain` on the expected branch: an edited or stale `checkout:` line must not remove an unrelated clean worktree.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).

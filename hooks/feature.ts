@@ -107,3 +107,31 @@ export function parseGate(fileName: string, text: string): GateResult | undefine
   if (/\bfail/i.test(text) && exitCodes(text).length === 0) return { round, pass: false }
   return { round, pass: true }
 }
+
+/**
+ * Round da cui parte la change in corso, dal playbook della feature (`## Changes`, riga scritta da
+ * skills/factory/SKILL.md: `- Change <n> — <testo> — from round <R> — in progress`).
+ * Vince la riga `in progress` con `<n>` piu' alto; ogni altro caso -> 1. Non lancia mai.
+ */
+export function changeStart(text: string | undefined): number {
+  if (typeof text !== 'string') return 1
+  let inChanges = false
+  let bestN = -1
+  let start = 1
+  for (const raw of text.split(/\r?\n/)) {
+    if (/^##\s/.test(raw.trim())) {
+      inChanges = /^##\s+changes\b/i.test(raw.trim())
+      continue
+    }
+    if (!inChanges) continue
+    const m = /^\s*-\s*Change\s+(\d+)\b.*\bfrom round\s+(\d+)\b.*\bin progress\s*$/i.exec(raw)
+    if (!m) continue
+    const n = Number(m[1])
+    const round = Number(m[2])
+    if (Number.isInteger(n) && Number.isInteger(round) && round >= 1 && n > bestN) {
+      bestN = n
+      start = round
+    }
+  }
+  return start
+}

@@ -4,7 +4,7 @@ import type { AgentCard, BoardRow } from '../types'
 import { parseCards, parseSession, reconcile, showsFlow } from './restore'
 
 const card = (id: string, status: AgentCard['status']): AgentCard => ({
-  id, type: 'devflow:coder', description: 'd', startedAt: 1, status, activity: '',
+  id, type: 'devflow:implementer', description: 'd', startedAt: 1, status, activity: '',
 })
 const row = (state: string): BoardRow => ({ id: 'f', feature: 'F', state, round: 0, branch: '', pr: '' })
 

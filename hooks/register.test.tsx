@@ -39,11 +39,11 @@ ${log.map(l => `- 2026-10-27 10:00 · 003-reset · ${l}`).join('\n')}
 `
 const BOARD_BUILD = board('build', '', ['spec-review → build'])
 
-type Calls = { toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
+type Calls = { reads: string[]; toasts: string[]; notifies: { text: string; title?: string }[]; opened: string[]; commands: string[]; invalidations: number }
 
 /** Sta al posto del motore: file in memoria, store, clock, UI registrata */
 const stubEngine = (on: On, { files, bash, surfaces = ['terminal'], store = {} }: { files: Record<string, string>; bash?: (command: string) => Promise<void>; surfaces?: string[]; store?: Record<string, unknown> }) => {
-  const calls: Calls = { toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
+  const calls: Calls = { reads: [], toasts: [], notifies: [], opened: [], commands: [], invalidations: 0 }
   const clock = mock.clock(on, { now: 1_000_000 })
   // store in memoria, leggibile dal test (un resume si simula precaricandolo)
   const kv = new Map<string, unknown>(Object.entries(store))
@@ -63,6 +63,7 @@ const stubEngine = (on: On, { files, bash, surfaces = ['terminal'], store = {} }
   on('config.list', () => ({ value: [] }))
   on('fs.exists', (_, e) => ({ value: norm(e.path) in files }))
   on('fs.read', (_, e) => {
+    calls.reads.push(e.path)
     const text = files[norm(e.path)]
     if (text === undefined) throw new Error(`ENOENT ${e.path}`)
     return { value: text }
@@ -116,20 +117,20 @@ const idle = async ($: Parameters<TestBody>[0]) => {
   return source.includes('— · R')
 }
 
-test('card di un coder durante la factory', async ($, on) => {
+test('card di un implementer durante la factory', async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   expect(calls.opened).toEqual(['devflow-flow'])
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('Test di regressione')).toBe(true)
   expect(svg?.alt.includes('003-reset')).toBe(true)
   expect(svg?.isInteractive).toBeUndefined()
   expect(svg?.source.includes('Test di regressione')).toBe(true)
-  // max_rounds dal frontmatter di config.md
-  expect(svg?.source.includes('R1/3')).toBe(true)
+  // max_rounds dal frontmatter di config.md, tetto = max_rounds + 1
+  expect(svg?.source.includes('R1/4')).toBe(true)
   await ui.unmount()
 })
 
@@ -138,7 +139,7 @@ test('niente factory: riepilogo del board', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   expect(calls.commands).toEqual(['devflow-panel'])
   // un agente devflow senza /devflow:factory non anima nulla
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt).toBe('devflow: Queued 0, Open PRs 0, Stuck 1, Recently merged 1')
@@ -155,7 +156,7 @@ test('repo senza devflow: nessun pane, nessun comando', async ($, on) => {
   })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   expect(calls.commands).toEqual([])
   expect(calls.opened).toEqual([])
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
@@ -175,12 +176,12 @@ test('init a metà sessione: la Write di config.md attiva la mod', async ($, on)
   expect(calls.commands).toEqual(['devflow-panel'])
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   expect(calls.opened).toEqual(['devflow-flow'])
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('Test di regressione')).toBe(true)
   expect(svg?.alt.includes('003-reset')).toBe(true)
-  expect(svg?.source.includes('R1/3')).toBe(true)
+  expect(svg?.source.includes('R1/4')).toBe(true)
   await ui.unmount()
 })
 
@@ -193,7 +194,7 @@ test('config.md creato tra session.start e la Skill: la Skill attiva la mod', as
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   expect(calls.commands).toEqual(['devflow-panel'])
   expect(calls.opened).toEqual(['devflow-flow'])
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('Test di regressione')).toBe(true)
@@ -207,9 +208,9 @@ test('config.md riscritto con la mod attiva: rilegge max_rounds, comando registr
   files['factory/config.md'] = CONFIG.replace('max_rounds: 3', 'max_rounds: 5')
   await $.tool.call({ tool: 'Write', file_path: 'factory/config.md', content: CONFIG })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/5')).toBe(true)
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/6')).toBe(true)
   await ui.unmount()
   expect(calls.commands).toEqual(['devflow-panel'])
 })
@@ -218,7 +219,7 @@ test('Esc a metà: fine turno principale ferma l animazione', async ($, on) => {
   const { calls, clock } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   // mentre la factory gira con un agente vivo, il pannello si ridisegna ogni secondo
   const before = calls.invalidations
   await clock.advance(3000)
@@ -490,7 +491,7 @@ test('/devflow:factory scritto dall utente avvia la run', async ($, on) => {
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.prompt.submit({ text: '/devflow:factory', wait: false, origin: { kind: 'composer' } })
   expect(calls.opened).toEqual(['devflow-flow'])
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   // il comando del gate accende la fase gate finché gira
   await $.tool.call({ tool: 'Bash', command: 'npm test' })
   expect(during.includes('gate phase')).toBe(true)
@@ -589,10 +590,10 @@ test('terminale: righe di fase, card dell agente e rientro come Text', async ($,
   })
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Svg' })).toBeUndefined()
-  expect((await ui.find({ type: 'Text', text: /Test di regressione/ }))?.text).toMatch(/coder · sonnet/)
+  expect((await ui.find({ type: 'Text', text: /Test di regressione/ }))?.text).toMatch(/implementer · sonnet/)
   expect(await ui.find({ type: 'Text', text: /Build/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /↩ security/ })).toBeDefined()
   await ui.unmount()
@@ -628,7 +629,7 @@ test('attività della card dal turn.step dell agente, nessun hook sul tool Agent
   })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const coder = await $.agent.spawn(spawn('Test di regressione', 'devflow:coder'))
+  const coder = await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
   const step = $.turn.step({ turnId: 't9', index: 0, model: 'claude-sonnet-5-5', effort: 'medium', agentId: coder.agentId } as never)
   for await (const _ of step) { /* consuma lo stream */ }
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
@@ -661,9 +662,9 @@ test('agenti in background: il turno principale finisce ma la run resta attiva',
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
-  await $.agent.spawn(bg('Coder due', 'devflow:coder'))
-  await $.agent.spawn(bg('Coder tre', 'devflow:coder'))
+  const a = await $.agent.spawn(bg('Coder uno', 'devflow:implementer'))
+  await $.agent.spawn(bg('Coder due', 'devflow:implementer'))
+  await $.agent.spawn(bg('Coder tre', 'devflow:implementer'))
   await $.turn.complete(endTurn('t1'))
   let alt = await flowAlt($)
   expect(alt).toContain('Coder uno')
@@ -683,7 +684,7 @@ test('finiti tutti gli agenti e il turno principale in build: la run termina', a
   stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
+  const a = await $.agent.spawn(bg('Coder uno', 'devflow:implementer'))
   await $.turn.complete(endTurn('t1'))
   await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
   await $.turn.complete(endTurn('t2'))
@@ -696,7 +697,7 @@ test('spawn devflow a run inattiva: la run riparte sulla fase commit', async ($,
   const { calls } = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const a = await $.agent.spawn(bg('Coder uno', 'devflow:coder'))
+  const a = await $.agent.spawn(bg('Coder uno', 'devflow:implementer'))
   await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
   await $.turn.complete(endTurn('t1'))
   expect(await flowAlt($)).not.toContain('Commit finale')
@@ -763,7 +764,7 @@ test('hot reload con agente in corso', async ($, on) => {
   stubSession(on, list)
   await startSession($)
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  await $.agent.spawn(spawn('Coder vivo', 'devflow:coder'))
+  await $.agent.spawn(spawn('Coder vivo', 'devflow:implementer'))
   await startSession($)
   const alt = await flowAlt($)
   expect(alt).toContain('003-reset')
@@ -777,14 +778,14 @@ test('spawn dopo reload riavvia la run', async ($, on) => {
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
   await $.turn.complete(endTurn('t1'))
   await startSession($)
-  await $.agent.spawn(spawn('Coder nuovo', 'devflow:coder'))
+  await $.agent.spawn(spawn('Coder nuovo', 'devflow:implementer'))
   expect(await flowAlt($)).toContain('Coder nuovo')
 })
 
 test('resume ripristina la feature legata', async ($, on) => {
   const { calls } = stubEngine(on, { files: FILES('build'), store: {
     [`session:${SID}`]: { featureId: '003-reset', startedAt: 900_000, asks: 1, questions: 1, lastAsk: 'q1' },
-    [`agents:${SID}`]: { a1: { id: 'a1', type: 'coder', description: 'Coder perso', startedAt: 950_000, status: 'running', activity: '@thinking' } },
+    [`agents:${SID}`]: { a1: { id: 'a1', type: 'implementer', description: 'Coder perso', startedAt: 950_000, status: 'running', activity: '@thinking' } },
     'times:003-reset': { phaseStarted: { build: 950_000 }, phaseEnded: {} },
   } })
   stubSession(on)
@@ -827,7 +828,7 @@ test('session id assente', async ($, on) => {
   await startSession($)
   expect(await flowAlt($)).toContain('Stuck')
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  await $.agent.spawn(spawn('Coder', 'devflow:coder'))
+  await $.agent.spawn(spawn('Coder', 'devflow:implementer'))
   expect(await flowAlt($)).toContain('003-reset')
 })
 
@@ -851,7 +852,7 @@ test('persistenza della run', async ($, on) => {
   stubSession(on)
   await startSession($)
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
-  const a = await $.agent.spawn(spawn('Coder', 'devflow:coder'))
+  const a = await $.agent.spawn(spawn('Coder', 'devflow:implementer'))
   expect((kv.get(`session:${SID}`) as { featureId: string }).featureId).toBe('003-reset')
   expect((kv.get(`agents:${SID}`) as Record<string, { status: string }>)[a.agentId!]?.status).toBe('running')
   await $.turn.complete({ ...endTurn('c1'), agentId: a.agentId } as never)
@@ -860,4 +861,94 @@ test('persistenza della run', async ($, on) => {
   kv.set(`agents:${SID}`, {})
   await $.turn.step({ agentId: a.agentId, model: 'sonnet' } as never)
   expect(kv.get(`agents:${SID}`)).toEqual({})
+})
+
+const MAIN_FILES = (state: string) => ({
+  'factory/config.md': CONFIG,
+  'factory/board.md': board(state),
+  'factory/features/003-reset/gate-r1.md': ['# Gate r1', '', 'Result: pass', ''].join('\n'),
+})
+
+const GIT = (exitCode: number, stdout: string) =>
+  ({ value: { exitCode, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } as never })
+
+/** Percorsi letti, con separatori normalizzati (il motore risolve i relativi sulla cartella di lavoro) */
+const readPaths = (calls: Calls) => calls.reads.map(p => p.replaceAll('\\', '/'))
+
+test('sessione in un worktree: config, board e feature si leggono dal checkout principale', async ($, on) => {
+  const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
+  on('process.run', (_, e) => {
+    expect(e.argv).toEqual(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
+    return GIT(0, ['/main/.git', ''].join('\n'))
+  })
+  await $.session.start({ cwd: '/wt', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt.includes('003-reset')).toBe(true)
+  await ui.unmount()
+  // `/main` è assoluto su Linux e su Windows (dove il motore aggiunge il drive): si confronta senza
+  // drive; i backslash di git su Windows sono coperti da mainCheckoutOf in board.test.ts
+  const fromMain = readPaths(calls).map(p => p.replace(/^[A-Za-z]:/, ''))
+  expect(calls.reads.length > 0).toBe(true)
+  expect(fromMain.every(p => p.startsWith('/main/factory/'))).toBe(true)
+  expect(fromMain).toContain('/main/factory/config.md')
+  expect(fromMain).toContain('/main/factory/board.md')
+  expect(fromMain).toContain('/main/factory/features/003-reset/gate-r1.md')
+})
+
+test('git che rifiuta: percorsi relativi come prima', async ($, on) => {
+  const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
+  on('process.run', () => { throw new Error('git missing') })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('003-reset')).toBe(true)
+  await ui.unmount()
+  expect(calls.reads.length > 0).toBe(true)
+  expect(readPaths(calls).some(p => p.startsWith('F:/main'))).toBe(false)
+  expect(readPaths(calls).some(p => p.endsWith('/factory/board.md'))).toBe(true)
+})
+
+test('git con exit code diverso da 0: percorsi relativi come prima', async ($, on) => {
+  const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
+  on('process.run', () => GIT(128, ['F:/main/.git', ''].join('\n')))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.alt.includes('003-reset')).toBe(true)
+  await ui.unmount()
+  expect(calls.reads.length > 0).toBe(true)
+  expect(readPaths(calls).some(p => p.startsWith('F:/main'))).toBe(false)
+  expect(readPaths(calls).some(p => p.endsWith('/factory/board.md'))).toBe(true)
+})
+
+test('max_rounds assente o non valido: tetto 3 (default 2 + 1)', async ($, on) => {
+  const config = CONFIG.replace('max_rounds: 3          # rework rounds\n', 'max_rounds: boh\n')
+  stubEngine(on, { files: { 'factory/config.md': config, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect(svgOf(await ui.find({ type: 'Svg' }))?.source.includes('R1/3')).toBe(true)
+  await ui.unmount()
+})
+
+test('change in corso: round relativo alla change, gate col numero del file', async ($, on) => {
+  const files: Record<string, string> = {
+    'factory/config.md': CONFIG,
+    'factory/board.md': BOARD_BUILD.replace('| build | 1 |', '| build | 4 |'),
+    'factory/features/003-reset/gate-r4.md': ['# Gate r4', '', 'Result: pass', ''].join('\n'),
+    'factory/features/003-reset/playbook.md': ['# P', '', '## Changes', '- Change 1 — x — from round 4 — in progress', ''].join('\n'),
+  }
+  stubEngine(on, { files })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Test di regressione', 'devflow:implementer'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  expect(source.includes('R1/4')).toBe(true)
+  expect(source.includes('R4/4')).toBe(false)
+  expect(source.includes('r4')).toBe(true)
+  await ui.unmount()
 })

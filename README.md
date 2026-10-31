@@ -1,6 +1,6 @@
 # devflow
 
-A small software factory for Claude Code, built from one orchestrator skill, nine subagents (plus two deprecated aliases) and
+A small software factory for Claude Code, built from one orchestrator skill, nine subagents and
 markdown files. You describe a feature; devflow interviews you, writes a spec, builds it (in
 parallel when it can), runs build/lint/test, reviews it and opens a pull request. It never merges
 to your base branch on its own.
@@ -20,7 +20,7 @@ interview → spec → parallel build → gate → parallel reviews → approve 
     prepared but not verified
   - any other platform: nothing, in **git only** mode the factory pushes the branch and you open
     the pull request by hand
-- Node.js (`npx`), only for browser UI reviews (Playwright MCP, bundled in `.mcp.json`)
+- Node.js (`npx`), only for browser UI reviews (Playwright MCP `0.0.83`, pinned in `.mcp.json`)
 
 ## Install
 
@@ -35,8 +35,10 @@ interview → spec → parallel build → gate → parallel reviews → approve 
 
 Run once in each repo you want to use the factory in.
 
-- **Existing project**: detects the stack (React, Angular, .NET, Maven, Gradle, Python) and
-  proposes the `build`, `lint` and `test` commands for you to confirm.
+- **Existing project**: detects the stack (Node and its frontends, Angular, .NET, Maven, Gradle,
+  Python, Go, Rust, PHP, Ruby, Makefile/justfile; monorepos and several apps) and proposes the
+  `build`, `lint` and `test` commands for you to confirm, preferring the project's own scripts.
+  An existing project with an unknown stack is asked for its commands, never scaffolded.
 - **Empty repo**: interviews you one question at a time (what you are building, constraints,
   preferences), recommends a stack for you to approve, and queues a feature that scaffolds the
   project.
@@ -122,6 +124,16 @@ commits and reviews happen in it, so your checkout stays free. The worktree stay
 merged; the next run then removes it (never with `--force`: if it has local changes it is kept and
 you are told). Each session runs its own feature against the shared board.
 
+A session opened inside a git worktree of the repo (for example one created by Claude Desktop) uses
+the board and the features of the main checkout, like every other session; a new feature gets an id
+not used by the board, the branches or the existing worktrees. If that worktree already has its own
+local `factory/` board with features the main board does not know, the factory lists them, explains
+how to move them by hand and stops until you have. In branch mode the feature branch is created and
+worked on in the folder of the session, recorded as `checkout: <folder>` under `## Workspace`, so a
+resume from another session works in the right folder. After the merge, the cleanup removes that
+worktree and its branch if it is clean and is neither the current session's folder nor the main
+checkout; otherwise it keeps it and tells you in one line.
+
 `/devflow:factory <id>` (or just `<NNN>`) resumes that feature. With no argument it resumes the
 only active feature; with several it asks which one, or **New feature**; with none it starts the
 oldest queued one. Any other argument is a new feature description. When something needs a human,
@@ -139,7 +151,8 @@ with a `factory/config.md`.
 - **Reentry**: an arrow back to the build phase, with the reason: a failing gate (also in round 1,
   e.g. a red test or a commit hook) or a blocking review of the previous round. An escalated task
   shows on its implementer card as `implementer ← sonnet` (the model of the previous attempt).
-- **Header**: current phase, active agents, round (of `max_rounds`) and total time.
+- **Header**: current phase, active agents, round (of `max_rounds + 1`: the first round plus the rework rounds) and total time. In a change the
+  round counts from the first round of the change; review and gate lines keep the file's round number.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
   closed), the pane shows a summary of the board instead.
@@ -191,6 +204,42 @@ protected base branch is fine; on GitLab the job token is enough.
 - Two merges close together get two releases in commit order; re-running a job does nothing.
 - After a plugin update, re-run `/devflow:init` → **Release** to refresh the files.
 
+## Developing devflow
+
+The mod types are committed in `.claude-plugin/types/`, so a clean clone passes the type check
+(`npx -y -p typescript tsc -p .`) without an interactive session. `claude plugin validate .` and
+`claude plugin test .` also work from a clean clone.
+
+Regenerate the types after a Claude Code update: the first line of
+`.claude-plugin/types/claude-code/index.d.ts` reports the version that wrote them. Run:
+
+```bash
+claude --plugin-dir <repo>
+```
+
+wait until the mod has loaded, then exit. Where you cannot pass the flag, set
+`CLAUDE_CODE_PLUGIN_DIRS=<repo>` instead. `claude -p` and the plugin installed from a marketplace do
+not write the types. Then commit the changed files; the folder has its own `.gitignore` (`*`) written
+by Claude Code, so add any new file with `git add -f`. The CI installs the Claude Code version
+written on that first line, so types and CLI always change together.
+
+### Pull request checks
+
+`.github/workflows/ci.yml` runs on every pull request into `main` or `develop`, and again when the
+PR is edited:
+
+- `checks` installs the Claude Code version written in the types, fails if `claude --version`
+  differs, then runs the type check, `claude plugin validate .`, `claude plugin test .` and the
+  `test-*.sh` scripts. Each runs in its own step, so one failure does not hide the others.
+- `pr-title` (only for PRs into `main`) checks that the title is `type(scope)!: subject` with a
+  standard type (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `perf`, `build`, `style`,
+  `revert`), because the release version depends on it. Fix a wrong title by editing it on GitHub:
+  the check runs again.
+
+The checks use no secrets. They only report: to block the merge, make them required on `main`.
+In GitHub go to Settings → Rules → Rulesets (or Branches → add a rule for `main`), enable "Require
+status checks to pass" and add `checks` and `pr-title`.
+
 ## devflow's own versions
 
 Every pull request merged into this repo is released automatically: the version in
@@ -238,6 +287,16 @@ For every change you want to try:
 
 Before opening the pull request, set the version back to the released one (the last tag): the
 test bumps never reach `main`, and the release workflow computes the new version from the PR title.
+
+### Updating Playwright MCP
+
+The Playwright MCP version is pinned in `.mcp.json` and does not follow `latest`, so a new upstream
+release never changes the browser reviews by itself. To update it:
+
+1. Change the exact version in `.mcp.json` (never `latest` or a range).
+2. Check that every `browser_*` tool listed in `tools` of `agents/review-ui.md` and
+   `agents/review-ux.md` still exists in the new version; update the agents if a name changed.
+3. Update the version cited in the requirements at the top of this README.
 
 ## More
 

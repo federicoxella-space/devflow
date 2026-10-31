@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.21.1 — 2026-10-31
+- ci: check pull requests with type check, validate, tests and title (#36)
+
+## v0.21.0 — 2026-10-30
+- feat: copy mod types into factory worktrees (#35)
+
+## v0.20.0 — 2026-10-30
+- feat(mcp): pin playwright mcp to version 0.0.83 (#34)
+
+## v0.19.0 — 2026-10-30
+- feat(pane): remove deprecated coder and builder agent aliases (#33)
+
+## v0.18.3 — 2026-10-30
+- fix(init): detect more stacks and never scaffold an existing project (#20)
+
+## v0.18.2 — 2026-10-29
+- fix(pane): show round counter as max_rounds + 1 per change (#19)
+
+## v0.18.1 — 2026-10-29
+- fix(factory): use main checkout board from worktree sessions (#17)
+
 ## v0.18.0 — 2026-10-28
 - feat(factory): one sonnet implementer, opus checks and escalation (#16)
 

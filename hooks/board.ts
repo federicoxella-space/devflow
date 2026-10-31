@@ -90,3 +90,11 @@ export function bindFeature(changed: BoardRow[], input: string | undefined): str
   const named = changed.filter(r => r.id !== '' && text.includes(r.id))
   return named.length === 1 ? named[0]?.id : undefined
 }
+
+/** Radice del checkout principale dall'output di `git rev-parse --path-format=absolute --git-common-dir`; `undefined` se non è un `.git` */
+export function mainCheckoutOf(exitCode: number, stdout: string): string | undefined {
+  if (exitCode !== 0 || typeof stdout !== 'string') return undefined
+  const dir = stdout.replace(/[\\]/g, '/').trim().replace(/\/+$/, '')
+  const m = /^(.*)\/\.git$/.exec(dir)
+  return m ? m[1] || '/' : undefined
+}

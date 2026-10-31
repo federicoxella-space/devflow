@@ -9,7 +9,7 @@ export const phaseOfAgent = (type: string): PhaseId | undefined => {
   const t = type.replace(/^devflow:/, '')
   if (t === 'spec-writer') return 'spec'
   if (t === 'spec-checker') return 'spec'
-  if (t === 'implementer' || t === 'coder' || t === 'builder') return 'build'
+  if (t === 'implementer') return 'build'
   if (t === 'committer') return 'commit'
   if (t.startsWith('review-')) return 'review'
   if (t === 'approver') return 'approver'
@@ -50,6 +50,8 @@ export const phaseOfState = (state: string): PhaseId | undefined => {
 
 type Input = {
   run: Run; row: BoardRow; agents: AgentCard[]; reviews: ReviewResult[]; gates: GateResult[]; maxRounds: number; now: number; forge?: Forge
+  /** round da cui parte la change in corso (1 = nessuna change) */
+  start?: number
 }
 
 const latestReviews = (reviews: ReviewResult[], round: number) => {
@@ -62,7 +64,7 @@ const latestReviews = (reviews: ReviewResult[], round: number) => {
 const latestGate = (gates: GateResult[], round: number) =>
   gates.filter(g => g.round <= round).sort((a, b) => b.round - a.round)[0]
 
-export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now, forge = 'github' }: Input): FlowView => {
+export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now, forge = 'github', start: fromRound = 1 }: Input): FlowView => {
   const agents = allAgents.filter(a => a.startedAt >= run.startedAt)
   const running = agents.filter(a => a.status === 'running')
   const runningIdx = running.map(a => phaseOfAgent(a.type)).filter((p): p is PhaseId => !!p).map(idx)
@@ -116,7 +118,7 @@ export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRou
   const start = starts.length ? Math.min(...starts) : run.startedAt
 
   return {
-    featureId: row.id, title: row.feature, branch: row.branch, round: row.round, maxRounds,
+    featureId: row.id, title: row.feature, branch: row.branch, round: Math.max(0, row.round - fromRound + 1), maxRounds: maxRounds + 1,
     elapsedMs: Math.max(0, now - start),
     phases: PHASES.map((id, i) => {
       const s = run.phaseStarted[id], e = run.phaseEnded[id]

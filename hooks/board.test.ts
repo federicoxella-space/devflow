@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { bindFeature, featureOfArg, isTerminal, parseBoard, soleActive, summarize } from './board'
+import { bindFeature, featureOfArg, isTerminal, mainCheckoutOf, parseBoard, soleActive, summarize } from './board'
 
 const BOARD = `# Factory board
 
@@ -92,4 +92,14 @@ test('bindFeature: la sola riga cambiata, o quella nominata nell input', () => {
   expect(bindFeature(two, '002-b e 003-c')).toBe(undefined)
   expect(bindFeature(two, undefined)).toBe(undefined)
   expect(bindFeature([], '002-b')).toBe(undefined)
+})
+
+test('mainCheckoutOf: radice per un .git, altrimenti undefined', () => {
+  expect(mainCheckoutOf(0, 'F:/devflow/.git\n')).toBe('F:/devflow')
+  expect(mainCheckoutOf(0, 'F:\\devflow\\.git\r\n')).toBe('F:/devflow')
+  expect(mainCheckoutOf(0, '/home/me/repo/.git')).toBe('/home/me/repo')
+  expect(mainCheckoutOf(1, 'F:/devflow/.git')).toBeUndefined()
+  expect(mainCheckoutOf(0, '')).toBeUndefined()
+  expect(mainCheckoutOf(0, '/srv/repo.git\n')).toBeUndefined()
+  expect(mainCheckoutOf(0, '/srv/repo/.git/worktrees/x')).toBeUndefined()
 })

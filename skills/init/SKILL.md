@@ -35,21 +35,50 @@ file.
 
 ## 1. Stack and commands
 
-Detect the stack and propose commands; ask the user to confirm or edit them:
+Detect the stack and propose commands; ask the user to confirm or edit them. Look at the repo root
+and, for monorepos or several apps, at the folders the root declares (workspaces, solution,
+modules) or that hold their own manifest one level down.
 
 | Found | build | lint | test |
 |---|---|---|---|
-| `package.json` + react | `npm run build` | `npm run lint` | `npm test -- --run` (vitest) / `npm test -- --watchAll=false` (jest) |
 | `angular.json` | `npx ng build` | `npx ng lint` | `npx ng test --watch=false --browsers=ChromeHeadless` |
+| `package.json` (any other) | `<pm> run build` | `<pm> run lint` | `<pm> test` (see below) |
 | `*.sln` / `*.csproj` | `dotnet build` | `dotnet format --verify-no-changes` | `dotnet test` |
-| `pom.xml` | | | `mvn -q verify` |
-| `build.gradle*` | | | `./gradlew build` |
-| `pyproject.toml` | | `ruff check .` | `pytest -q` |
+| `pom.xml` | | | `mvn -q verify` (`./mvnw` if present) |
+| `build.gradle*` | | | `./gradlew build` (`gradle` without a wrapper) |
+| `pyproject.toml`, `setup.py`, `requirements*.txt` | | `ruff check .` | `pytest -q` |
+| `go.mod` | `go build ./...` | `go vet ./...` | `go test ./...` |
+| `Cargo.toml` | `cargo build` | `cargo clippy -- -D warnings` | `cargo test` |
+| `composer.json` | | `vendor/bin/phpstan analyse` | `vendor/bin/phpunit` |
+| `Gemfile` | | `bundle exec rubocop` | `bundle exec rspec` (`bundle exec rake test` without `spec/`) |
+| only `Makefile` / `justfile` | `make build` | `make lint` | `make test` (`just ...` alike) |
 
-Prefer scripts that already exist in the project. Multiple apps (e.g. React + .NET): chain with `&&`.
-`ui_review`: `browser` for web frontends, `static` for CLIs, `none` for backend-only.
+The table is a starting point; what the project already has wins:
+- **Existing scripts first**: `package.json` `scripts`, `composer.json` `scripts`, Makefile or
+  justfile targets, a CI file (`.github/workflows/`, `.gitlab-ci.yml`, `azure-pipelines.yml`)
+  that already runs build, lint and tests. Propose a command only if it exists in the project or
+  its tool is configured: no `lint` script → empty lint; no `ruff`/`phpstan`/`rubocop`/`clippy`
+  config or dependency → leave lint empty or propose the linter the project does configure
+  (`flake8`, `golangci-lint` with `.golangci.yml`, ...).
+- **Node package manager** `<pm>` from the lockfile: `pnpm-lock.yaml` → `pnpm`, `yarn.lock` →
+  `yarn`, `bun.lock*` → `bun`, otherwise `npm`. The test command must not stay in watch mode:
+  vitest → `<pm> test -- --run`, jest → `<pm> test -- --watchAll=false`, otherwise `<pm> test`.
+  Workspaces (`workspaces` in `package.json`, `pnpm-workspace.yaml`, `nx.json`, `turbo.json`) →
+  the root scripts, or the tool's run-all (`npx nx run-many -t build`, `npx turbo run build`).
+- **Several apps** (e.g. React + .NET): chain each command with `&&`, each part run in its folder
+  (`cd web && npm run build && cd .. && dotnet build`).
 
-**No stack yet** (empty repo, or none of the files above): run a **stack interview** instead. Stop
+`ui_review`: `browser` for web frontends (React, Vue, Svelte, Angular, Next, Nuxt, Astro, Solid,
+server-rendered pages, ...), `static` for CLIs and libraries with a user-facing API, `none` for
+backend-only. With `browser`, propose `dev_server` (the `dev`/`start` script) and `base_url` (from
+the dev server config or its default port).
+
+**Unknown stack in an existing project** (source code, but none of the files above): do not run
+the stack interview. Say which languages you see and ask the user, in plain text, for the `build`,
+`lint` and `test` commands (each may be empty) and `ui_review`.
+
+**No stack yet** (empty repo, or only docs, licence and config files, no source code): run a
+**stack interview** instead. Stop
 asking when you can choose without guessing. Find out what the user wants to build (kind of
 product, users, scale), constraints (languages and frameworks the team knows, hosting, company
 standards, integrations, licences) and preferences. Then recommend one stack with a short reason
@@ -66,8 +95,11 @@ Ask with AskUserQuestion which `workspace` the factory uses for new features: **
 with its own branch, so several sessions can build different features in parallel; a branch runs
 in the main checkout, one feature at a time; Ask decides per feature. Then propose
 `worktree_setup`, the command that prepares a fresh worktree, from the stack: `npm ci` with
-`package-lock.json`, `dotnet restore` for .NET, empty when nothing is needed; the user confirms or
-edits it.
+`package-lock.json`, `pnpm install --frozen-lockfile`, `yarn install --frozen-lockfile` (Yarn 1) or
+`yarn install --immutable` (Yarn 2+), `bun install --frozen-lockfile`, `dotnet restore` for .NET,
+`composer install`, `bundle install`, `go mod download`, the project's install command for Python
+(e.g. `uv sync`, `poetry install`, `pip install -e .`), empty when nothing is needed (Cargo, Maven
+and Gradle fetch on build); chain them for several apps. The user confirms or edits it.
 
 ## 1b. Forge
 

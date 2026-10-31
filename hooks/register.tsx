@@ -5,8 +5,8 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run, SessionRecord } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
-import { bindFeature, featureOfArg, parseBoard, soleActive, summarize } from './board'
-import { parseGate, parseReview } from './feature'
+import { bindFeature, featureOfArg, mainCheckoutOf, parseBoard, soleActive, summarize } from './board'
+import { changeStart, parseGate, parseReview } from './feature'
 import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
@@ -42,6 +42,8 @@ let lastRows = new Map<string, BoardRow>()
 let ticker: { cancel: () => void } | undefined
 let forge: Forge = 'github'
 let lastAsk: string | undefined
+// radice del checkout principale (da git); senza, i percorsi restano relativi alla cartella della sessione
+let root: string | undefined
 
 // ───────────── helper senza eccezioni ─────────────
 
@@ -52,7 +54,17 @@ const quiet = async <T,>(fn: () => Promise<T>, fallback: T): Promise<T> => {
 const readText = ($: $, path: string) =>
   quiet(async () => { const v = await $.fs.read(path); return typeof v === 'string' ? v : undefined }, undefined as string | undefined)
 
-const loadBoard = async ($: $) => parseBoard((await readText($, BOARD)) ?? '')
+/** Percorso sotto `factory/` (o altro relativo alla radice): assoluto sul checkout principale se noto */
+const fromRoot = (rel: string) => (root ? `${root}/${rel}` : rel)
+
+const loadBoard = async ($: $) => parseBoard((await readText($, fromRoot(BOARD))) ?? '')
+
+/** Radice del checkout principale da `git rev-parse --git-common-dir`; `undefined` se git manca o fallisce */
+const resolveRoot = ($: $) =>
+  quiet(async () => {
+    const r = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], { timeoutMs: 5000 })
+    return mainCheckoutOf(r.exitCode, r.stdout)
+  }, undefined as string | undefined)
 
 /** Chiavi `chiave: valore` del frontmatter di config.md, commenti `#` e virgolette tolti */
 export const frontmatter = (text: string): Record<string, string> => {
@@ -175,9 +187,9 @@ const persistAgents = async ($: $, run: Run) => {
   await quiet(() => $.store.set(`agents:${sid}`, cards), undefined)
 }
 
-/** Gate e review della feature, riletti a ogni render (file piccoli, nessuna cache) */
-const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[] }> => {
-  const dir = `factory/features/${id}`
+/** Gate, review e round di partenza della change, riletti a ogni render (file piccoli, nessuna cache) */
+const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[]; start: number }> => {
+  const dir = fromRoot(`factory/features/${id}`)
   const files = async (path: string) => quiet(async () => (await $.fs.list(path)).filter(f => f.kind === 'file').map(f => f.name), [] as string[])
   const gates: GateResult[] = []
   for (const name of (await files(dir)).filter(n => /^gate-r\d+\.md$/i.test(n))) {
@@ -189,7 +201,8 @@ const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; rev
     const r = parseReview(name, (await readText($, `${dir}/reviews/${name}`)) ?? '')
     if (r) reviews.push(r)
   }
-  return { gates, reviews }
+  const start = changeStart((await readText($, `${dir}/playbook.md`)) ?? undefined)
+  return { gates, reviews, start }
 }
 
 // ───────────── transizioni ─────────────
@@ -343,7 +356,7 @@ const isConfig = (path: unknown) => typeof path === 'string' && /(^|[\\/])factor
 
 /** Rilegge max_rounds, forge e comandi del gate da config.md */
 const loadConfig = async ($: $) => {
-  const cfg = frontmatter((await readText($, CONFIG)) ?? '')
+  const cfg = frontmatter((await readText($, fromRoot(CONFIG))) ?? '')
   const rounds = Number(cfg.max_rounds)
   maxRounds = Number.isFinite(rounds) && rounds > 0 ? rounds : 2
   forge = parseForge(cfg.forge)
@@ -416,7 +429,7 @@ const activate = async ($: $, options: { language?: unknown }, fresh = false) =>
 /** Mod inattiva: se nel frattempo config.md è comparso (init a metà sessione) la attiva */
 const ensureActive = async ($: $, options: { language?: unknown }) => {
   if (enabled) return
-  await quiet(async () => { if (await $.fs.exists(CONFIG)) await activate($, options) }, undefined)
+  await quiet(async () => { if (await $.fs.exists(fromRoot(CONFIG))) await activate($, options) }, undefined)
 }
 
 export const register: Register = (on, options) => {
@@ -427,7 +440,8 @@ export const register: Register = (on, options) => {
       ticker = undefined
       commandRegistered = false
       enabled = false
-      if (await quiet(() => $.fs.exists(CONFIG), false)) await activate($, options, true)
+      root = await resolveRoot($)
+      if (await quiet(() => $.fs.exists(fromRoot(CONFIG)), false)) await activate($, options, true)
     } catch {
       // un errore qui non deve fermare l'avvio della sessione
     }
@@ -657,8 +671,8 @@ export const register: Register = (on, options) => {
       try {
         const now = await $.clock.now()
         const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
-        const { gates, reviews } = await loadFeature($, row.id)
-        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge })
+        const { gates, reviews, start } = await loadFeature($, row.id)
+        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge, start })
         if (!Svg) return flowTerminal(els, view, t, now)
         const { source, height } = flowSvg(view, W, t, mode, now)
         const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
