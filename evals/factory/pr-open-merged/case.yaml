@@ -1,0 +1,35 @@
+schema_version: "1.1"
+name: factory-pr-open-merged
+runs: 1
+tags: [factory, shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: /devflow:factory
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+graders:
+  - name: board-row-merged
+    type: regex
+    target: { source: file, path: factory/board.md }
+    pattern: '\|\s*001-hello\s*\|[^\n]*\|\s*merged\s*\|'
+  - name: board-log-transition
+    type: regex
+    target: { source: file, path: factory/board.md }
+    pattern: '001-hello · pr-open → merged'
+  - name: git-merged-script-run
+    type: tool_used
+    tool: Bash
+    input_match: 'git-merged\.sh'
+    min: 1
+  - name: branch-deleted
+    type: tool_used
+    tool: Bash
+    input_match: 'branch -D[^\n]*feature/001-hello'
+    min: 1
+  - name: base-updated
+    type: tool_used
+    tool: Bash
+    input_match: 'pull --ff-only'
+    min: 1
