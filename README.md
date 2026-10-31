@@ -206,12 +206,12 @@ protected base branch is fine; on GitLab the job token is enough.
 
 ## Developing devflow
 
-Only the type check needs the mod types: the factory's `build` (`npx -y -p typescript tsc -p .`)
-fails on a clean clone because `tsconfig.json` extends `.claude-plugin/types/tsconfig.json`, which
-does not exist yet. `claude plugin validate .` and `claude plugin test .` work from a clean clone.
+The mod types are committed in `.claude-plugin/types/`, so a clean clone passes the type check
+(`npx -y -p typescript tsc -p .`) without an interactive session. `claude plugin validate .` and
+`claude plugin test .` also work from a clean clone.
 
-The types live in `.claude-plugin/types/` (ignored by git). Claude Code writes them when an
-interactive session loads the repo as a mod. Once, run:
+Regenerate the types after a Claude Code update: the first line of
+`.claude-plugin/types/claude-code/index.d.ts` reports the version that wrote them. Run:
 
 ```bash
 claude --plugin-dir <repo>
@@ -219,13 +219,26 @@ claude --plugin-dir <repo>
 
 wait until the mod has loaded, then exit. Where you cannot pass the flag, set
 `CLAUDE_CODE_PLUGIN_DIRS=<repo>` instead. `claude -p` and the plugin installed from a marketplace do
-not write the types, and there is no dedicated command to generate them.
+not write the types. Then commit the changed files; the folder has its own `.gitignore` (`*`) written
+by Claude Code, so add any new file with `git add -f`. The CI installs the Claude Code version
+written on that first line, so types and CLI always change together.
 
-Regenerate the types after a Claude Code update: the first line of
-`.claude-plugin/types/claude-code/index.d.ts` reports the version that wrote them.
+### Pull request checks
 
-In worktrees created by the factory, `worktree_setup` (in `factory/config.md`) copies the types from
-the main checkout. It fails, and the feature goes to `needs-human`, if they are missing there.
+`.github/workflows/ci.yml` runs on every pull request into `main` or `develop`, and again when the
+PR is edited:
+
+- `checks` installs the Claude Code version written in the types, fails if `claude --version`
+  differs, then runs the type check, `claude plugin validate .`, `claude plugin test .` and the
+  `test-*.sh` scripts. Each runs in its own step, so one failure does not hide the others.
+- `pr-title` (only for PRs into `main`) checks that the title is `type(scope)!: subject` with a
+  standard type (`feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `ci`, `perf`, `build`, `style`,
+  `revert`), because the release version depends on it. Fix a wrong title by editing it on GitHub:
+  the check runs again.
+
+The checks use no secrets. They only report: to block the merge, make them required on `main`.
+In GitHub go to Settings → Rules → Rulesets (or Branches → add a rule for `main`), enable "Require
+status checks to pass" and add `checks` and `pr-title`.
 
 ## devflow's own versions
 

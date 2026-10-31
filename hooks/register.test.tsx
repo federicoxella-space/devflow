@@ -879,7 +879,7 @@ test('sessione in un worktree: config, board e feature si leggono dal checkout p
   const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
   on('process.run', (_, e) => {
     expect(e.argv).toEqual(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
-    return GIT(0, ['F:\\main\\.git', ''].join('\n'))
+    return GIT(0, ['/main/.git', ''].join('\n'))
   })
   await $.session.start({ cwd: '/wt', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
@@ -887,11 +887,14 @@ test('sessione in un worktree: config, board e feature si leggono dal checkout p
   const svg = svgOf(await ui.find({ type: 'Svg' }))
   expect(svg?.alt.includes('003-reset')).toBe(true)
   await ui.unmount()
+  // `/main` è assoluto su Linux e su Windows (dove il motore aggiunge il drive): si confronta senza
+  // drive; i backslash di git su Windows sono coperti da mainCheckoutOf in board.test.ts
+  const fromMain = readPaths(calls).map(p => p.replace(/^[A-Za-z]:/, ''))
   expect(calls.reads.length > 0).toBe(true)
-  expect(readPaths(calls).every(p => p.startsWith('F:/main/factory/'))).toBe(true)
-  expect(readPaths(calls)).toContain('F:/main/factory/config.md')
-  expect(readPaths(calls)).toContain('F:/main/factory/board.md')
-  expect(readPaths(calls)).toContain('F:/main/factory/features/003-reset/gate-r1.md')
+  expect(fromMain.every(p => p.startsWith('/main/factory/'))).toBe(true)
+  expect(fromMain).toContain('/main/factory/config.md')
+  expect(fromMain).toContain('/main/factory/board.md')
+  expect(fromMain).toContain('/main/factory/features/003-reset/gate-r1.md')
 })
 
 test('git che rifiuta: percorsi relativi come prima', async ($, on) => {
