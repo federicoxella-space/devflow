@@ -259,18 +259,20 @@ locally, never in CI, and run them before you change `init`, `factory` or `spec-
 macOS or WSL2 run all of them:
 
 ```bash
-claude plugin eval . --scaffold --ablation none --allow-tools Bash,Write,Edit
+claude plugin eval . --scaffold --ablation none --no-publish --allow-tools Bash,Write,Edit
 ```
 
 The cases tagged `shell` (all but the spec-checker one) need Bash. On native Windows Bash is
-refused without a sandbox, so run only the `no-shell` case (`--allow-tools` takes a list, so put `--tag` before it):
+refused without a sandbox, so run only the `no-shell` case (`--allow-tools` takes a list, so put
+`--tag` before it):
 
 ```bash
-claude plugin eval . --scaffold --ablation none --tag no-shell --allow-tools Write,Edit
+claude plugin eval . --scaffold --ablation none --no-publish --tag no-shell --allow-tools Write,Edit
 ```
 
 Add `--runs 3` for a stricter check (each case runs once by default). Results go to
-`evals/results/`, which git ignores.
+`evals/results/`, which git ignores. `--no-publish` keeps the HTML report local: without it the
+report is published to claude.ai.
 
 ## devflow's own versions
 
