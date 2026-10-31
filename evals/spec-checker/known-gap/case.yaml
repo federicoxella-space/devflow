@@ -1,0 +1,32 @@
+schema_version: "1.1"
+name: spec-checker-known-gap
+description: The spec-checker reports GAPS for a spec whose only task leaves the CSV format open.
+runs: 1
+tags: [spec-checker, no-shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: >-
+    Spawn the devflow:spec-checker agent with feature dir factory/features/003-export, config path
+    factory/config.md, project playbook path factory/playbook.md and output path
+    factory/features/003-export/spec-check.md (all relative to the current directory).
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Agent]
+graders:
+  - type: file_exists
+    name: spec-check-written
+    path: factory/features/003-export/spec-check.md
+  - type: regex
+    name: verdict-gaps
+    target: { source: file, path: factory/features/003-export/spec-check.md }
+    pattern: 'verdict:\s*GAPS'
+  - type: regex
+    name: gap-names-t1
+    target: { source: file, path: factory/features/003-export/spec-check.md }
+    pattern: 'T1'
+  - type: tool_used
+    name: spawned-spec-checker
+    tool: Agent
+    input_match: 'spec-checker'
+    min: 1
