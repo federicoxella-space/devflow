@@ -21,6 +21,10 @@
 - External tools started by `.mcp.json` are pinned to an exact version (never `latest` or a range), and that version is cited in the README.
 - Updating a tool pinned in `.mcp.json` includes reading its upstream changelog, not only checking that the tool names used by the agents still exist.
 - Notes in `factory/config.md` about what the repo contains are checked on a clean clone before they are written.
+- In `.github/workflows/` user-written event fields (PR title, body, branch) reach steps only through `env` and are used quoted, never as `${{ ... }}` inside `run:`: a PR title must not be able to inject shell code.
+- After a Claude Code update, the types in `.claude-plugin/types/` are regenerated and committed in the same PR: CI installs the version written on their first line, so types and CLI always change together.
+- CI steps that must run even after an earlier failure use `if: ${{ !cancelled() && steps.<setup>.outcome == 'success' }}`, gated on the setup step: one failing test does not hide the others, and nothing runs on a broken setup.
+- Workflows on PR events use `pull_request`, never `pull_request_target`, unless the job checks out no PR code: fork code must not get secrets or write tokens.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
