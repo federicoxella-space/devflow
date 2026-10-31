@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.21.1 — 2026-10-31
+- ci: check pull requests with type check, validate, tests and title (#36)
+
 ## v0.21.0 — 2026-10-30
 - feat: copy mod types into factory worktrees (#35)
 
