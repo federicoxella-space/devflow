@@ -1,0 +1,82 @@
+# Checks on every pull request into main or develop: type check, plugin validate and test, shell
+# script tests; on PRs into main also the title format (the release bump depends on it, see
+# skills/init/release/next-version.sh). No secrets. Event fields reach the steps only through env.
+name: ci
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    if: github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: bash .github/scripts/check-pr-title.sh "$PR_TITLE"
+
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The Claude Code version comes from the committed types: one source, so types and CLI
+      # cannot diverge.
+      - name: install
+        id: install
+        run: |
+          version=$(bash .github/scripts/claude-version.sh .claude-plugin/types/claude-code/index.d.ts)
+          npm install -g "@anthropic-ai/claude-code@$version"
+          installed=$(claude --version | awk '{print $1}')
+          if [ "$installed" != "$version" ]; then
+            echo "Installed Claude Code $installed differs from the types version $version" >&2
+            exit 1
+          fi
+
+      - name: Type check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx -y -p typescript tsc -p .
+
+      - name: Plugin validate
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: claude plugin validate .
+
+      - name: Plugin test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: claude plugin test .
+
+      - name: Test .github/scripts/test-release.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash .github/scripts/test-release.sh
+
+      - name: Test skills/init/release/test-next-version.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash skills/init/release/test-next-version.sh
+
+      - name: Test skills/init/release/test-release.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash skills/init/release/test-release.sh
+
+      - name: Test skills/factory/scripts/test-git-merged.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash skills/factory/scripts/test-git-merged.sh
+
+      - name: Test .github/scripts/test-claude-version.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash .github/scripts/test-claude-version.sh
+
+      - name: Test .github/scripts/test-check-pr-title.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash .github/scripts/test-check-pr-title.sh
