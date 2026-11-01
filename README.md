@@ -240,6 +240,40 @@ The checks use no secrets. They only report: to block the merge, make them requi
 In GitHub go to Settings → Rules → Rulesets (or Branches → add a rule for `main`), enable "Require
 status checks to pass" and add `checks` and `pr-title`.
 
+### Skill evals
+
+`evals/` holds seven cases for `claude plugin eval`. Each one builds a small example repo with its
+`scaffold.sh`, opens a real Claude session on it with the plugin and checks the result:
+
+- `init-vue-pnpm`: a Vue repo with pnpm gets the `pnpm` commands and no stack interview.
+- `init-go`: a Go repo gets the `go build`, `go vet` and `go test` commands.
+- `init-unknown-stack`: a Lua repo is named and init asks for the commands instead of guessing.
+- `init-empty-repo`: an empty repo starts the stack interview and gets no commands.
+- `factory-pr-open-merged`: a `pr-open` change already merged on the remote is cleaned up and set to
+  `merged`.
+- `factory-resume-interview`: a feature in `interview` asks one new question, not the answered ones.
+- `spec-checker-known-gap`: a spec with a known gap gets the verdict `GAPS` on `T1`.
+
+The evals use real sessions, so they cost tokens and need your Claude credentials: run them only
+locally, never in CI, and run them before you change `init`, `factory` or `spec-checker`. On Linux,
+macOS or WSL2 run all of them:
+
+```bash
+claude plugin eval . --scaffold --ablation none --no-publish --allow-tools Bash,Write,Edit
+```
+
+The cases tagged `shell` (all but the spec-checker one) need Bash. On native Windows Bash is
+refused without a sandbox, so run only the `no-shell` case (`--allow-tools` takes a list, so put
+`--tag` before it):
+
+```bash
+claude plugin eval . --scaffold --ablation none --no-publish --tag no-shell --allow-tools Write,Edit
+```
+
+Add `--runs 3` for a stricter check (each case runs once by default). Results go to
+`evals/results/`, which git ignores. `--no-publish` keeps the HTML report local: without it the
+report is published to claude.ai.
+
 ## devflow's own versions
 
 Every pull request merged into this repo is released automatically: the version in

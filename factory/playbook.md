@@ -25,12 +25,15 @@
 - After a Claude Code update, the types in `.claude-plugin/types/` are regenerated and committed in the same PR: CI installs the version written on their first line, so types and CLI always change together.
 - CI steps that must run even after an earlier failure use `if: ${{ !cancelled() && steps.<setup>.outcome == 'success' }}`, gated on the setup step: one failing test does not hide the others, and nothing runs on a broken setup.
 - Workflows on PR events use `pull_request`, never `pull_request_target`, unless the job checks out no PR code: fork code must not get secrets or write tokens.
+- Every `claude plugin eval` command written in the README passes `--no-publish`: by default the CLI publishes the report (prompts, verdicts) to claude.ai, while `README.md` `### Skill evals` promises results stay local.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
 - Shell script: `set -u`, a sibling `test-<name>.sh` against a temp repo with stubbed CLIs (`.github/scripts/test-release.sh`).
 - New forge operation: add a `## <operation>` section to all four files in `skills/factory/forges/` (`git.md` with a manual fallback) and list it in step 1 of the factory entry point, without a count that goes stale.
 - Before a `git worktree remove` or `git branch -D` on a path read from a feature file, check that the path is listed in `git worktree list --porcelain` on the expected branch: an edited or stale `checkout:` line must not remove an unrelated clean worktree.
+- Eval case: `evals/<group>/<case>/case.yaml` + `scaffold.sh` starting with `#!/usr/bin/env bash` and `set -eu`, tagged `shell` or `no-shell`: the split is what lets the suite run on native Windows.
+- Eval `scaffold.sh` scripts exit if the cwd is not empty before running `git init`/`git config`/`git reset`: `evals/factory/pr-open-merged/scaffold.sh` runs `git reset --hard HEAD~1`, which would damage the devflow checkout if run by hand outside `claude plugin eval --scaffold`.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).
