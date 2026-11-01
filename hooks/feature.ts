@@ -110,7 +110,7 @@ export function parseGate(fileName: string, text: string): GateResult | undefine
 
 /**
  * Round da cui parte la change in corso, dal playbook della feature (`## Changes`, riga scritta da
- * skills/factory/SKILL.md: `- Change <n> — <testo> — from round <R> — in progress`).
+ * skills/factory/references/change.md: `- Change <n> — <testo> — from round <R> — in progress`).
  * Vince la riga `in progress` con `<n>` piu' alto; ogni altro caso -> 1. Non lancia mai.
  */
 export function changeStart(text: string | undefined): number {
