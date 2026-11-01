@@ -1,4 +1,10 @@
+#!/usr/bin/env bash
 set -eu
+
+if [ -n "$(ls -A)" ]; then
+  echo "scaffold.sh: the current directory is not empty; run it only through claude plugin eval --scaffold" >&2
+  exit 1
+fi
 
 git init -q -b main
 git config user.name eval
