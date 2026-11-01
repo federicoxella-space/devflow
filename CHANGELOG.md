@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.22.0 — 2026-11-01
+- feat(evals): add local skill evals for init, factory and spec-checker (#37)
+
 ## v0.21.1 — 2026-10-31
 - ci: check pull requests with type check, validate, tests and title (#36)
 
