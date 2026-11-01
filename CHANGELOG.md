@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.22.1 — 2026-11-01
+- fix(evals): guard scaffolds against a non-empty current directory (#38)
+
 ## v0.22.0 — 2026-11-01
 - feat(evals): add local skill evals for init, factory and spec-checker (#37)
 
