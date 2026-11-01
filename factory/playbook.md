@@ -33,7 +33,7 @@
 - New forge operation: add a `## <operation>` section to all four files in `skills/factory/forges/` (`git.md` with a manual fallback) and list it in step 1 of the factory entry point, without a count that goes stale.
 - Before a `git worktree remove` or `git branch -D` on a path read from a feature file, check that the path is listed in `git worktree list --porcelain` on the expected branch: an edited or stale `checkout:` line must not remove an unrelated clean worktree.
 - Eval case: `evals/<group>/<case>/case.yaml` + `scaffold.sh` starting with `#!/usr/bin/env bash` and `set -eu`, tagged `shell` or `no-shell`: the split is what lets the suite run on native Windows.
-- Eval `scaffold.sh` scripts exit if the cwd is not empty before running `git init`/`git config`/`git reset`: `evals/factory/pr-open-merged/scaffold.sh` runs `git reset --hard HEAD~1`, which would damage the devflow checkout if run by hand outside `claude plugin eval --scaffold`.
+- Every eval `scaffold.sh` checks that the cwd is empty as its first statement after `set -eu`, before any write (git or not), and exits otherwise: `evals/factory/pr-open-merged/scaffold.sh` runs `git reset --hard HEAD~1` and `evals/spec-checker/known-gap/scaffold.sh` writes `factory/config.md`, which would damage the devflow checkout if run by hand outside `claude plugin eval --scaffold`.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).
