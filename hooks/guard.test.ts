@@ -219,6 +219,27 @@ test('AC17: la regola 2 guarda solo i path, non le frasi quotate', () => {
   expect(sh('committer', 'bash -c "echo x >> factory/playbook.md"')).toBe(en.guard.orchestrator('factory/playbook.md'))
   expect(sh('committer', 'Set-Content -Path "F:/my repo/factory/board.md" x')).toBe(board)
   expect(sh('committer', 'tool --out=factory/board.md > log.txt')).toBe(board)
+  expect(sh('committer', 'Set-Content -Path:factory/board.md x')).toBe(board)
+  expect(sh('committer', 'Get-Date | Out-File -FilePath:factory/playbook.md')).toBe(en.guard.orchestrator('factory/playbook.md'))
+  expect(sh('committer', 'Set-Content -Path:"F:/my repo/factory/board.md" x')).toBe(board)
+  expect(sh('committer', 'Get-Content -Path:factory/board.md')).toBeUndefined()
+})
+
+test('delimitatori senza chiusura: valgono come carattere normale e non nascondono il resto', () => {
+  for (const type of ['implementer', 'committer', 'review-code']) {
+    expect(sh(type, 'Write-Host "done`n"; git push')).toBe(en.guard.command('git push'))
+    expect(sh(type, 'Write-Host "say `"hi`""; git push')).toBe(en.guard.command('git push'))
+    expect(sh(type, `echo "it's"; git push`)).toBe(en.guard.command('git push'))
+    expect(sh(type, 'echo "unclosed; git push')).toBe(en.guard.command('git push'))
+    expect(sh(type, "echo 'unclosed; git push")).toBe(en.guard.command('git push'))
+    expect(sh(type, 'echo $(x; git push')).toBe(en.guard.command('git push'))
+  }
+  const ro = (what: string) => en.guard.readOnly('review-code', what)
+  expect(sh('review-code', 'Write-Host "a`tb"; Remove-Item x')).toBe(ro('Remove-Item'))
+  expect(sh('review-code', 'echo "a`b"; rm x')).toBe(ro('rm'))
+  expect(sh('review-code', 'Write-Host "a`tb" > out.txt')).toBe(ro('> out.txt'))
+  expect(sh('review-code', 'Write-Host "done`n"')).toBeUndefined()
+  expect(sh('implementer', 'Write-Host "done`n"; git status')).toBeUndefined()
 })
 
 test('input non validi: fail open', () => {

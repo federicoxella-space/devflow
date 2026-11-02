@@ -105,38 +105,40 @@ function unescape(src: Src): Src {
   return { s, map }
 }
 
-/** Indice della `'` di chiusura (o la lunghezza se manca) */
-const closeSingle = (s: string, i: number) => { const e = s.indexOf("'", i + 1); return e < 0 ? s.length : e }
+// Ogni `close*` restituisce l'indice del delimitatore di chiusura, o -1 se manca: un delimitatore senza
+// chiusura vale come carattere normale, così non ingloba il resto del comando (es. il backtick di
+// PowerShell in `Write-Host "done`n"; git push`).
 
-/** Indice della `"` di chiusura: salta `\x`, `$(…)` e `` `…` `` (che possono contenere altre virgolette) */
+/** Indice della `'` di chiusura, o -1 */
+const closeSingle = (s: string, i: number) => s.indexOf("'", i + 1)
+
+/** Indice della `"` di chiusura, o -1: salta `\x`, `$(…)` e `` `…` `` chiusi (che possono contenere altre virgolette) */
 function closeDouble(s: string, i: number): number {
   let j = i + 1
   while (j < s.length) {
     const c = s.charAt(j)
-    if (c === '\\') j += 2
-    else if (c === '"') return j
-    else if (c === '$' && s.charAt(j + 1) === '(') j = closeParen(s, j + 1) + 1
-    else if (c === '`') j = closeBacktick(s, j) + 1
-    else j++
+    if (c === '\\') { j += 2; continue }
+    if (c === '"') return j
+    const e = c === '$' && s.charAt(j + 1) === '(' ? closeParen(s, j + 1) : c === '`' ? closeBacktick(s, j) : -1
+    j = e < 0 ? j + 1 : e + 1
   }
-  return s.length
+  return -1
 }
 
-/** Indice della `)` che chiude la `(` in `open`, contando le parentesi annidate e saltando le virgolette */
+/** Indice della `)` che chiude la `(` in `open`, o -1: conta le parentesi annidate e salta le virgolette chiuse */
 function closeParen(s: string, open: number): number {
   let depth = 0
   for (let j = open; j < s.length; j++) {
     const c = s.charAt(j)
     if (c === '\\') j++
-    else if (c === "'") j = closeSingle(s, j)
-    else if (c === '"') j = closeDouble(s, j)
+    else if (c === "'" || c === '"') { const e = c === "'" ? closeSingle(s, j) : closeDouble(s, j); if (e >= 0) j = e }
     else if (c === '(') depth++
     else if (c === ')' && --depth === 0) return j
   }
-  return s.length
+  return -1
 }
 
-/** Indice del `` ` `` di chiusura (o la lunghezza se manca) */
+/** Indice del `` ` `` di chiusura, o -1 */
 function closeBacktick(s: string, i: number): number {
   let j = i + 1
   while (j < s.length) {
@@ -145,10 +147,10 @@ function closeBacktick(s: string, i: number): number {
     else if (c === '`') return j
     else j++
   }
-  return s.length
+  return -1
 }
 
-/** Sostituzioni `$(…)` e `` `…` `` nel contenuto grezzo di virgolette doppie, restituite senza escape */
+/** Sostituzioni `$(…)` e `` `…` `` chiuse nel contenuto grezzo di virgolette doppie, restituite senza escape */
 function substitutions(inner: Src): Src[] {
   const out: Src[] = []
   const s = inner.s
@@ -157,10 +159,12 @@ function substitutions(inner: Src): Src[] {
     if (c === '\\') { j++; continue }
     if (c === '$' && s.charAt(j + 1) === '(') {
       const e = closeParen(s, j + 1)
+      if (e < 0) continue
       out.push(unescape(slice(inner, j + 2, e)))
       j = e
     } else if (c === '`') {
       const e = closeBacktick(s, j)
+      if (e < 0) continue
       out.push(unescape(slice(inner, j + 1, e)))
       j = e
     }
@@ -198,35 +202,43 @@ function lex(src: Src): { segs: Token[][]; subs: Src[] } {
     const next = s.charAt(i + 1)
     if (c === "'") {
       const end = closeSingle(s, i)
-      begin(i)
-      add(slice(src, i + 1, end))
-      i = end
-      continue
+      if (end >= 0) {
+        begin(i)
+        add(slice(src, i + 1, end))
+        i = end
+        continue
+      }
     }
     if (c === '"') {
       const end = closeDouble(s, i)
-      const inner = slice(src, i + 1, end)
-      begin(i)
-      add(unescape(inner))
-      subs.push(...substitutions(inner))
-      i = end
-      continue
+      if (end >= 0) {
+        const inner = slice(src, i + 1, end)
+        begin(i)
+        add(unescape(inner))
+        subs.push(...substitutions(inner))
+        i = end
+        continue
+      }
     }
     if (c === '$' && next === '(') {
       const end = closeParen(s, i + 1)
-      begin(i)
-      add(slice(src, i, end + 1))
-      subs.push(slice(src, i + 2, end))
-      i = end
-      continue
+      if (end >= 0) {
+        begin(i)
+        add(slice(src, i, end + 1))
+        subs.push(slice(src, i + 2, end))
+        i = end
+        continue
+      }
     }
     if (c === '`') {
       const end = closeBacktick(s, i)
-      begin(i)
-      add(slice(src, i, end + 1))
-      subs.push(slice(src, i + 1, end))
-      i = end
-      continue
+      if (end >= 0) {
+        begin(i)
+        add(slice(src, i, end + 1))
+        subs.push(slice(src, i + 1, end))
+        i = end
+        continue
+      }
     }
     if (c === '\n' || c === '\r' || c === ';') { flushSeg(); continue }
     if (c === '|') { flushSeg(); if (next === '|') i++; continue }
@@ -347,15 +359,14 @@ const SAFE_TARGET = /^(\/dev\/null|nul|\$null|&\d+)$/i
 /** Redirect `>`/`>>` (con `1>`, `2>`, `&>`, `*>`) fuori dalle virgolette verso un file vero; `pos` è l'indice in `command` */
 function redirects(command: string): Hit[] {
   const out: Hit[] = []
-  let quote: '"' | "'" | undefined
   for (let i = 0; i < command.length; i++) {
     const c = command.charAt(i)
-    if (quote) {
-      if (c === '\\' && quote === '"') i++
-      else if (c === quote) quote = undefined
+    // virgolette chiuse: si saltano; senza chiusura valgono come carattere normale
+    if (c === '"' || c === "'") {
+      const e = c === "'" ? closeSingle(command, i) : closeDouble(command, i)
+      if (e >= 0) i = e
       continue
     }
-    if (c === '"' || c === "'") { quote = c; continue }
     if (c !== '>') continue
     // prefisso del descrittore (`2>`, `&>`, `*>`) solo a inizio parola
     let opStart = i
@@ -403,14 +414,15 @@ function projectFileOf(path: string): string | undefined {
 }
 
 /**
- * Punto 2: primo file del progetto nominato come path (token, valore dopo il primo `=` di `-x=…`/`--x=…`,
- * destinazione di un redirect). Una frase quotata che cita il file non è un path: il token intero non è il file.
+ * Punto 2: primo file del progetto nominato come path (token, valore dopo il primo `=` di `-x=…`/`--x=…` o
+ * dopo il primo `:` di un parametro PowerShell `-X:…`, destinazione di un redirect).
+ * Una frase quotata che cita il file non è un path: il token intero non è il file.
  */
 function namedProjectFile(scan: Scan): string | undefined {
   const hits: { pos: number; f: string }[] = []
   for (const seg of scan.segs) for (const tok of seg) {
-    const value = /^--?[^=]+=(.*)$/.exec(tok.text)?.[1]
-    for (const cand of value === undefined ? [tok.text] : [tok.text, value]) {
+    const values = [/^--?[^=]+=(.*)$/, /^--?[^:=]+:(.*)$/].map(re => re.exec(tok.text)?.[1])
+    for (const cand of [tok.text, ...values.filter((v): v is string => v !== undefined)]) {
       const f = projectFileOf(cand)
       if (f) hits.push({ pos: tok.pos, f })
     }
