@@ -26,6 +26,11 @@
 - CI steps that must run even after an earlier failure use `if: ${{ !cancelled() && steps.<setup>.outcome == 'success' }}`, gated on the setup step: one failing test does not hide the others, and nothing runs on a broken setup.
 - Workflows on PR events use `pull_request`, never `pull_request_target`, unless the job checks out no PR code: fork code must not get secrets or write tokens.
 - Every `claude plugin eval` command written in the README passes `--no-publish`: by default the CLI publishes the report (prompts, verdicts) to claude.ai, while `README.md` `### Skill evals` promises results stay local.
+- A mod hook that can refuse a call (`{ deny }`) fails open on every error or unknown state: `hooks/register.tsx` already wraps its logic in `quiet`, and a guard that throws must not stop a normal session or another plugin's agents.
+- A guard pattern that allows a write checks the path against the known roots (checkout and worktrees), not only its suffix: in `hooks/guard.ts` the `(^|/)factory/...` patterns also match paths outside the repo, which weakens "own output file only".
+- A shell command tokenizer in the mod keeps quoted words whole (spaces inside quotes do not split tokens) and rescans their content for nested commands: in 016 r1 `git -C "<dir with spaces>" push` bypassed the guard.
+- When the guard tokenizer sends quoted content to one check (git), it sends it to the other checks of the same rule too, or the spec says why not: `hooks/guard.ts` sends `nested` segments to `gitInvocations` but not to `leadingWrite`, so `bash -c "x; rm -rf src"` passes for read-only agents.
+- A fail-open test raises the error inside the code that must absorb it and checks that the call reaches `next`: in 016 r1/r2 the AC10 test passed a non-string `command`, which was rejected before the guard logic, so the `catch` never ran.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
