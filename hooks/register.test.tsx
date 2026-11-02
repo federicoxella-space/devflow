@@ -959,8 +959,8 @@ test('change in corso: round relativo alla change, gate col numero del file', as
 type Call = Record<string, unknown>
 const call = ($: Parameters<TestBody>[0], c: Call) => $.tool.call(c as never) as Promise<{ deny?: string }>
 
-const guardSession = async ($: Parameters<TestBody>[0], on: On, type = 'devflow:review-code') => {
-  const stub = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+const guardSession = async ($: Parameters<TestBody>[0], on: On, type = 'devflow:review-code', bash?: (command: string) => Promise<void>) => {
+  const stub = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }, bash })
   on('session.id', () => ({ value: SID }))
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
@@ -1018,9 +1018,18 @@ test('guard: mod non attiva, nessun rifiuto', async ($, on) => {
   expect((await call($, { tool: 'Bash', command: 'git push', agentId: 'a1' })).deny).toBeUndefined()
 })
 
-test('guard: un errore del guard lascia passare la chiamata', async ($, on) => {
-  await guardSession($, on)
-  // comando non stringa: il guard lancia, la chiamata passa
-  const r = await call($, { tool: 'Bash', command: undefined as never, agentId: 'a1' })
+test('guard: un errore dentro il guard lascia passare la chiamata a next', async ($, on) => {
+  // dopo lo spawn la lettura dell'atom delle card dà null e l'accesso per agentId lancia dentro guardDeny
+  let broken = false
+  on('state.get', (_, e, next) => {
+    if (broken && e.plugin === 'devflow' && e.key === 'agents') return { value: null, version: 0 } as never
+    return next(e)
+  })
+  const { calls } = await guardSession($, on)
+  broken = true
+  const before = calls.invalidations
+  // la Write della board sarebbe vietata; col guard rotto il resto dell'hook gira (boardChanged ridisegna)
+  const r = await call($, { tool: 'Write', file_path: 'factory/board.md', content: BOARD_BUILD, agentId: 'a1' })
   expect(r.deny).toBeUndefined()
+  expect(calls.invalidations > before).toBe(true)
 })
