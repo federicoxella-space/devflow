@@ -169,7 +169,9 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   nothing under `factory/`. No agent writes `factory/board.md` or the project `factory/playbook.md`,
   runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
   git state (commit, add, checkout, stash...) or modify files from the shell (redirects, `rm`, `mv`,
-  `sed -i`, PowerShell equivalents). A refused call is not run: the agent gets the reason in the pane
+  `sed -i`, PowerShell equivalents). Commands run inside another command (`bash -c`, `pwsh -Command`,
+  `cmd /c`, `$(...)`) are checked too; quoted text, such as a commit message, is not:
+  `git commit -m "docs: explain git push"` passes. A refused call is not run: the agent gets the reason in the pane
   language and can take another way, and its card shows `⊘ N blocked`. The guard covers the common
   mistakes, not every possible shell write. It fails open: the main loop, agents of other plugins,
   unknown agents and sessions without a factory are never touched, nor is any call if the guard

@@ -182,6 +182,45 @@ test('AC7: nessuna scrittura da shell su board e playbook del progetto', () => {
   expect(checkShell('implementer', 'rm factory/board.md', it)).toBe('devflow guard: solo l’orchestratore scrive factory/board.md')
 })
 
+test('AC15: il testo quotato fuori dai comandi annidati non è un comando', () => {
+  expect(sh('committer', 'git commit -m "docs: explain git push"')).toBeUndefined()
+  expect(sh('committer', 'git commit -m "fix --force flag"')).toBeUndefined()
+  expect(sh('committer', "git commit -m 'skip --no-verify'")).toBeUndefined()
+  expect(sh('review-code', 'grep "git push" f')).toBeUndefined()
+  expect(sh('review-code', 'grep -n "rm -rf" f')).toBeUndefined()
+  expect(sh('review-code', "echo '$(git push)'")).toBeUndefined()
+  for (const type of ['implementer', 'committer', 'review-code', 'future-agent']) {
+    expect(sh(type, 'echo "$(git push)"')).toBe(en.guard.command('git push'))
+    expect(sh(type, 'echo "`git push`"')).toBe(en.guard.command('git push'))
+    expect(sh(type, 'echo $(git push)')).toBe(en.guard.command('git push'))
+  }
+})
+
+test('AC16: un comando annidato passa a tutti i controlli', () => {
+  const ro = (what: string) => en.guard.readOnly('review-code', what)
+  expect(sh('review-code', 'bash -c "x; rm -rf src"')).toBe(ro('rm'))
+  expect(sh('review-code', "sh -c 'echo x > out.txt'")).toBe(ro('> out.txt'))
+  expect(sh('review-code', 'pwsh -Command "Remove-Item x"')).toBe(ro('Remove-Item'))
+  expect(sh('review-code', 'bash -c "git commit -m \\"x\\""')).toBe(ro('git commit'))
+  for (const type of ['implementer', 'committer', 'review-code', 'future-agent']) {
+    expect(sh(type, 'bash -lc "git push"')).toBe(en.guard.command('git push'))
+    expect(sh(type, 'powershell.exe -c "git push"')).toBe(en.guard.command('git push'))
+    expect(sh(type, 'cmd /c "git push"')).toBe(en.guard.command('git push'))
+    expect(sh(type, `bash -c "sh -c 'git push'"`)).toBe(en.guard.command('git push'))
+  }
+  expect(sh('implementer', 'bash -c "rm f"')).toBeUndefined()
+})
+
+test('AC17: la regola 2 guarda solo i path, non le frasi quotate', () => {
+  const board = en.guard.orchestrator('factory/board.md')
+  expect(sh('committer', 'git commit -m "update factory/board.md"')).toBeUndefined()
+  expect(sh('committer', 'git add factory/board.md')).toBe(board)
+  expect(sh('committer', 'echo x > "factory/board.md"')).toBe(board)
+  expect(sh('committer', 'bash -c "echo x >> factory/playbook.md"')).toBe(en.guard.orchestrator('factory/playbook.md'))
+  expect(sh('committer', 'Set-Content -Path "F:/my repo/factory/board.md" x')).toBe(board)
+  expect(sh('committer', 'tool --out=factory/board.md > log.txt')).toBe(board)
+})
+
 test('input non validi: fail open', () => {
   expect(checkWrite('implementer', undefined as unknown as string, ROOTS, en)).toBeUndefined()
   expect(checkWrite('implementer', 'factory/x', undefined as unknown as string[], en)).toBe('devflow guard: implementer cannot write under factory/')

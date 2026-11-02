@@ -82,39 +82,149 @@ export function checkWrite(type: string, path: string, roots: string[], t: Strin
 
 // ---- Shell ----
 
-type Token = { text: string; pos: number }
+/** Testo con, per ogni carattere, la sua posizione nel comando originale */
+type Src = { s: string; map: number[] }
 
-type Lexed = { segs: Token[][]; nested: Token[][] }
+type Token = { text: string; pos: number; src: Src }
+
+type Hit = { pos: number; what: string; target?: string }
+
+type Scan = { segs: Token[][]; redirs: Hit[] }
+
+const slice = (src: Src, from: number, to: number): Src => ({ s: src.s.slice(from, to), map: src.map.slice(from, to) })
+
+/** Toglie il `\` di `\"`, `\\`, `` \` ``, `\$` (contenuto preso da virgolette doppie) */
+function unescape(src: Src): Src {
+  let s = ''
+  const map: number[] = []
+  for (let i = 0; i < src.s.length; i++) {
+    if (src.s.charAt(i) === '\\' && i + 1 < src.s.length && '"\\`$'.includes(src.s.charAt(i + 1))) i++
+    s += src.s.charAt(i)
+    map.push(src.map[i] ?? 0)
+  }
+  return { s, map }
+}
+
+/** Indice della `'` di chiusura (o la lunghezza se manca) */
+const closeSingle = (s: string, i: number) => { const e = s.indexOf("'", i + 1); return e < 0 ? s.length : e }
+
+/** Indice della `"` di chiusura: salta `\x`, `$(…)` e `` `…` `` (che possono contenere altre virgolette) */
+function closeDouble(s: string, i: number): number {
+  let j = i + 1
+  while (j < s.length) {
+    const c = s.charAt(j)
+    if (c === '\\') j += 2
+    else if (c === '"') return j
+    else if (c === '$' && s.charAt(j + 1) === '(') j = closeParen(s, j + 1) + 1
+    else if (c === '`') j = closeBacktick(s, j) + 1
+    else j++
+  }
+  return s.length
+}
+
+/** Indice della `)` che chiude la `(` in `open`, contando le parentesi annidate e saltando le virgolette */
+function closeParen(s: string, open: number): number {
+  let depth = 0
+  for (let j = open; j < s.length; j++) {
+    const c = s.charAt(j)
+    if (c === '\\') j++
+    else if (c === "'") j = closeSingle(s, j)
+    else if (c === '"') j = closeDouble(s, j)
+    else if (c === '(') depth++
+    else if (c === ')' && --depth === 0) return j
+  }
+  return s.length
+}
+
+/** Indice del `` ` `` di chiusura (o la lunghezza se manca) */
+function closeBacktick(s: string, i: number): number {
+  let j = i + 1
+  while (j < s.length) {
+    const c = s.charAt(j)
+    if (c === '\\') j += 2
+    else if (c === '`') return j
+    else j++
+  }
+  return s.length
+}
+
+/** Sostituzioni `$(…)` e `` `…` `` nel contenuto grezzo di virgolette doppie, restituite senza escape */
+function substitutions(inner: Src): Src[] {
+  const out: Src[] = []
+  const s = inner.s
+  for (let j = 0; j < s.length; j++) {
+    const c = s.charAt(j)
+    if (c === '\\') { j++; continue }
+    if (c === '$' && s.charAt(j + 1) === '(') {
+      const e = closeParen(s, j + 1)
+      out.push(unescape(slice(inner, j + 2, e)))
+      j = e
+    } else if (c === '`') {
+      const e = closeBacktick(s, j)
+      out.push(unescape(slice(inner, j + 1, e)))
+      j = e
+    }
+  }
+  return out
+}
+
+/** Testo del token: senza `$(`, virgolette, parentesi, backtick */
+const clean = (value: string) => value.replace(/\$\(/g, '').replace(/["'()`]/g, '')
 
 /**
- * Divide il comando in segmenti (`&&`, `||`, `;`, `|`, `&` isolato, a capo) di token puliti con la loro posizione.
- * Una parola quotata resta un solo token (gli spazi e i separatori fra virgolette non dividono); il contenuto
- * quotato si ri-segmenta in `nested`, così `bash -c "git push"` e `"$(git push)"` sono visti.
+ * Divide `src` in segmenti (`&&`, `||`, `;`, `|`, `&` isolato, a capo) di token, fuori dalle virgolette.
+ * Una parola quotata, anche in parte, resta un solo token e il contenuto quotato non si ri-segmenta.
+ * `subs`: le sostituzioni `$(…)` e `` `…` `` (fuori dalle virgolette o dentro le doppie), da analizzare come comandi.
  */
-function lex(command: string, base = 0): Lexed {
+function lex(src: Src): { segs: Token[][]; subs: Src[] } {
+  const s = src.s
   const segs: Token[][] = []
-  const nested: Token[][] = []
+  const subs: Src[] = []
   let cur: Token[] = []
-  let word = ''
-  let start = 0
+  let word: Src = { s: '', map: [] }
+  let start = -1
+  const add = (part: Src) => { word.s += part.s; word.map.push(...part.map) }
+  const begin = (i: number) => { if (start < 0) start = i }
   const flushWord = () => {
-    const text = word.replace(/\$\(/g, '').replace(/["'()`]/g, '')
-    if (text) cur.push({ text, pos: base + start })
-    word = ''
+    const text = clean(word.s)
+    if (start >= 0 && text) cur.push({ text, pos: src.map[start] ?? 0, src: word })
+    word = { s: '', map: [] }
+    start = -1
   }
   const flushSeg = () => { flushWord(); if (cur.length) segs.push(cur); cur = [] }
-  for (let i = 0; i < command.length; i++) {
-    const c = command.charAt(i)
-    const prev = command.charAt(i - 1)
-    const next = command.charAt(i + 1)
-    if (c === '"' || c === "'") {
-      let end = i + 1
-      while (end < command.length && command.charAt(end) !== c) end += c === '"' && command.charAt(end) === '\\' ? 2 : 1
-      const inner = command.slice(i + 1, Math.min(end, command.length))
-      if (!word) start = i
-      word += inner
-      const sub = lex(inner, base + i + 1)
-      nested.push(...sub.segs, ...sub.nested)
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charAt(i)
+    const prev = s.charAt(i - 1)
+    const next = s.charAt(i + 1)
+    if (c === "'") {
+      const end = closeSingle(s, i)
+      begin(i)
+      add(slice(src, i + 1, end))
+      i = end
+      continue
+    }
+    if (c === '"') {
+      const end = closeDouble(s, i)
+      const inner = slice(src, i + 1, end)
+      begin(i)
+      add(unescape(inner))
+      subs.push(...substitutions(inner))
+      i = end
+      continue
+    }
+    if (c === '$' && next === '(') {
+      const end = closeParen(s, i + 1)
+      begin(i)
+      add(slice(src, i, end + 1))
+      subs.push(slice(src, i + 2, end))
+      i = end
+      continue
+    }
+    if (c === '`') {
+      const end = closeBacktick(s, i)
+      begin(i)
+      add(slice(src, i, end + 1))
+      subs.push(slice(src, i + 1, end))
       i = end
       continue
     }
@@ -126,11 +236,50 @@ function lex(command: string, base = 0): Lexed {
       if (prev !== '>' && prev !== '<' && next !== '>') { flushSeg(); continue }
     }
     if (/\s/.test(c)) { flushWord(); continue }
-    if (!word) start = i
-    word += c
+    begin(i)
+    add(slice(src, i, i + 1))
   }
   flushSeg()
-  return { segs, nested }
+  return { segs, subs }
+}
+
+/** Nome del comando: ultimo componente del path, minuscolo, senza `.exe` */
+const commandName = (text: string) => text.replace(/\\/g, '/').split('/').pop()?.toLowerCase().replace(/\.exe$/, '') ?? ''
+
+const SH = new Set(['bash', 'sh', 'zsh', 'dash'])
+
+/** Riconosce il flag che introduce il comando annidato, se `name` è un interprete */
+function interpreterFlag(name: string): ((flag: string) => boolean) | undefined {
+  if (SH.has(name)) return f => /^-[A-Za-z]*c[A-Za-z]*$/.test(f)
+  if (name === 'pwsh' || name === 'powershell') return f => /^-(command|c)$/i.test(f)
+  if (name === 'cmd') return f => /^\/c$/i.test(f)
+  return undefined
+}
+
+/** Argomenti degli interpreti nel segmento: il token subito dopo il primo `-c` / `-Command` / `/c` */
+function interpreterArgs(seg: Token[]): Src[] {
+  const out: Src[] = []
+  seg.forEach((tok, i) => {
+    const isFlag = interpreterFlag(commandName(tok.text))
+    if (!isFlag) return
+    const j = seg.findIndex((t, k) => k > i && isFlag(t.text))
+    const arg = j >= 0 ? seg[j + 1] : undefined
+    if (arg) out.push(arg.src)
+  })
+  return out
+}
+
+// limite di ricorsione sui comandi annidati: oltre, il resto non si analizza
+const MAX_DEPTH = 16
+
+/** Segmenti e redirect di `src` e, ricorsivamente, dei suoi comandi annidati (posizioni nel comando originale) */
+function analyze(src: Src, out: Scan, depth = 0): Scan {
+  const { segs, subs } = lex(src)
+  out.segs.push(...segs)
+  for (const r of redirects(src.s)) out.redirs.push({ ...r, pos: src.map[r.pos] ?? 0 })
+  if (depth >= MAX_DEPTH) return out
+  for (const sub of [...subs, ...segs.flatMap(interpreterArgs)]) analyze(sub, out, depth + 1)
+  return out
 }
 
 const isGit = (token: string) => /(^|\/)git(\.exe)?$/i.test(token.replace(/\\/g, '/'))
@@ -162,7 +311,7 @@ function gitInvocations(segs: Token[][]): Invocation[] {
 
 /** Punto 1: push, force, no-verify, reset --hard (per tutti i subagent) */
 function forbiddenGit(invs: Invocation[]): string | undefined {
-  const hits: { pos: number; what: string }[] = []
+  const hits: Hit[] = []
   for (const inv of invs) {
     if (inv.sub === 'push') hits.push({ pos: inv.subPos, what: 'git push' })
     for (const a of inv.args) {
@@ -181,11 +330,11 @@ const FILE_COMMANDS = new Set(['rm', 'mv', 'cp', 'tee', 'touch'])
 const CMDLETS = ['Set-Content', 'Add-Content', 'Out-File', 'Remove-Item', 'Move-Item', 'Copy-Item', 'New-Item', 'Tee-Object']
 
 /** Comando di scrittura all'inizio di un segmento (dopo le assegnazioni `VAR=x`) */
-function leadingWrite(seg: Token[]): { pos: number; what: string } | undefined {
+function leadingWrite(seg: Token[]): Hit | undefined {
   const i = seg.findIndex(tok => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok.text))
   const head = seg[i]
   if (!head) return undefined
-  const name = head.text.replace(/\\/g, '/').split('/').pop()?.toLowerCase().replace(/\.exe$/, '') ?? ''
+  const name = commandName(head.text)
   if (FILE_COMMANDS.has(name)) return { pos: head.pos, what: name }
   if (name === 'sed' && seg.slice(i + 1).some(tok => /^(-i|--in-place)/.test(tok.text))) return { pos: head.pos, what: 'sed -i' }
   const cmdlet = CMDLETS.find(c => c.toLowerCase() === name)
@@ -195,9 +344,9 @@ function leadingWrite(seg: Token[]): { pos: number; what: string } | undefined {
 
 const SAFE_TARGET = /^(\/dev\/null|nul|\$null|&\d+)$/i
 
-/** Redirect `>`/`>>` (con `1>`, `2>`, `&>`, `*>`) fuori dalle virgolette verso un file vero */
-function redirects(command: string): { pos: number; what: string }[] {
-  const out: { pos: number; what: string }[] = []
+/** Redirect `>`/`>>` (con `1>`, `2>`, `&>`, `*>`) fuori dalle virgolette verso un file vero; `pos` è l'indice in `command` */
+function redirects(command: string): Hit[] {
+  const out: Hit[] = []
   let quote: '"' | "'" | undefined
   for (let i = 0; i < command.length; i++) {
     const c = command.charAt(i)
@@ -226,45 +375,72 @@ function redirects(command: string): { pos: number; what: string }[] {
       k = end < 0 ? command.length : end + 1
       target = command.slice(j, k)
     } else {
-      while (k < command.length && !/[\s;|<>()]/.test(command.charAt(k)) && !(command.charAt(k) === '&' && k > j)) k++
+      while (k < command.length && !/[\s;|<>()`]/.test(command.charAt(k)) && !(command.charAt(k) === '&' && k > j)) k++
       target = command.slice(j, k)
     }
     i = Math.max(j, k) - 1
     const bare = target.replace(/^["']|["']$/g, '')
     if (!bare || SAFE_TARGET.test(bare)) continue
-    out.push({ pos: opStart, what: `${op} ${target}` })
+    out.push({ pos: opStart, what: `${op} ${target}`, target: bare })
   }
   return out
 }
 
-/** Prima operazione di scrittura del comando (punto 3), da sinistra a destra */
-function writeOp(command: string, segs: Token[][], invs: Invocation[]): string | undefined {
-  const hits: { pos: number; what: string }[] = []
+/** Prima operazione di scrittura (punto 3), da sinistra a destra, nei segmenti e nei comandi annidati */
+function writeOp(scan: Scan, invs: Invocation[]): string | undefined {
+  const hits: Hit[] = []
   for (const inv of invs) if (inv.sub && GIT_WRITES.has(inv.sub)) hits.push({ pos: inv.pos, what: `git ${inv.sub}` })
-  for (const seg of segs) { const w = leadingWrite(seg); if (w) hits.push(w) }
-  hits.push(...redirects(command))
+  for (const seg of scan.segs) { const w = leadingWrite(seg); if (w) hits.push(w) }
+  hits.push(...scan.redirs)
   hits.sort((a, b) => a.pos - b.pos)
   return hits[0]?.what
 }
 
+/** File del progetto (board o playbook) se `path`, dopo `normPath`, è quel file o finisce con `/<file>` */
+function projectFileOf(path: string): string | undefined {
+  const p = normPath(path)
+  return PROJECT_FILES.find(f => p === f || p.endsWith(`/${f}`))
+}
+
+/**
+ * Punto 2: primo file del progetto nominato come path (token, valore dopo il primo `=` di `-x=…`/`--x=…`,
+ * destinazione di un redirect). Una frase quotata che cita il file non è un path: il token intero non è il file.
+ */
+function namedProjectFile(scan: Scan): string | undefined {
+  const hits: { pos: number; f: string }[] = []
+  for (const seg of scan.segs) for (const tok of seg) {
+    const value = /^--?[^=]+=(.*)$/.exec(tok.text)?.[1]
+    for (const cand of value === undefined ? [tok.text] : [tok.text, value]) {
+      const f = projectFileOf(cand)
+      if (f) hits.push({ pos: tok.pos, f })
+    }
+  }
+  for (const r of scan.redirs) {
+    const f = r.target ? projectFileOf(r.target) : undefined
+    if (f) hits.push({ pos: r.pos, f })
+  }
+  hits.sort((a, b) => a.pos - b.pos)
+  return hits[0]?.f
+}
+
 /**
  * Comando di shell (Bash o PowerShell) dell'agente `type` (senza `devflow:`).
+ * Il testo quotato non è un comando, salvo i comandi annidati (`bash -c`, `pwsh -Command`, `cmd /c`, `$(…)`, backtick).
  * Motivo del rifiuto o `undefined`; solo la prima violazione, nell'ordine delle regole.
  */
 export function checkShell(type: string, command: string, t: Strings): string | undefined {
   if (typeof type !== 'string' || typeof command !== 'string') return undefined
   const ty = bareType(type)
-  const { segs, nested } = lex(command)
-  const invs = gitInvocations([...segs, ...nested])
+  const scan = analyze({ s: command, map: Array.from({ length: command.length }, (_, i) => i) }, { segs: [], redirs: [] })
+  const invs = gitInvocations(scan.segs)
 
   const forbidden = forbiddenGit(invs)
   if (forbidden) return t.guard.command(forbidden)
 
-  const write = writeOp(command, segs, invs)
+  const write = writeOp(scan, invs)
   if (write) {
-    const lower = command.replace(/\\/g, '/').toLowerCase()
-    const found = PROJECT_FILES.map(f => ({ f, at: lower.indexOf(f) })).filter(x => x.at >= 0).sort((a, b) => a.at - b.at)[0]
-    if (found) return t.guard.orchestrator(found.f)
+    const file = namedProjectFile(scan)
+    if (file) return t.guard.orchestrator(file)
     if (isReadOnly(ty)) return t.guard.readOnly(ty, write)
   }
   return undefined
