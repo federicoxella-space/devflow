@@ -9,6 +9,12 @@ execution:
   max_turns: 40
   timeout_seconds: 900
   allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+  append_system_prompt: >-
+    Environment note: in this run, shell commands that write inside the repository, including its
+    .git directory, fail with a read-only file system error. This is a limit of the evaluation
+    environment and is expected. Do not skip any step of the skill because of it: run every step
+    the skill prescribes, in order, and when a command fails, handle the failure exactly as the
+    skill says. File changes made with the Write and Edit tools work normally.
 graders:
   - name: board-row-merged
     type: regex
