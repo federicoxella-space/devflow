@@ -25,6 +25,7 @@ export const parseCards = (v: unknown): Record<string, AgentCard> => {
     if (c.status !== 'running' && c.status !== 'done' && c.status !== 'failed') continue
     if (c.endedAt !== undefined && !isNum(c.endedAt)) continue
     if (!optStr(c.model) || !optStr(c.effort) || !optStr(c.escalatedFrom) || !optStr(c.task)) continue
+    if (c.blocked !== undefined && !isNum(c.blocked)) continue
     out[key] = c as unknown as AgentCard
   }
   return out

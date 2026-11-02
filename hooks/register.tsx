@@ -7,6 +7,7 @@ import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewRe
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
 import { bindFeature, featureOfArg, mainCheckoutOf, parseBoard, soleActive, summarize } from './board'
 import { changeStart, parseGate, parseReview } from './feature'
+import { checkShell, checkWrite, worktreeRoots } from './guard'
 import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
 import type { PaletteMode } from './palette'
@@ -44,6 +45,8 @@ let forge: Forge = 'github'
 let lastAsk: string | undefined
 // radice del checkout principale (da git); senza, i percorsi restano relativi alla cartella della sessione
 let root: string | undefined
+// radici su cui il guard riconosce `factory/`: checkout principale e worktree (git worktree list)
+let guardRoots: string[] = []
 
 // ───────────── helper senza eccezioni ─────────────
 
@@ -65,6 +68,33 @@ const resolveRoot = ($: $) =>
     const r = await $.process.run(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'], { timeoutMs: 5000 })
     return mainCheckoutOf(r.exitCode, r.stdout)
   }, undefined as string | undefined)
+
+/** Radici per il guard: checkout principale + worktree; senza git restano i soli percorsi relativi */
+const resolveGuardRoots = ($: $) =>
+  quiet(async () => {
+    const r = await $.process.run(['git', 'worktree', 'list', '--porcelain'], { timeoutMs: 5000 })
+    return [...(root ? [root] : []), ...(r.exitCode === 0 ? worktreeRoots(r.stdout) : [])]
+  }, [] as string[])
+
+/** Guard: motivo del rifiuto se la chiamata è di un agente devflow noto e viola un vincolo; fail open su ogni errore */
+const guardDeny = async ($: $, agentId: string | undefined, check: (type: string) => string | undefined): Promise<string | undefined> => {
+  if (!enabled || agentId === undefined) return undefined
+  return quiet(async () => {
+    const card = (await read($, agentsAtom))[agentId]
+    if (!card) return undefined
+    const reason = check(card.type)
+    if (reason === undefined) return undefined
+    await quiet(async () => {
+      await update($, agentsAtom, all => {
+        const a = all[agentId]
+        return a ? { ...all, [agentId]: { ...a, blocked: (a.blocked ?? 0) + 1 } } : all
+      })
+      await persistAgents($, await read($, runAtom))
+      redraw($)
+    }, undefined)
+    return reason
+  }, undefined)
+}
 
 /** Chiavi `chiave: valore` del frontmatter di config.md, commenti `#` e virgolette tolti */
 export const frontmatter = (text: string): Record<string, string> => {
@@ -328,6 +358,8 @@ export const isGateCommand = (command: string, gates: readonly string[]) => {
 
 /** Il board lo aggiorna anche l'orchestratore da shell (Get-Content/Set-Content, sed): dopo ogni comando lo si rilegge */
 const shellCall = async <E extends { agentId?: string; command: string }, R>($: $, e: E, next: (e: E) => Promise<R>): Promise<R> => {
+  const reason = await guardDeny($, e.agentId, type => checkShell(type, e.command, t))
+  if (reason !== undefined) return { deny: reason } as R
   if (!enabled || e.agentId !== undefined) return next(e)
   const run = await quiet(() => read($, runAtom), emptyRun())
   if (!run.active) return next(e)
@@ -398,6 +430,7 @@ const restore = async ($: $) => {
 /** Attiva la mod (idempotente): config.md esiste ma la sessione era partita senza, o rilettura dopo una sua modifica */
 const activate = async ($: $, options: { language?: unknown }, fresh = false) => {
   await loadConfig($)
+  guardRoots = await resolveGuardRoots($)
   if (enabled && !fresh) return
   enabled = true
   const settings = await quiet(() => $.settings.read(), {} as Awaited<ReturnType<$['settings']['read']>>)
@@ -480,6 +513,9 @@ export const register: Register = (on, options) => {
   // Modello, effort e attività degli agenti arrivano da turn.step, come in agent-monitor.
   on('tool.call', { tool: ['Write', 'Edit'] }, async ($, e, next) => {
     const input = e as unknown as Record<string, unknown>
+    const path = typeof input.file_path === 'string' ? input.file_path : undefined
+    const reason = path === undefined ? undefined : await guardDeny($, e.agentId, type => checkWrite(type, path, guardRoots, t))
+    if (reason !== undefined) return { deny: reason }
     if (isConfig(input.file_path)) {
       // init scrive config.md: a file scritto si attiva la mod, o si rileggono i valori
       const r = await next(e)
@@ -545,6 +581,7 @@ export const register: Register = (on, options) => {
   on('agent.spawn', async ($, e, next) => {
     if (!enabled || !e.subagentType.startsWith('devflow:')) return next(e)
     await quiet(() => markActivity($), undefined)
+    guardRoots = await resolveGuardRoots($)
     const r = await next(e)
     if (r.deny === undefined && r.agentId) {
       const id = r.agentId
@@ -675,7 +712,7 @@ export const register: Register = (on, options) => {
         const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge, start })
         if (!Svg) return flowTerminal(els, view, t, now)
         const { source, height } = flowSvg(view, W, t, mode, now)
-        const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}`)
+        const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}${(a.blocked ?? 0) > 0 ? ` (${t.blocked(a.blocked ?? 0)})` : ''}`)
         const alt = shown.length ? `${flowAlt(view, t)}: ${shown.join(', ')}` : flowAlt(view, t)
         return <Svg source={source} alt={alt} width={W} height={height} />
       } catch (err) {

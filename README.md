@@ -141,9 +141,9 @@ it stops and tells you which files to look at.
 
 ### 3. Follow the run: the flow pane
 
-devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It only
-observes the session and the files in `factory/`; it never writes the board. It is active in repos
-with a `factory/config.md`.
+devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It
+observes the session and the files in `factory/`; it never writes the board. It also guards the
+devflow agents (see **Guard** below). It is active in repos with a `factory/config.md`.
 
 - **Phases**: a vertical line of the factory phases, each with its state and time.
 - **Agents**: a live card for each devflow agent, coloured by model family, with its task,
@@ -162,6 +162,18 @@ with a `factory/config.md`.
   of turn), the pane keeps showing the flow of the session's feature, with no running agents, while
   it is in progress (interview to approve). Agents that no longer run are shown as ended without
   success. Reloading sends no new toasts or notifications.
+- **Guard**: while the factory runs, the mod refuses the calls of devflow agents that break their
+  constraints, so they no longer rest on the prompts alone. A reviewer (`review-*`), the approver and
+  the spec-checker write only their own result file (`reviews/r<N>-<x>.md`, `decision.md`,
+  `spec-check.md`); the spec-writer only `spec.md` and `playbook.md` of its feature; the implementer
+  nothing under `factory/`. No agent writes `factory/board.md` or the project `factory/playbook.md`,
+  runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
+  git state (commit, add, checkout, stash...) or modify files from the shell (redirects, `rm`, `mv`,
+  `sed -i`, PowerShell equivalents). A refused call is not run: the agent gets the reason in the pane
+  language and can take another way, and its card shows `⊘ N blocked`. The guard covers the common
+  mistakes, not every possible shell write. It fails open: the main loop, agents of other plugins,
+  unknown agents and sessions without a factory are never touched, nor is any call if the guard
+  itself fails.
 - **Your turn**: a toast when the factory needs you (a system notification too, from the terminal only; the desktop app's own banners cover questions and turn ends while the app is in the background): each interview
   question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
   the PR is opened.
