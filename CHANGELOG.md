@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.22.3 — 2026-11-02
+- fix(evals): note read-only sandbox in pr-open-merged case (#40)
+
 ## v0.22.2 — 2026-11-01
 - refactor(factory): move conditional skill parts into references (#39)
 
