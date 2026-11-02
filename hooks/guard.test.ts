@@ -90,6 +90,11 @@ test('AC5: push, force, no-verify e reset --hard vietati a tutti', () => {
   for (const type of ['implementer', 'committer', 'review-code', 'future-agent']) {
     expect(sh(type, 'git push')).toBe('devflow guard: subagents cannot run git push')
     expect(sh(type, 'git -C "F:/devflow" push origin feature/x')).toBe('devflow guard: subagents cannot run git push')
+    expect(sh(type, 'git -C "F:/my repo" push')).toBe('devflow guard: subagents cannot run git push')
+    expect(sh(type, "git -C 'C:/Users/John Doe/repo' push")).toBe('devflow guard: subagents cannot run git push')
+    expect(sh(type, '"C:/Program Files/Git/bin/git.exe" push')).toBe('devflow guard: subagents cannot run git push')
+    expect(sh(type, 'echo "$(git push)"')).toBe('devflow guard: subagents cannot run git push')
+    expect(sh(type, 'bash -c "cd x && git push"')).toBe('devflow guard: subagents cannot run git push')
     expect(sh(type, 'bash -c "git push"')).toBe('devflow guard: subagents cannot run git push')
     expect(sh(type, 'git status && git push')).toBe('devflow guard: subagents cannot run git push')
     expect(sh(type, 'echo $(git push)')).toBe('devflow guard: subagents cannot run git push')
@@ -121,6 +126,11 @@ test('AC6: gli agenti read-only non cambiano git né file da shell', () => {
     const ro = (what: string) => `devflow guard: ${type} is read-only and cannot run ${what}`
     for (const sub of ['commit', 'add', 'checkout', 'switch', 'stash', 'restore', 'rebase', 'merge'])
       expect(sh(type, `git -C "x" ${sub} y`)).toBe(ro(`git ${sub}`))
+    expect(sh(type, 'git -C "F:/my repo" stash')).toBe(ro('git stash'))
+    expect(sh(type, 'bash -c "git commit -m x"')).toBe(ro('git commit'))
+    expect(sh(type, 'git -C "F:/my repo" log --format="%h %s"')).toBeUndefined()
+    expect(sh(type, 'grep -n "a; rm b" f')).toBeUndefined()
+    expect(sh(type, 'git log --grep "x | tee"')).toBeUndefined()
     for (const cmd of ['rm', 'mv', 'cp', 'tee', 'touch']) expect(sh(type, `${cmd} a b`)).toBe(ro(cmd))
     expect(sh(type, 'cat x | tee out')).toBe(ro('tee'))
     expect(sh(type, 'FOO=1 rm -rf x')).toBe(ro('rm'))

@@ -84,22 +84,40 @@ export function checkWrite(type: string, path: string, roots: string[], t: Strin
 
 type Token = { text: string; pos: number }
 
-/** Divide il comando in segmenti (`&&`, `||`, `;`, `|`, `&` isolato, a capo) di token puliti con la loro posizione */
-function segments(command: string): Token[][] {
+type Lexed = { segs: Token[][]; nested: Token[][] }
+
+/**
+ * Divide il comando in segmenti (`&&`, `||`, `;`, `|`, `&` isolato, a capo) di token puliti con la loro posizione.
+ * Una parola quotata resta un solo token (gli spazi e i separatori fra virgolette non dividono); il contenuto
+ * quotato si ri-segmenta in `nested`, così `bash -c "git push"` e `"$(git push)"` sono visti.
+ */
+function lex(command: string, base = 0): Lexed {
   const segs: Token[][] = []
+  const nested: Token[][] = []
   let cur: Token[] = []
   let word = ''
   let start = 0
   const flushWord = () => {
     const text = word.replace(/\$\(/g, '').replace(/["'()`]/g, '')
-    if (text) cur.push({ text, pos: start })
+    if (text) cur.push({ text, pos: base + start })
     word = ''
   }
   const flushSeg = () => { flushWord(); if (cur.length) segs.push(cur); cur = [] }
   for (let i = 0; i < command.length; i++) {
-    const c = command[i] ?? ''
-    const prev = command[i - 1]
-    const next = command[i + 1]
+    const c = command.charAt(i)
+    const prev = command.charAt(i - 1)
+    const next = command.charAt(i + 1)
+    if (c === '"' || c === "'") {
+      let end = i + 1
+      while (end < command.length && command.charAt(end) !== c) end += c === '"' && command.charAt(end) === '\\' ? 2 : 1
+      const inner = command.slice(i + 1, Math.min(end, command.length))
+      if (!word) start = i
+      word += inner
+      const sub = lex(inner, base + i + 1)
+      nested.push(...sub.segs, ...sub.nested)
+      i = end
+      continue
+    }
     if (c === '\n' || c === '\r' || c === ';') { flushSeg(); continue }
     if (c === '|') { flushSeg(); if (next === '|') i++; continue }
     if (c === '&') {
@@ -112,7 +130,7 @@ function segments(command: string): Token[][] {
     word += c
   }
   flushSeg()
-  return segs
+  return { segs, nested }
 }
 
 const isGit = (token: string) => /(^|\/)git(\.exe)?$/i.test(token.replace(/\\/g, '/'))
@@ -236,8 +254,8 @@ function writeOp(command: string, segs: Token[][], invs: Invocation[]): string |
 export function checkShell(type: string, command: string, t: Strings): string | undefined {
   if (typeof type !== 'string' || typeof command !== 'string') return undefined
   const ty = bareType(type)
-  const segs = segments(command)
-  const invs = gitInvocations(segs)
+  const { segs, nested } = lex(command)
+  const invs = gitInvocations([...segs, ...nested])
 
   const forbidden = forbiddenGit(invs)
   if (forbidden) return t.guard.command(forbidden)
