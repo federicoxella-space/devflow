@@ -105,65 +105,99 @@ function unescape(src: Src): Src {
   return { s, map }
 }
 
-// Ogni `close*` restituisce l'indice del delimitatore di chiusura, o -1 se manca: un delimitatore senza
-// chiusura vale come carattere normale, così non ingloba il resto del comando (es. il backtick di
-// PowerShell in `Write-Host "done`n"; git push`).
+// Le funzioni di `closers(s)` restituiscono l'indice del delimitatore di chiusura, o -1 se manca: un
+// delimitatore senza chiusura vale come carattere normale, così non ingloba il resto del comando (es. il
+// backtick di PowerShell in `Write-Host "done`n"; git push`).
+// Ogni risultato è in cache per (tipo, indice) sulla stessa stringa: senza cache un input come
+// `$("$("…` senza chiusure richiede tempo esponenziale e blocca l'hook, che è sincrono.
 
-/** Indice della `'` di chiusura, o -1 */
-const closeSingle = (s: string, i: number) => s.indexOf("'", i + 1)
-
-/** Indice della `"` di chiusura, o -1: salta `\x`, `$(…)` e `` `…` `` chiusi (che possono contenere altre virgolette) */
-function closeDouble(s: string, i: number): number {
-  let j = i + 1
-  while (j < s.length) {
-    const c = s.charAt(j)
-    if (c === '\\') { j += 2; continue }
-    if (c === '"') return j
-    const e = c === '$' && s.charAt(j + 1) === '(' ? closeParen(s, j + 1) : c === '`' ? closeBacktick(s, j) : -1
-    j = e < 0 ? j + 1 : e + 1
-  }
-  return -1
+type Closers = {
+  /** `'` di chiusura */
+  single: (i: number) => number
+  /** `"` di chiusura: salta `\x`, `$(…)` e `` `…` `` chiusi (che possono contenere altre virgolette) */
+  double: (i: number) => number
+  /** `)` che chiude la `(` in `open`: conta le parentesi annidate e salta le virgolette chiuse */
+  paren: (open: number) => number
+  /** `` ` `` di chiusura */
+  backtick: (i: number) => number
 }
 
-/** Indice della `)` che chiude la `(` in `open`, o -1: conta le parentesi annidate e salta le virgolette chiuse */
-function closeParen(s: string, open: number): number {
-  let depth = 0
-  for (let j = open; j < s.length; j++) {
-    const c = s.charAt(j)
-    if (c === '\\') j++
-    else if (c === "'" || c === '"') { const e = c === "'" ? closeSingle(s, j) : closeDouble(s, j); if (e >= 0) j = e }
-    else if (c === '(') depth++
-    else if (c === ')' && --depth === 0) return j
-  }
-  return -1
-}
+// annidamento massimo fra virgolette e `$(…)` dentro una scansione: oltre, il delimitatore vale come
+// carattere normale (più controlli, non meno) e lo stack resta limitato
+const MAX_NEST = 64
 
-/** Indice del `` ` `` di chiusura, o -1 */
-function closeBacktick(s: string, i: number): number {
-  let j = i + 1
-  while (j < s.length) {
-    const c = s.charAt(j)
-    if (c === '\\') j += 2
-    else if (c === '`') return j
-    else j++
+function closers(s: string): Closers {
+  const memo = new Map<number, number>()
+  let nest = 0
+  const cached = (kind: number, i: number, scan: () => number): number => {
+    const key = i * 4 + kind
+    const hit = memo.get(key)
+    if (hit !== undefined) return hit
+    if (nest >= MAX_NEST) return -1
+    nest++
+    let r: number
+    try { r = scan() } finally { nest-- }
+    memo.set(key, r)
+    return r
   }
-  return -1
+  const single = (i: number) => cached(0, i, () => s.indexOf("'", i + 1))
+  const backtick = (i: number) => cached(1, i, () => {
+    let j = i + 1
+    while (j < s.length) {
+      const c = s.charAt(j)
+      if (c === '\\') j += 2
+      else if (c === '`') return j
+      else j++
+    }
+    return -1
+  })
+  const double = (i: number): number => cached(2, i, () => {
+    let j = i + 1
+    while (j < s.length) {
+      const c = s.charAt(j)
+      if (c === '\\') { j += 2; continue }
+      if (c === '"') return j
+      const e = c === '$' && s.charAt(j + 1) === '(' ? paren(j + 1) : c === '`' ? backtick(j) : -1
+      j = e < 0 ? j + 1 : e + 1
+    }
+    return -1
+  })
+  // la scansione da `open` passa per le stesse posizioni di quella da ogni `(` interna: una pila risolve
+  // in un solo passaggio anche le `(` interne (chiuse o senza chiusura), così ogni posizione si scandisce una volta
+  const paren = (open: number): number => cached(3, open, () => {
+    const stack: number[] = []
+    for (let j = open; j < s.length; j++) {
+      const c = s.charAt(j)
+      if (c === '\\') j++
+      else if (c === "'" || c === '"') { const e = c === "'" ? single(j) : double(j); if (e >= 0) j = e }
+      else if (c === '(') stack.push(j)
+      else if (c === ')') {
+        const p = stack.pop()
+        if (p === undefined || p === open) return j
+        memo.set(p * 4 + 3, j)
+      }
+    }
+    for (const p of stack) if (p !== open) memo.set(p * 4 + 3, -1)
+    return -1
+  })
+  return { single, double, paren, backtick }
 }
 
 /** Sostituzioni `$(…)` e `` `…` `` chiuse nel contenuto grezzo di virgolette doppie, restituite senza escape */
 function substitutions(inner: Src): Src[] {
   const out: Src[] = []
   const s = inner.s
+  const close = closers(s)
   for (let j = 0; j < s.length; j++) {
     const c = s.charAt(j)
     if (c === '\\') { j++; continue }
     if (c === '$' && s.charAt(j + 1) === '(') {
-      const e = closeParen(s, j + 1)
+      const e = close.paren(j + 1)
       if (e < 0) continue
       out.push(unescape(slice(inner, j + 2, e)))
       j = e
     } else if (c === '`') {
-      const e = closeBacktick(s, j)
+      const e = close.backtick(j)
       if (e < 0) continue
       out.push(unescape(slice(inner, j + 1, e)))
       j = e
@@ -182,6 +216,7 @@ const clean = (value: string) => value.replace(/\$\(/g, '').replace(/["'()`]/g, 
  */
 function lex(src: Src): { segs: Token[][]; subs: Src[] } {
   const s = src.s
+  const close = closers(s)
   const segs: Token[][] = []
   const subs: Src[] = []
   let cur: Token[] = []
@@ -201,7 +236,7 @@ function lex(src: Src): { segs: Token[][]; subs: Src[] } {
     const prev = s.charAt(i - 1)
     const next = s.charAt(i + 1)
     if (c === "'") {
-      const end = closeSingle(s, i)
+      const end = close.single(i)
       if (end >= 0) {
         begin(i)
         add(slice(src, i + 1, end))
@@ -210,7 +245,7 @@ function lex(src: Src): { segs: Token[][]; subs: Src[] } {
       }
     }
     if (c === '"') {
-      const end = closeDouble(s, i)
+      const end = close.double(i)
       if (end >= 0) {
         const inner = slice(src, i + 1, end)
         begin(i)
@@ -221,7 +256,7 @@ function lex(src: Src): { segs: Token[][]; subs: Src[] } {
       }
     }
     if (c === '$' && next === '(') {
-      const end = closeParen(s, i + 1)
+      const end = close.paren(i + 1)
       if (end >= 0) {
         begin(i)
         add(slice(src, i, end + 1))
@@ -231,7 +266,7 @@ function lex(src: Src): { segs: Token[][]; subs: Src[] } {
       }
     }
     if (c === '`') {
-      const end = closeBacktick(s, i)
+      const end = close.backtick(i)
       if (end >= 0) {
         begin(i)
         add(slice(src, i, end + 1))
@@ -359,11 +394,12 @@ const SAFE_TARGET = /^(\/dev\/null|nul|\$null|&\d+)$/i
 /** Redirect `>`/`>>` (con `1>`, `2>`, `&>`, `*>`) fuori dalle virgolette verso un file vero; `pos` è l'indice in `command` */
 function redirects(command: string): Hit[] {
   const out: Hit[] = []
+  const close = closers(command)
   for (let i = 0; i < command.length; i++) {
     const c = command.charAt(i)
     // virgolette chiuse: si saltano; senza chiusura valgono come carattere normale
     if (c === '"' || c === "'") {
-      const e = c === "'" ? closeSingle(command, i) : closeDouble(command, i)
+      const e = c === "'" ? close.single(i) : close.double(i)
       if (e >= 0) i = e
       continue
     }

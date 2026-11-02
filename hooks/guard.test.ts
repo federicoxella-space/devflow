@@ -242,6 +242,26 @@ test('delimitatori senza chiusura: valgono come carattere normale e non nascondo
   expect(sh('implementer', 'Write-Host "done`n"; git status')).toBeUndefined()
 })
 
+test('input lunghi malformati: tempo breve e risultato definito', () => {
+  const inputs = [
+    '$("'.repeat(200),
+    '"$('.repeat(200),
+    '`"'.repeat(200),
+    "'\"$(".repeat(200),
+    '$("`\''.repeat(200),
+    '$(' .repeat(200) + ')'.repeat(200),
+    '"$("'.repeat(2000),
+    '$("'.repeat(200) + '; git push',
+  ]
+  for (const cmd of inputs) {
+    const t0 = Date.now()
+    const r = sh('review-code', cmd)
+    expect(Date.now() - t0).toBeLessThan(200)
+    expect(r === undefined || typeof r === 'string').toBe(true)
+  }
+  expect(sh('implementer', '$("'.repeat(200) + '; git push')).toBe(en.guard.command('git push'))
+})
+
 test('input non validi: fail open', () => {
   expect(checkWrite('implementer', undefined as unknown as string, ROOTS, en)).toBeUndefined()
   expect(checkWrite('implementer', 'factory/x', undefined as unknown as string[], en)).toBe('devflow guard: implementer cannot write under factory/')
