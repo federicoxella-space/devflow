@@ -35,6 +35,7 @@
 - Eval case: `evals/<group>/<case>/case.yaml` + `scaffold.sh` starting with `#!/usr/bin/env bash` and `set -eu`, tagged `shell` or `no-shell`: the split is what lets the suite run on native Windows.
 - Every eval `scaffold.sh` checks that the cwd is empty as its first statement after `set -eu`, before any write (git or not), and exits otherwise: `evals/factory/pr-open-merged/scaffold.sh` runs `git reset --hard HEAD~1` and `evals/spec-checker/known-gap/scaffold.sh` writes `factory/config.md`, which would damage the devflow checkout if run by hand outside `claude plugin eval --scaffold`.
 - Parts of a skill needed only in some cases go in `references/<area>.md` in its base directory, with a pointer in `SKILL.md` that says when to read them: `skills/factory/SKILL.md` reached 522 lines loaded whole on every run (~575k tokens/run, issue #25), and the pointers keep the core small as the skill grows.
+- An eval case's prompt or `append_system_prompt` never names the commands, scripts or flags its `tool_used` graders match: the note added to `evals/factory/pr-open-merged/case.yaml` could otherwise make `pull --ff-only` or `branch -D` pass without the skill prescribing them.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).
