@@ -36,6 +36,10 @@
 - A hand-written parser of agent input runs in linear time: failed scans are cached or move the cursor past the scanned part, and a test with long malformed input bounds the time; in `3a215fd` unclosed delimiters made `closeParen`/`closeDouble` exponential and hung the synchronous hook.
 - Timing tests use a wide margin or a step counter instead of a tight threshold in ms: a 200 ms wall-clock limit in `hooks/guard.test.ts` risks false failures on a slow CI.
 - A synchronous hook that parses agent input sets a maximum input length and, above it, falls back to a defined result (deny or plain-text check): after `4543d7d` the guard's worst case is still quadratic and nothing bounds the command length.
+- Shell scripts in `skills/` avoid GNU-only options (`stat -c`, `date -d`, `sed -i`, `mv -T`) and `flock`: they run in Git Bash, Linux and macOS; the `board.sh` lock expiry had to use an epoch written in the lock instead of the mtime.
+- Every new `test-*.sh` gets its own step in `.github/workflows/ci.yml`: CI lists the scripts one by one, so a test not added there never runs on PRs.
+- Shell scripts in `skills/` run on macOS bash 3.2: no `mapfile`, associative arrays, `${x,,}` or `EPOCHSECONDS`; `skills/factory/scripts/board.sh` uses `$SECONDS` and `date +%s`.
+- When a skill prescribes shell escaping for user text, it quotes the exact idiom in a code span (`'\''` for a single quote) and the review compares it with the spec: in 017 r1 `skills/factory/SKILL.md:76` said `'''`, which reopened command injection through feature titles.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
