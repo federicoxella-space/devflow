@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.23.0 — 2026-11-03
+- feat(pane): enforce devflow agent constraints with a guard (#41)
+
 ## v0.22.3 — 2026-11-02
 - fix(evals): note read-only sandbox in pr-open-merged case (#40)
 
