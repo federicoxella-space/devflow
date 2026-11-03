@@ -31,6 +31,11 @@
 - A shell command tokenizer in the mod keeps quoted words whole (spaces inside quotes do not split tokens) and rescans their content for nested commands: in 016 r1 `git -C "<dir with spaces>" push` bypassed the guard.
 - When the guard tokenizer sends quoted content to one check (git), it sends it to the other checks of the same rule too, or the spec says why not: `hooks/guard.ts` sends `nested` segments to `gitInvocations` but not to `leadingWrite`, so `bash -c "x; rm -rf src"` passes for read-only agents.
 - A fail-open test raises the error inside the code that must absorb it and checks that the call reaches `next`: in 016 r1/r2 the AC10 test passed a non-string `command`, which was rejected before the guard logic, so the `catch` never ran.
+- The guard's shell tokenizer, used for Bash and PowerShell, treats a delimiter with no closing (backtick included, an escape in PowerShell) as a plain character instead of swallowing the rest of the command: in `ca98a5a` an unclosed backtick hid `; git push`.
+- When a guard rule moves from substring to token matching, its tests cover every argument syntax of the target shells (`-x=v`, `--x v`, PowerShell `-X:v`): in `ca98a5a` `Set-Content -Path:factory/board.md` stopped being caught.
+- A hand-written parser of agent input runs in linear time: failed scans are cached or move the cursor past the scanned part, and a test with long malformed input bounds the time; in `3a215fd` unclosed delimiters made `closeParen`/`closeDouble` exponential and hung the synchronous hook.
+- Timing tests use a wide margin or a step counter instead of a tight threshold in ms: a 200 ms wall-clock limit in `hooks/guard.test.ts` risks false failures on a slow CI.
+- A synchronous hook that parses agent input sets a maximum input length and, above it, falls back to a defined result (deny or plain-text check): after `4543d7d` the guard's worst case is still quadratic and nothing bounds the command length.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
