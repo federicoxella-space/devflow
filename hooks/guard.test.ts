@@ -242,24 +242,62 @@ test('delimitatori senza chiusura: valgono come carattere normale e non nascondo
   expect(sh('implementer', 'Write-Host "done`n"; git status')).toBeUndefined()
 })
 
-test('input lunghi malformati: tempo breve e risultato definito', () => {
+test('AC22: input lunghi malformati: tempo limitato con margine ampio e risultato definito', () => {
   const inputs = [
     '$("'.repeat(200),
     '"$('.repeat(200),
-    '`"'.repeat(200),
     "'\"$(".repeat(200),
     '$("`\''.repeat(200),
     '$(' .repeat(200) + ')'.repeat(200),
-    '"$("'.repeat(2000),
     '$("'.repeat(200) + '; git push',
+    '$("'.repeat(21845) + 'x',
   ]
+  expect(inputs[inputs.length - 1]?.length).toBe(65536)
   for (const cmd of inputs) {
     const t0 = Date.now()
     const r = sh('review-code', cmd)
-    expect(Date.now() - t0).toBeLessThan(200)
-    expect(r === undefined || typeof r === 'string').toBe(true)
+    // margine ampio: il limite ferma un hook bloccato, non misura le prestazioni su una CI lenta
+    expect(Date.now() - t0).toBeLessThan(2000)
+    expect(typeof r).toBe('string')
+  }
+  // lunghi ma ben formati (virgolette chiuse, nessun comando annidato): passano, sempre entro il margine
+  for (const cmd of ['`"'.repeat(200), '"$("'.repeat(2000)]) {
+    const t0 = Date.now()
+    expect(sh('review-code', cmd)).toBeUndefined()
+    expect(Date.now() - t0).toBeLessThan(2000)
   }
   expect(sh('implementer', '$("'.repeat(200) + '; git push')).toBe(en.guard.command('git push'))
+})
+
+test('AC19: oltre 65536 caratteri il comando si rifiuta per ogni tipo', () => {
+  const at = 'echo ' + 'a'.repeat(65536 - 5)
+  const over = 'echo ' + 'a'.repeat(65537 - 5)
+  expect(at.length).toBe(65536)
+  expect(over.length).toBe(65537)
+  for (const type of ['implementer', 'committer', 'review-code', 'approver', 'spec-writer', 'devflow:implementer']) {
+    expect(sh(type, over)).toBe(en.guard.tooComplex(type.replace(/^devflow:/, '')))
+    expect(sh(type, at)).toBeUndefined()
+  }
+  expect(checkShell('review-code', over, it)).toBe(it.guard.tooComplex('review-code'))
+})
+
+test('AC20: oltre la profondità massima dei comandi annidati il comando si rifiuta', () => {
+  const nested = (n: number) => 'echo $('.repeat(n) + 'x' + ')'.repeat(n)
+  expect(sh('review-code', nested(16))).toBeUndefined()
+  expect(sh('review-code', nested(17))).toBe(en.guard.tooComplex('review-code'))
+  expect(sh('implementer', nested(17))).toBe(en.guard.tooComplex('implementer'))
+  // interpreti annidati oltre il limite
+  let cmd = 'git status'
+  for (let i = 0; i < 17; i++) cmd = `bash -c ${JSON.stringify(cmd)}`
+  expect(sh('implementer', cmd)).toBe(en.guard.tooComplex('implementer'))
+})
+
+test('AC21: oltre l’annidamento massimo delle virgolette il comando si rifiuta, dopo le violazioni trovate', () => {
+  expect(sh('review-code', 'echo ' + '"$('.repeat(40) + 'x' + ')"'.repeat(40))).toBe(en.guard.tooComplex('review-code'))
+  expect(sh('review-code', '$("'.repeat(200))).toBe(en.guard.tooComplex('review-code'))
+  expect(sh('implementer', '$("'.repeat(200))).toBe(en.guard.tooComplex('implementer'))
+  expect(sh('implementer', '$("'.repeat(200) + '; git push')).toBe(en.guard.command('git push'))
+  expect(sh('review-code', '$("'.repeat(200) + '; rm x')).toBe(en.guard.readOnly('review-code', 'rm'))
 })
 
 test('input non validi: fail open', () => {
@@ -269,11 +307,13 @@ test('input non validi: fail open', () => {
   expect(sh('review-code', '')).toBeUndefined()
 })
 
-test('AC13: testi guard e blocked in en e it con le stesse chiavi', () => {
+test('AC13, AC23: testi guard (tooComplex compreso) e blocked in en e it con le stesse chiavi', () => {
   expect(Object.keys(STRINGS.it.guard).sort()).toEqual(Object.keys(STRINGS.en.guard).sort())
   expect(STRINGS.en.blocked(1)).toBe('⊘ 1 blocked')
   expect(STRINGS.en.blocked(3)).toBe('⊘ 3 blocked')
   expect(STRINGS.it.blocked(1)).toBe('⊘ 1 bloccata')
   expect(STRINGS.it.blocked(2)).toBe('⊘ 2 bloccate')
   expect(en.guard.only('x', ['a', 'b', 'c'])).toBe('devflow guard: x can only write a, b or c')
+  expect(en.guard.tooComplex('review-code')).toBe('devflow guard: review-code: command too long or too deeply nested to check; split or simplify it')
+  expect(it.guard.tooComplex('review-code')).toBe('devflow guard: review-code: comando troppo lungo o annidato per il controllo; dividilo o semplificalo')
 })

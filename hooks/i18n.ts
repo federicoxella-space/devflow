@@ -76,6 +76,7 @@ const en = {
     orchestrator: (file: string) => `devflow guard: only the orchestrator writes ${file}`,
     command: (what: string) => `devflow guard: subagents cannot run ${what}`,
     readOnly: (type: string, what: string) => `devflow guard: ${type} is read-only and cannot run ${what}`,
+    tooComplex: (type: string) => `devflow guard: ${type}: command too long or too deeply nested to check; split or simplify it`,
   },
   blocked: (n: number) => `⊘ ${n} blocked`,
 }
@@ -139,6 +140,7 @@ const it: Strings = {
     orchestrator: (file: string) => `devflow guard: solo l’orchestratore scrive ${file}`,
     command: (what: string) => `devflow guard: i subagent non possono eseguire ${what}`,
     readOnly: (type: string, what: string) => `devflow guard: ${type} è read-only e non può eseguire ${what}`,
+    tooComplex: (type: string) => `devflow guard: ${type}: comando troppo lungo o annidato per il controllo; dividilo o semplificalo`,
   },
   blocked: (n: number) => `⊘ ${n} ${n === 1 ? 'bloccata' : 'bloccate'}`,
 }

@@ -89,7 +89,8 @@ type Token = { text: string; pos: number; src: Src }
 
 type Hit = { pos: number; what: string; target?: string }
 
-type Scan = { segs: Token[][]; redirs: Hit[] }
+/** `tooComplex`: un limite dello scanner superato (profondità o annidamento), quindi una parte non è stata analizzata */
+type Scan = { segs: Token[][]; redirs: Hit[]; tooComplex: boolean }
 
 const slice = (src: Src, from: number, to: number): Src => ({ s: src.s.slice(from, to), map: src.map.slice(from, to) })
 
@@ -123,17 +124,17 @@ type Closers = {
 }
 
 // annidamento massimo fra virgolette e `$(…)` dentro una scansione: oltre, il delimitatore vale come
-// carattere normale (più controlli, non meno) e lo stack resta limitato
+// carattere normale e lo stack resta limitato; il superamento si segnala con `onOver` (fail-closed)
 const MAX_NEST = 64
 
-function closers(s: string): Closers {
+function closers(s: string, onOver: () => void): Closers {
   const memo = new Map<number, number>()
   let nest = 0
   const cached = (kind: number, i: number, scan: () => number): number => {
     const key = i * 4 + kind
     const hit = memo.get(key)
     if (hit !== undefined) return hit
-    if (nest >= MAX_NEST) return -1
+    if (nest >= MAX_NEST) { onOver(); return -1 }
     nest++
     let r: number
     try { r = scan() } finally { nest-- }
@@ -184,10 +185,10 @@ function closers(s: string): Closers {
 }
 
 /** Sostituzioni `$(…)` e `` `…` `` chiuse nel contenuto grezzo di virgolette doppie, restituite senza escape */
-function substitutions(inner: Src): Src[] {
+function substitutions(inner: Src, onOver: () => void): Src[] {
   const out: Src[] = []
   const s = inner.s
-  const close = closers(s)
+  const close = closers(s, onOver)
   for (let j = 0; j < s.length; j++) {
     const c = s.charAt(j)
     if (c === '\\') { j++; continue }
@@ -214,9 +215,9 @@ const clean = (value: string) => value.replace(/\$\(/g, '').replace(/["'()`]/g, 
  * Una parola quotata, anche in parte, resta un solo token e il contenuto quotato non si ri-segmenta.
  * `subs`: le sostituzioni `$(…)` e `` `…` `` (fuori dalle virgolette o dentro le doppie), da analizzare come comandi.
  */
-function lex(src: Src): { segs: Token[][]; subs: Src[] } {
+function lex(src: Src, onOver: () => void): { segs: Token[][]; subs: Src[] } {
   const s = src.s
-  const close = closers(s)
+  const close = closers(s, onOver)
   const segs: Token[][] = []
   const subs: Src[] = []
   let cur: Token[] = []
@@ -250,7 +251,7 @@ function lex(src: Src): { segs: Token[][]; subs: Src[] } {
         const inner = slice(src, i + 1, end)
         begin(i)
         add(unescape(inner))
-        subs.push(...substitutions(inner))
+        subs.push(...substitutions(inner, onOver))
         i = end
         continue
       }
@@ -316,16 +317,22 @@ function interpreterArgs(seg: Token[]): Src[] {
   return out
 }
 
-// limite di ricorsione sui comandi annidati: oltre, il resto non si analizza
+// limite di ricorsione sui comandi annidati: oltre, il comando si rifiuta (`Scan.tooComplex`)
 const MAX_DEPTH = 16
 
 /** Segmenti e redirect di `src` e, ricorsivamente, dei suoi comandi annidati (posizioni nel comando originale) */
 function analyze(src: Src, out: Scan, depth = 0): Scan {
-  const { segs, subs } = lex(src)
+  const mark = () => { out.tooComplex = true }
+  const { segs, subs } = lex(src, mark)
   out.segs.push(...segs)
-  for (const r of redirects(src.s)) out.redirs.push({ ...r, pos: src.map[r.pos] ?? 0 })
-  if (depth >= MAX_DEPTH) return out
-  for (const sub of [...subs, ...segs.flatMap(interpreterArgs)]) analyze(sub, out, depth + 1)
+  for (const r of redirects(src.s, mark)) out.redirs.push({ ...r, pos: src.map[r.pos] ?? 0 })
+  const nested = [...subs, ...segs.flatMap(interpreterArgs)]
+  if (depth >= MAX_DEPTH) {
+    // comandi annidati oltre la profondità massima: non analizzati, quindi il comando non è controllabile
+    if (nested.length) mark()
+    return out
+  }
+  for (const sub of nested) analyze(sub, out, depth + 1)
   return out
 }
 
@@ -392,9 +399,9 @@ function leadingWrite(seg: Token[]): Hit | undefined {
 const SAFE_TARGET = /^(\/dev\/null|nul|\$null|&\d+)$/i
 
 /** Redirect `>`/`>>` (con `1>`, `2>`, `&>`, `*>`) fuori dalle virgolette verso un file vero; `pos` è l'indice in `command` */
-function redirects(command: string): Hit[] {
+function redirects(command: string, onOver: () => void): Hit[] {
   const out: Hit[] = []
-  const close = closers(command)
+  const close = closers(command, onOver)
   for (let i = 0; i < command.length; i++) {
     const c = command.charAt(i)
     // virgolette chiuse: si saltano; senza chiusura valgono come carattere normale
@@ -471,15 +478,21 @@ function namedProjectFile(scan: Scan): string | undefined {
   return hits[0]?.f
 }
 
+// lunghezza massima del comando: oltre, si rifiuta senza scansione (il caso peggiore dello scanner è quadratico)
+const MAX_LEN = 65536
+
 /**
  * Comando di shell (Bash o PowerShell) dell'agente `type` (senza `devflow:`).
  * Il testo quotato non è un comando, salvo i comandi annidati (`bash -c`, `pwsh -Command`, `cmd /c`, `$(…)`, backtick).
- * Motivo del rifiuto o `undefined`; solo la prima violazione, nell'ordine delle regole.
+ * Motivo del rifiuto o `undefined`; solo la prima violazione, nell'ordine delle regole. Oltre i limiti dello
+ * scanner (lunghezza, profondità, annidamento) il comando si rifiuta con `guard.tooComplex` (fail-closed),
+ * dopo le violazioni trovate nella parte analizzata.
  */
 export function checkShell(type: string, command: string, t: Strings): string | undefined {
   if (typeof type !== 'string' || typeof command !== 'string') return undefined
   const ty = bareType(type)
-  const scan = analyze({ s: command, map: Array.from({ length: command.length }, (_, i) => i) }, { segs: [], redirs: [] })
+  if (command.length > MAX_LEN) return t.guard.tooComplex(ty)
+  const scan = analyze({ s: command, map: Array.from({ length: command.length }, (_, i) => i) }, { segs: [], redirs: [], tooComplex: false })
   const invs = gitInvocations(scan.segs)
 
   const forbidden = forbiddenGit(invs)
@@ -491,5 +504,6 @@ export function checkShell(type: string, command: string, t: Strings): string | 
     if (file) return t.guard.orchestrator(file)
     if (isReadOnly(ty)) return t.guard.readOnly(ty, write)
   }
+  if (scan.tooComplex) return t.guard.tooComplex(ty)
   return undefined
 }
