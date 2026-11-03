@@ -61,7 +61,8 @@ factory/
 
 States: `queued → interview → spec → spec-review → build → review → approve → pr-open → merged`, plus
 `needs-human` and `closed` (PR closed without merge).
-On every state change update the row **and** append one log line (local time, `YYYY-MM-DD HH:MM`).
+`set <id> state=<X>` updates the row and writes the transition log line itself (local time,
+`YYYY-MM-DD HH:MM`); do not add a `log` for the same change.
 
 **Shared board.** Several sessions can run different features at once, each writing this board.
 Every write of `board.md` goes through `bash "<base dir of this skill>/scripts/board.sh" "<main>"
