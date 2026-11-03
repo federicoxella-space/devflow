@@ -64,11 +64,18 @@ States: `queued → interview → spec → spec-review → build → review → 
 On every state change update the row **and** append one log line (local time, `YYYY-MM-DD HH:MM`).
 
 **Shared board.** Several sessions can run different features at once, each writing this board.
-Right before every write, re-read `board.md`, change only your own row, and append your log lines
-at the end. Compute the next free NNN at that moment, as the highest plus one of: the ids in the
-board and in `<main>/factory/features/` (re-read), the local and remote branches `*/NNN-*`
-(`git -C "<main>" branch -a --format='%(refname:short)'`) and the basenames `NNN-*` of the paths in
-`git -C "<main>" worktree list --porcelain`.
+Every write of `board.md` goes through `bash "<base dir of this skill>/scripts/board.sh" "<main>"
+...`, never Edit or Write (reading stays Read). The script takes a lock, re-reads the board, changes
+only the row you name and appends the log lines atomically:
+- `new <slug> <state> <title> [<note>]` creates `features/<NNN>-<slug>/`, adds the row and the log
+  `created → <state>`, and prints the id. Only `new` computes the next NNN.
+- `set <id> <key>=<value>...` (keys `state round branch pr feature note`) changes those cells; a new
+  `state` also logs `<old> → <new>` (with `note`). `log <id> <text>` appends a free log line.
+"Set state `X`", "round", "write the branch / PR in the board" and "log ..." in this file and in
+the references mean `set` and `log`. Arguments taken from the user's text (title, note, text) go in
+single quotes (a `'` is written `'''`). If the script exits non-zero, tell the user its stderr
+message (with exit 1 it names the lock: if no session is writing, they can delete it) and stop,
+with no further board writes.
 
 **Main checkout.** `<session>` = `git rev-parse --show-toplevel`. `<main>` = the parent folder of
 the output of `git rev-parse --path-format=absolute --git-common-dir`, if its last segment is
@@ -122,8 +129,8 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
    - No argument: exactly one active row → resume it; several → AskUserQuestion with the active
      rows (id, title, state) and **New feature** (then ask for its description); none → the oldest
      `queued` row; if none, show the board and stop.
-   - Creating a feature: next free NNN (see **Shared board**), slug from the text, write
-     `feature.md` in `<main>/factory/features/<id>/`, add the row as `interview`.
+   - Creating a feature: slug from the text, `new` it as `interview` (see **Shared board**), write
+     `feature.md` in the folder `new` created.
    - Resuming: if it has no `features/<id>/playbook.md` (old format), set it back to `interview`
      with the log note "restarted: old format".
 4. Preconditions before `build`: `git -C "<dir>" status --porcelain` is empty, **auth**
