@@ -131,13 +131,15 @@ END {
   if (mode == "new" && !done) print ENVIRON["B_ROW"]
 }'
 
-owned=0 me='' created_dir=''
+owned=0 me='' created_dir='' stale_dir=''
 
 release() {
   local code=$?
   rm -f "$tmp"
+  if [ -n "$stale_dir" ]; then rm -rf "$stale_dir"; fi
   if [ -n "$created_dir" ] && [ "$code" -ne 0 ]; then rmdir "$created_dir" 2> /dev/null || true; fi
-  if [ "$owned" = 1 ] && [ "$(cat "$lock/owner" 2> /dev/null || true)" = "$me" ]; then
+  read_owner "$lock/owner"
+  if [ "$owned" = 1 ] && [ "$owner_c" = "$me" ]; then
     rm -f "$lock/owner"
     rmdir "$lock" 2> /dev/null || true
   fi
@@ -145,42 +147,95 @@ release() {
 trap release EXIT
 trap 'exit 3' INT TERM HUP
 
+# Reads the first line of <file> into owner_c ('' when missing), without starting a process.
+read_owner() {
+  owner_c=''
+  { IFS= read -r owner_c < "$1"; } 2> /dev/null || true
+}
+
+# Takes an abandoned lock out of the way. It is first renamed to a name only this process uses, so
+# two sessions never remove the same lock; then its owner is read again in the renamed folder:
+# still abandoned (old epoch, or the same content seen without an epoch) -> removed; otherwise it
+# was another session's fresh lock and goes back in place (removed if board.lock exists again).
+# steal <content seen> <epoch|noepoch>
+steal() {
+  local e2 abandoned=0 now
+  now=$(date +%s)
+  # Last check right before the rename: the lock may have changed hands while we looked at it.
+  read_owner "$lock/owner"
+  [ "$owner_c" = "$1" ] || return 0
+  stale_dir=$lock.stale.$$.$RANDOM$RANDOM
+  if ! mv "$lock" "$stale_dir" 2> /dev/null; then
+    # Another session took it or removed it first.
+    stale_dir=''
+    return 0
+  fi
+  read_owner "$stale_dir/owner"
+  e2=${owner_c%% *}
+  if [[ $e2 =~ $INT_RE ]]; then
+    if [ $((now - e2)) -gt "$stale_s" ]; then abandoned=1; fi
+  elif [ "$2" = noepoch ] && [ "$owner_c" = "$1" ]; then
+    abandoned=1
+  fi
+  if [ "$abandoned" = 0 ] && mkdir "$lock" 2> /dev/null; then
+    if [ -e "$stale_dir/owner" ]; then mv "$stale_dir/owner" "$lock/owner" 2> /dev/null || true; fi
+  fi
+  rm -rf "$stale_dir"
+  stale_dir=''
+}
+
 acquire() {
-  local start=$SECONDS seen='' same=0 nodir=0 content epoch
+  local start=$SECONDS seen='' same=0 nodir=0 wfail=0 waited=0 content epoch i st
   while :; do
+    # The owner line is ready before mkdir, so the lock stays without owner as briefly as possible.
+    me="$(date +%s) $$ $RANDOM$RANDOM"
     if mkdir "$lock" 2> /dev/null; then
-      me="$(date +%s) $$ $RANDOM$RANDOM"
       owned=1
-      if ! printf '%s\n' "$me" > "$lock/owner" 2> /dev/null; then
-        owned=0
-        rm -f "$lock/owner"
-        rmdir "$lock" 2> /dev/null || true
-        die 3 "cannot write $lock_abs/owner"
+      if { printf '%s\n' "$me" > "$lock/owner"; } 2> /dev/null; then
+        st=0
+        for i in "$lock".stale.*; do [ -e "$i" ] && st=1; done
+        [ "$waited" = 1 ] || [ "$st" = 1 ] || return 0
+        # After a wait, or while another session removes an abandoned lock, that session may have
+        # moved ours too: give it time to put it back, then keep it only if the owner is ours.
+        i=0
+        sleep 0.3
+        read_owner "$lock/owner"
+        while [ -z "$owner_c" ] && [ "$i" -lt 10 ]; do
+          sleep 0.1
+          i=$((i + 1))
+          read_owner "$lock/owner"
+        done
+        [ "$owner_c" != "$me" ] || return 0
+        owned=0 waited=1
+        continue
       fi
-      return 0
+      owned=0 waited=1
+      # Moved away by a session that took it for abandoned: that session handles it, try again.
+      [ -d "$lock" ] || continue
+      # Not writable: drop the empty folder, give up after 3 attempts.
+      rmdir "$lock" 2> /dev/null || true
+      wfail=$((wfail + 1))
+      [ "$wfail" -lt 3 ] || die 3 "cannot write $lock_abs/owner"
+      continue
     fi
     if [ ! -d "$lock" ]; then
       # Released in the meantime (try again at once), or mkdir cannot create it at all.
-      nodir=$((nodir + 1))
+      nodir=$((nodir + 1)) waited=1
       [ "$nodir" -lt 3 ] || die 3 "cannot create $lock_abs"
       continue
     fi
-    nodir=0
-    content=$(cat "$lock/owner" 2> /dev/null || true)
+    nodir=0 waited=1
+    read_owner "$lock/owner"
+    content=$owner_c
     epoch=${content%% *}
     if [[ $epoch =~ $INT_RE ]]; then
       same=0
-      if [ $(($(date +%s) - epoch)) -gt "$stale_s" ] \
-        && [ "$(cat "$lock/owner" 2> /dev/null || true)" = "$content" ]; then
-        rm -f "$lock/owner"
-        rmdir "$lock" 2> /dev/null || true
-      fi
+      if [ $(($(date +%s) - epoch)) -gt "$stale_s" ]; then steal "$content" epoch; fi
     else
       # No owner (or an unreadable one): abandoned once it stays the same for 2 s.
       if [ "$content" = "$seen" ]; then same=$((same + 1)); else seen=$content same=1; fi
-      if [ "$same" -ge 20 ] && [ "$(cat "$lock/owner" 2> /dev/null || true)" = "$content" ]; then
-        rm -f "$lock/owner"
-        rmdir "$lock" 2> /dev/null || true
+      if [ "$same" -ge 20 ]; then
+        steal "$content" noepoch
         same=0
       fi
     fi
@@ -222,9 +277,19 @@ add_log() {
   printf -- '- %s · %s\n' "$(date '+%Y-%m-%d %H:%M')" "$1" >> "$tmp" || die 3 "cannot write $tmp"
 }
 
-# Replaces the board with the temp file: 5 more attempts 0.2 s apart (Windows: file in use).
+# Replaces the board with the temp file: 5 more attempts 0.2 s apart (Windows: file in use). The
+# lock must still be ours: if another session took it over, nothing is written (exit 1).
 commit() {
   local i=0
+  read_owner "$lock/owner"
+  # A missing owner can be a lock in transit (renamed and being put back by another session).
+  while [ -z "$owner_c" ] && [ "$i" -lt 10 ]; do
+    sleep 0.1
+    i=$((i + 1))
+    read_owner "$lock/owner"
+  done
+  [ "$owner_c" = "$me" ] || die 1 "board locked by another session: $lock_abs"
+  i=0
   until mv -f "$tmp" "$board" 2> /dev/null; do
     i=$((i + 1))
     [ "$i" -le 5 ] || die 3 "cannot replace $board"

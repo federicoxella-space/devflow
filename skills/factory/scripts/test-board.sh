@@ -21,8 +21,8 @@ has() { grep -qF -- "$2" "$1"; }
 count() { grep -cF -- "$2" "$1"; }
 ts_line() { grep -qE '^- [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} · ' <<< "$1"; }
 
-# run <main> <args...>: sets out, err, code. Afterwards no temp board file may exist and, unless
-# foreign=1 (the test planted another session's lock), no lock either.
+# run <main> <args...>: sets out, err, code. Afterwards no temp board file or renamed stale lock may
+# exist and, unless foreign=1 (the test planted another session's lock), no lock either.
 foreign=0
 run() {
   local d=$1 f
@@ -30,8 +30,8 @@ run() {
   out=$(bash "$script" "$d" "$@" 2> "$tmp/err")
   code=$?
   err=$(cat "$tmp/err")
-  for f in "$d"/factory/board.md.tmp.*; do
-    if [ -e "$f" ]; then echo "      left $f"; leftover=$((leftover + 1)); rm -f "$f"; fi
+  for f in "$d"/factory/board.md.tmp.* "$d"/factory/board.lock.stale.*; do
+    if [ -e "$f" ]; then echo "      left $f"; leftover=$((leftover + 1)); rm -rf "$f"; fi
   done
   if [ "$foreign" = 0 ] && [ -e "$d/factory/board.lock" ]; then
     echo "      left $d/factory/board.lock"
@@ -67,6 +67,17 @@ if [ -n "${STUB_OWNER:-}" ]; then printf '%s\n' "$STUB_OWNER" > "$STUB_OWNER_FIL
 exec "$REAL_GIT" "$@"
 EOF
 chmod +x "$tmp/stub/git"
+
+# Stub mv: logs its arguments to $MV_LOG, then runs the real mv.
+real_mv=$(command -v mv)
+mkdir -p "$tmp/mvstub"
+cat > "$tmp/mvstub/mv" << 'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$MV_LOG"
+exec "$REAL_MV" "$@"
+EOF
+chmod +x "$tmp/mvstub/mv"
+renamed() { grep -qE '/board\.lock [^ ]*/board\.lock\.stale\.[0-9]+\.[0-9]+$' "$tmp/mv.log"; }
 
 # --- AC2: next id from every source ---------------------------------------------------------------
 m=$tmp/n-board; mkmain "$m"
@@ -219,8 +230,10 @@ foreign=0
 m=$tmp/stale; mkmain "$m"
 mkdir "$m/factory/board.lock"
 printf '%s\n' "$(($(date +%s) - 31)) 99999 4242" > "$m/factory/board.lock/owner"
-run "$m" set 002-beta state=build
+: > "$tmp/mv.log"
+MV_LOG=$tmp/mv.log REAL_MV=$real_mv PATH="$tmp/mvstub:$PATH" run "$m" set 002-beta state=build
 check "stale owner (now - 31) removed, write done" same "$code $(grep -c '^| 002-beta | Beta | build |' "$m/factory/board.md")" "0 1"
+check "stale owner: lock renamed to board.lock.stale.<pid>.<random> first" renamed
 
 mkdir "$m/factory/board.lock"
 printf '%s\n' "$(($(date +%s) - 5)) 99999 4242" > "$m/factory/board.lock/owner"
@@ -229,8 +242,10 @@ check "BOARD_LOCK_STALE respected" same "$code" "0"
 
 mkdir "$m/factory/board.lock"
 start=$SECONDS
-run "$m" set 002-beta state=approve
+: > "$tmp/mv.log"
+MV_LOG=$tmp/mv.log REAL_MV=$real_mv PATH="$tmp/mvstub:$PATH" run "$m" set 002-beta state=approve
 elapsed=$((SECONDS - start))
+check "lock without owner: renamed to board.lock.stale.<pid>.<random> first" renamed
 check "lock without owner removed after 2 s, write done" same "$code $(grep -c '^| 002-beta | Beta | approve |' "$m/factory/board.md")" "0 1"
 check "lock without owner kept for at least 2 s" test "$elapsed" -ge 2
 
@@ -260,12 +275,15 @@ check "lock cannot be created: exit 3 at once" same "$code $((elapsed < 5))" "3 
 check "lock cannot be created: board unchanged" cmp -s "$m/factory/board.md" "$tmp/before"
 foreign=0
 
-# --- AC9: release keeps a lock that another process took over ------------------------------------------
-m=$tmp/taken-over; mkmain "$m"
+# --- AC9, AC16: a lock another process took over is neither written through nor released --------------
+m=$tmp/taken-over; mkmain "$m"; cp "$m/factory/board.md" "$tmp/before"
+lock_abs=$(cd "$m/factory" && { pwd -W 2> /dev/null || pwd; })/board.lock
 foreign=1
 STUB_OWNER='1 2 other' STUB_OWNER_FILE=$m/factory/board.lock/owner REAL_GIT=$real_git PATH="$tmp/stub:$PATH" \
   run "$m" new gamma interview 'Gamma'
-check "taken-over lock: write done" same "$code $out" "0 004-gamma"
+check "taken-over lock: exit 1 with the locked message" same "$code $err" "1 board.sh: board locked by another session: $lock_abs"
+check "taken-over lock: board not written" cmp -s "$m/factory/board.md" "$tmp/before"
+check "taken-over lock: folder created by new removed" test ! -e "$m/factory/features/004-gamma"
 check "taken-over lock: not removed on release" same "$(cat "$m/factory/board.lock/owner" 2> /dev/null)" "1 2 other"
 rm -rf "$m/factory/board.lock"
 foreign=0
@@ -311,8 +329,30 @@ check "parallel set/log: no errors" same "$(cat "$tmp"/set-*.err "$tmp"/log-*.er
 check "parallel set/log: no lock left" test ! -e "$m/factory/board.lock"
 for f in "$m"/factory/board.md.tmp.*; do [ -e "$f" ] && { echo "      left $f"; leftover=$((leftover + 1)); }; done
 
+# --- AC15: 8 parallel set on different rows with an abandoned lock in place ---------------------------
+m=$tmp/par-stale; mkmain "$m"
+awk -v rows="$tmp/rows" '{ print } /^\| 003-short/ { while ((getline l < rows) > 0) print l }' "$m/factory/board.md" > "$tmp/b"
+cp "$tmp/b" "$m/factory/board.md"
+mkdir "$m/factory/board.lock"
+printf '%s\n' "$(($(date +%s) - 31)) 99999 4242" > "$m/factory/board.lock/owner"
+for i in 1 2 3 4 5 6 7 8; do
+  BOARD_LOCK_WAIT=120 bash "$script" "$m" set "01$i-row" state=build "round=$i" > /dev/null 2> "$tmp/stale-$i.err" &
+done
+wait
+ok=1
+for i in 1 2 3 4 5 6 7 8; do
+  [ "$(count "$m/factory/board.md" "| 01$i-row | Row $i | build | $i | | |")" = 1 ] || { echo "      row 01$i-row lost"; ok=0; }
+  [ "$(count "$m/factory/board.md" " · 01$i-row · spec → build")" = 1 ] || { echo "      state log 01$i-row lost"; ok=0; }
+done
+check "parallel set on abandoned lock: every row and log line kept" same "$ok" "1"
+check "parallel set on abandoned lock: no errors" same "$(cat "$tmp"/stale-*.err)" ""
+check "parallel set on abandoned lock: no lock left" test ! -e "$m/factory/board.lock"
+check "parallel set on abandoned lock: no board.lock.stale.* left" \
+  same "$(ls -d "$m"/factory/board.lock.stale.* 2> /dev/null)" ""
+for f in "$m"/factory/board.md.tmp.*; do [ -e "$f" ] && { echo "      left $f"; leftover=$((leftover + 1)); }; done
+
 # --- AC9 and AC10 -------------------------------------------------------------------------------------
-check "no own lock or temp board file left after any run" same "$leftover" "0"
+check "no own lock, board.lock.stale.* or temp board file left after any run" same "$leftover" "0"
 gnu_only='stat -''c|date -''d|sed -''i|mv -''T|flo''ck'
 check "no GNU-only options or lock tool in board.sh and test-board.sh" \
   test -z "$(grep -nE "$gnu_only" "$script" "$src/test-board.sh")"
