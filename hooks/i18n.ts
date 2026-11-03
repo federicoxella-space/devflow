@@ -12,6 +12,10 @@ export const parseForge = (value: unknown): Forge => {
   return v === 'gitlab' || v === 'azure' || v === 'git' ? v : 'github'
 }
 
+/** "a", "a or b", "a, b or c" */
+const orList = (items: string[], or: string) =>
+  items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} ${or} ${items[items.length - 1]}`
+
 const enFinish = (forge: Forge) => `you decide · ${forge === 'git' ? 'then push the branch' : `then PR on ${FORGE_NAME[forge]}`}`
 const itFinish = (forge: Forge) => `qui tocca a te · ${forge === 'git' ? 'poi push del branch' : `poi PR su ${FORGE_NAME[forge]}`}`
 
@@ -66,6 +70,15 @@ const en = {
     needsHuman: (id: string, why: string) => `${id}: needs you${why ? ` — ${why}` : ''}`,
     prOpen: (id: string, pr: string) => `${id}: PR open${pr ? ` ${pr}` : ''}, waiting for review`,
   },
+  guard: {
+    only: (type: string, files: string[]) => `devflow guard: ${type} can only write ${orList(files, 'or')}`,
+    factory: (type: string) => `devflow guard: ${type} cannot write under factory/`,
+    orchestrator: (file: string) => `devflow guard: only the orchestrator writes ${file}`,
+    command: (what: string) => `devflow guard: subagents cannot run ${what}`,
+    readOnly: (type: string, what: string) => `devflow guard: ${type} is read-only and cannot run ${what}`,
+    tooComplex: (type: string) => `devflow guard: ${type}: command too long or too deeply nested to check; split or simplify it`,
+  },
+  blocked: (n: number) => `⊘ ${n} blocked`,
 }
 
 export type Strings = typeof en
@@ -121,6 +134,15 @@ const it: Strings = {
     needsHuman: (id: string, why: string) => `${id}: serve il tuo intervento${why ? ` — ${why}` : ''}`,
     prOpen: (id: string, pr: string) => `${id}: PR aperta${pr ? ` ${pr}` : ''}, in attesa di review`,
   },
+  guard: {
+    only: (type: string, files: string[]) => `devflow guard: ${type} può scrivere solo ${orList(files, 'o')}`,
+    factory: (type: string) => `devflow guard: ${type} non può scrivere sotto factory/`,
+    orchestrator: (file: string) => `devflow guard: solo l’orchestratore scrive ${file}`,
+    command: (what: string) => `devflow guard: i subagent non possono eseguire ${what}`,
+    readOnly: (type: string, what: string) => `devflow guard: ${type} è read-only e non può eseguire ${what}`,
+    tooComplex: (type: string) => `devflow guard: ${type}: comando troppo lungo o annidato per il controllo; dividilo o semplificalo`,
+  },
+  blocked: (n: number) => `⊘ ${n} ${n === 1 ? 'bloccata' : 'bloccate'}`,
 }
 
 export const STRINGS: Record<Lang, Strings> = { en, it }
