@@ -73,7 +73,7 @@ only the row you name and appends the log lines atomically:
   `state` also logs `<old> → <new>` (with `note`). `log <id> <text>` appends a free log line.
 "Set state `X`", "round", "write the branch / PR in the board" and "log ..." in this file and in
 the references mean `set` and `log`. Arguments taken from the user's text (title, note, text) go in
-single quotes (a `'` is written `'''`). If the script exits non-zero, tell the user its stderr
+single quotes (a `'` inside is written `'\''`). If the script exits non-zero, tell the user its stderr
 message (with exit 1 it names the lock: if no session is writing, they can delete it) and stop,
 with no further board writes.
 
