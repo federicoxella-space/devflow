@@ -46,6 +46,8 @@ Run once in each repo you want to use the factory in.
   instance it asks the platform and its host. Any other platform works in **git only** mode.
 - Asks where new features run (`workspace`: **Ask**, **Branch** or **Worktree**) and proposes
   `worktree_setup`, the command that prepares a new worktree (e.g. `npm ci`).
+- Writes `secrets_scan: auto` and, if neither gitleaks nor trufflehog is installed, suggests
+  installing one.
 - Optionally enables **automatic releases** (GitHub and GitLab, see below).
 - Drafts the **project playbook**: conventions, patterns, reusable code and the Definition of
   Done. You review it before it is written.
@@ -83,7 +85,12 @@ git commit -m "chore: set up devflow factory"
    (`escalation_model`, default `opus / medium`) with a handover of the previous attempt; if that
    fails too, the factory stops and asks you. `complex` tasks (security-sensitive, concurrent,
    destructive migrations) start directly on opus. Then build, lint and tests must pass. The factory refuses to commit secrets,
-   `.env` files, build output or large unowned binaries; the changes are committed as
+   `.env` files, build output or large unowned binaries. Before each commit it scans the changed
+   files with gitleaks (or trufflehog), as set by `secrets_scan` in `config.md` (`auto`, `gitleaks`,
+   `trufflehog`, `off`). A finding stops the feature in `needs-human` with a report (file, line, rule,
+   never the value) on how to remove the secret or allow a false positive; with no scanner installed
+   the model's own check is used and the board log says so. The security reviewer runs the same
+   scanner on the PR diff. The changes are committed as
    Conventional Commits, one commit per task.
 4. **Reviews**: code (opus), security, UX and UI reviewers run in parallel; blocking findings go back to
    the implementers.

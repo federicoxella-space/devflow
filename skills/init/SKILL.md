@@ -29,7 +29,7 @@ file.
   a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
   offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
   `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty, without `implementer_model` as `sonnet / medium`, without
-  `escalation_model` as `opus / medium`: nothing
+  `escalation_model` as `opus / medium`, without `secrets_scan` as `auto`: nothing
   to migrate.
   Never touch an existing `factory/board.md`.
 
@@ -185,6 +185,7 @@ escalation_model: opus / medium     # <model> / <effort>: complex tasks and esca
 release: "off"         # auto | off — automatic tag + release on every merged PR (github, gitlab)
 workspace: ask         # ask | branch | worktree — where a new feature runs
 worktree_setup: ""     # worktree only: command run in a new worktree, e.g. npm ci (empty = none)
+secrets_scan: auto     # auto | gitleaks | trufflehog | off — secrets scanner run before each commit
 ---
 Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
 
@@ -254,3 +255,7 @@ Ask the user to commit `factory/config.md`, `factory/playbook.md`, `.gitignore` 
 `.gitlab-ci.yml`), then to run
 `/devflow:factory <feature description>` (or `/devflow:factory` alone to start the scaffold
 feature).
+
+If `command -v` finds neither `gitleaks` nor `trufflehog`, add one line suggesting to install one
+for the secrets scan: https://github.com/gitleaks/gitleaks or
+https://github.com/trufflesecurity/trufflehog. Never install anything.
