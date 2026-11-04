@@ -83,6 +83,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bash skills/factory/scripts/test-board.sh
 
+      - name: Test skills/factory/scripts/test-secrets-scan.sh
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: bash skills/factory/scripts/test-secrets-scan.sh
+
       - name: Test .github/scripts/test-claude-version.sh
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: bash .github/scripts/test-claude-version.sh
