@@ -47,6 +47,8 @@
 - A frontmatter field that a forge command uses is validated against the quoting that command actually uses: `skills/factory/references/spec-check.md` forbade only `'` while `skills/factory/forges/*.md` passed `"<title>"`, so `$(...)` still got through.
 - A compatibility exception for files written before a rule ("skip if the field is missing") applies only to files that existed before the run, never to files an agent has just produced: in 018 r1 the skip for a missing `pr_title` in `skills/factory/references/spec-check.md` also cancelled the presence check on new specs.
 - A value that goes into a shell command in single quotes is escaped (`'\''`) only when the command is built, never in the stored file: `references/change.md` reuses the title from `pr.md`, so a title stored escaped would be escaped twice.
+- A script that parses `git status --porcelain -z` handles rename/copy codes in both X and Y: `skills/factory/scripts/secrets-scan.sh:59` checks only X, so a worktree rename would misalign the NUL-separated records.
+- Changes to secrets scanner allowlists made in a feature (`.gitleaks.toml`, `.gitleaksignore`, new `gitleaks:allow` / `trufflehog:ignore` comments) need human approval: `skills/factory/scripts/secrets-scan.sh` trusts the scanned checkout's allowlist, so an implementer can silence its own finding.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
@@ -58,6 +60,7 @@
 - Parts of a skill needed only in some cases go in `references/<area>.md` in its base directory, with a pointer in `SKILL.md` that says when to read them: `skills/factory/SKILL.md` reached 522 lines loaded whole on every run (~575k tokens/run, issue #25), and the pointers keep the core small as the skill grows.
 - An eval case's prompt or `append_system_prompt` never names the commands, scripts or flags its `tool_used` graders match: the note added to `evals/factory/pr-open-merged/case.yaml` could otherwise make `pull --ff-only` or `branch -D` pass without the skill prescribing them.
 - Literal edits that contain `\n` (or other escapes) are made with Edit or a script file, never with an edit script inside a bash heredoc: in Git Bash the heredoc turned `\n` into a real line break twice in `printf '%s\n'` of `skills/factory/scripts/board.sh`, and in 017 a heredoc dropped the backslash of `'\''` from this playbook.
+- Tests of scripts that resolve external tools with `command -v` run the script with a PATH reduced to a temp folder of wrappers and stubs, and the stubs and wrappers use bash's absolute shebang (`#!$(command -v bash)`): with the reduced PATH `#!/usr/bin/env bash` cannot find bash, and without it an installed gitleaks would skew `skills/factory/scripts/test-secrets-scan.sh`.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).

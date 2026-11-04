@@ -111,7 +111,7 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
    Read `<main>/factory/config.md` once; its frontmatter drives the run. `implementer_model` and
    `escalation_model` have the form `<model> / <effort>` (effort missing → `medium`); a missing key
-   uses its default, `sonnet / medium` and `opus / medium`. Then read the **forge file**
+   uses its default, `sonnet / medium` and `opus / medium`; `secrets_scan` missing is `auto`. Then read the **forge file**
    `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
    commands of the six forge operations `auth`, `open-pr`, `update-pr`, `pr-state`,
    `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
@@ -231,7 +231,8 @@ Write `gate-r<round>.md`: commands, exit codes, last ~60 lines of output of the 
   commit (4b).
 
 ### 4b. Commit
-First check for **forbidden files** yourself, as in `references/forbidden-files.md`.
+First check for **forbidden files** yourself, then run the **secrets scan**, both as in
+`references/forbidden-files.md`.
 
 Then spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path
 (and `workdir` as in Feature checkout). It
@@ -256,7 +257,9 @@ false`), so you wait for all of them. Exception: in `browser` mode ux and ui sha
 
 Each reviewer gets: feature dir, round number, base branch, `ui_review` mode, output path
 `reviews/r<round>-<reviewer>.md`, `workdir` as in Feature checkout, and for round > 1 its own
-previous review path (it marks repeated blocking items with `repeat:`). With `ui_review: browser`,
+previous review path (it marks repeated blocking items with `repeat:`). `review-security` also gets
+`secrets_scan: <mode>` and `secrets_script: <absolute path of scripts/secrets-scan.sh in this
+skill's base directory>`. With `ui_review: browser`,
 start `dev_server` in `<dir>`. It reads the project playbook and the feature playbook's
 `## Done checklist` itself.
 After the reviews, append their `## Rule proposals` to `rule-proposals.md`.
