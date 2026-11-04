@@ -46,7 +46,7 @@
 - Decisions with permanent effects (PR title → version and tag) are made by an agent on opus and approved by the user, never by an agent on haiku: in `agents/committer.md` (haiku) step 6 picked the title type that `next-version.sh` turns into a release.
 - A frontmatter field that a forge command uses is validated against the quoting that command actually uses: `skills/factory/references/spec-check.md` forbade only `'` while `skills/factory/forges/*.md` passed `"<title>"`, so `$(...)` still got through.
 - A compatibility exception for files written before a rule ("skip if the field is missing") applies only to files that existed before the run, never to files an agent has just produced: in 018 r1 the skip for a missing `pr_title` in `skills/factory/references/spec-check.md` also cancelled the presence check on new specs.
-- A value that goes into a shell command in single quotes is escaped (`'''`) only when the command is built, never in the stored file: `references/change.md` reuses the title from `pr.md`, so a title stored escaped would be escaped twice.
+- A value that goes into a shell command in single quotes is escaped (`'\''`) only when the command is built, never in the stored file: `references/change.md` reuses the title from `pr.md`, so a title stored escaped would be escaped twice.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
