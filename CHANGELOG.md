@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.24.0 — 2026-11-04
+- feat(factory): write the shared board through a locked script (#43)
+
 ## v0.23.0 — 2026-11-03
 - feat(pane): enforce devflow agent constraints with a guard (#41)
 
