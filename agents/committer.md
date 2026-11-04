@@ -55,10 +55,5 @@ If `config.md` has a `## Commit rules` section, it overrides the defaults below 
    then commit with `git commit -F <tmpfile>` (message from a temp file, not `-m`, so the body is
    preserved). Pick type and scope per task.
 5. If a pre-commit hook fails, do not fix anything: report the hook output.
-6. Round 1 only: write a **PR title** for the whole feature, in the same format and language as
-   the subjects (`<type>(<scope>): <subject>`, max 72 chars). `type` is `fix` on a `hotfix/`
-   branch, else `feat` unless the feature is clearly something else (e.g. `refactor`). With squash
-   merge it becomes the commit on the base branch.
 
-Reply to the orchestrator with: `OK`, the list of `<short-sha> <task> <subject>` and, in round 1,
-one line `PR title: <title>`; or `FAILED` and the reason (wrong branch, forbidden files, hook output).
+Reply to the orchestrator with: `OK` and the list of `<short-sha> <task> <subject>`; or `FAILED` and the reason (wrong branch, forbidden files, hook output).

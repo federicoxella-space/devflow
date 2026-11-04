@@ -186,8 +186,11 @@ If the spec's `## Open questions` is not empty, ask them **one at a time**, appe
 and run the spec check again before going on. New logic that comes up here or in a "Request changes" is handled as in
 **Deferring logic** (step 0). Check that every checklist owner other than `n/a` and `gate` is in `reviewers`;
 if not, resume the spec-writer to fix it.
-Show the user: first the spec's `## Expected result`, then title, `kind` and why, tasks, the
-`## Done checklist`, `## Agent decisions`, reviewers, out of scope. If the spec has no
+Show the user: first the spec's `## Expected result`, then title, `kind` and why, then (always,
+even with `release: off`) the line `PR title: <pr_title> → bump <bump>`, with `<bump>` from the
+title alone: `!` → `major (minor while the version is 0.x)` (fixed text), `feat` → `minor`, else
+`patch`; read no version (tag, file, config). With `breaking` set add `Breaking change:
+<breaking>`. No `pr_title` in the spec: no line. Then tasks, the `## Done checklist`, `## Agent decisions`, reviewers, out of scope. If the spec has no
 `## Expected result` (written before this section existed), show the rest as usual. Ask with
 AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
@@ -232,7 +235,7 @@ First check for **forbidden files** yourself, as in `references/forbidden-files.
 Then spawn `devflow:committer` (foreground) with feature id, feature dir, round, config path
 (and `workdir` as in Feature checkout). It
 makes one commit per task, following `## Tasks` in the spec.
-- `OK` → append the commit list (and, in round 1, the `PR title:` line) to `gate-r<round>.md`,
+- `OK` → append the commit list to `gate-r<round>.md`,
   state `review`.
 - `FAILED` because of a commit hook → write the output to `gate-r<round>.md` and treat it as a gate
   fail (rework, same retry limit).
@@ -273,10 +276,12 @@ round (and `workdir` as in Feature checkout). Read `decision.md` frontmatter:
 - `ESCALATE` → `needs-human` with the approver's reason.
 - `APPROVE` → rule proposals (6b), then write the title (first line) and the body to
   `features/<id>/pr.md` and open the PR with **open-pr** (base `<base_branch>`, head `<kind>/<id>`,
-  title, body file). PR title = the `PR title:` line in `gate-r1.md` (Conventional Commits, so a squash merge leaves a
-  conventional commit on the base branch); if missing, build it the same way from the spec title:
+  title, body file). PR title = `pr_title` of the spec (Conventional Commits, so a squash merge
+  leaves a conventional commit on the base branch); a spec without `pr_title` (written before it
+  existed) uses the `PR title:` line in `gate-r1.md`, and if missing builds it from the spec title:
   `fix` for a hotfix, else `feat`, scope = the main area touched. Body = spec title as heading +
-  spec goal + done checklist table from `decision.md` + non-blocking review notes + footer
+  spec goal + (with `breaking` set) a line of its own `BREAKING CHANGE: <breaking>` at line start +
+  done checklist table from `decision.md` + non-blocking review notes + footer
   `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
   `pr-open` with the reference open-pr returned in the PR column (`-` with forge `git`: pass on its
   message to the user), then, in `branch` mode without `checkout:` only, `git -C "<main>" switch "<base_branch>"`;

@@ -52,9 +52,12 @@ In a change, the comparison with the snapshots (above) and the jump to `build` h
 
 ## Approval
 **With a change `in progress`** (also on resume in `approve`) use **update-pr** instead of
-open-pr. Rewrite `pr.md` as above (footer with the total number of rounds); the title is the
-first line of the existing `pr.md`, unless `title` or `kind` of the spec differ from
-`spec-c<n>.md`: then rebuild it with the fallback rule above. The branch stays the one in the
+open-pr. Rewrite `pr.md` as above (footer with the total number of rounds); if the spec has
+`pr_title`, the title is that `pr_title` when it differs from the one in `spec-c<n>.md` (absent
+there counts as different), else the first line of the existing `pr.md`. Without `pr_title`: the
+first line of the existing `pr.md`, unless `title` or `kind` of the spec differ from `spec-c<n>.md`,
+then rebuild it with the fallback rule above. The rewritten body follows the `BREAKING CHANGE` rule
+of step 6. The branch stays the one in the
 board even if `kind` changed. Write `change-<n>.md` in the language of `feature.md`: `Change <n>:
 <text>`, whether the spec was updated (yes/no), the commits of the change's rounds (from
 `gate-r<N>.md`), footer `Factory: <id>`. Call update-pr (reference from the PR column, head =
