@@ -124,6 +124,14 @@ commits and reviews happen in it, so your checkout stays free. The worktree stay
 merged; the next run then removes it (never with `--force`: if it has local changes it is kept and
 you are told). Each session runs its own feature against the shared board.
 
+Every board write goes through `skills/factory/scripts/board.sh`, which takes a lock
+(`factory/board.lock`), re-reads the board and writes it atomically, so two sessions never lose each
+other's changes. New ids are reserved by creating the feature folder with `mkdir`, so two sessions
+creating a feature at the same time get different numbers. If another session holds the board for
+more than 10 seconds, the factory stops and names the lock file to check (delete it if no session is
+writing); a lock left by an interrupted session for more than 30 seconds is removed automatically.
+The board format is unchanged and you can still edit the state cell by hand.
+
 A session opened inside a git worktree of the repo (for example one created by Claude Desktop) uses
 the board and the features of the main checkout, like every other session; a new feature gets an id
 not used by the board, the branches or the existing worktrees. If that worktree already has its own

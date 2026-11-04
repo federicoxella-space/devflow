@@ -11,9 +11,9 @@ Only behaviour and requirements; project conventions go through rule proposals (
 4. Defer → if **issues-enabled** is `true`, open one issue per logic with **create-issue**, in
    the language of `feature.md`: title = short title; body (in a temp file) = what the logic does,
    what was said about it, footer `Deferred from <id> — <feature title>`.
-   Otherwise (`false`, CLI missing or not authenticated, create-issue failed) → queue it: next free
-   NNN, write `features/<new id>/feature.md` with the logic and the same footer, add the row as
-   `queued` with a log line, and append `- <new id> — <logic> — deferred from <id>` to
+   Otherwise (`false`, CLI missing or not authenticated, create-issue failed) → queue it: `new` it
+   as `queued` with the note `(deferred from <id>)`, write `feature.md` with the logic and the same
+   footer in the folder `new` created, and append `- <new id> — <logic> — deferred from <id>` to
    `factory/backlog.md` (create it with the heading `# Factory backlog`). The board is gitignored,
    so the backlog is the committed record.
 5. Right after, append the line to `## Deferred` in the feature playbook, so a resume does not open

@@ -2,7 +2,8 @@
 
 If there are `pr-open` rows, `git -C "<main>" fetch --prune`
 once, then run **pr-state** for each (PR reference from the PR column, branch from the branch column):
-- `MERGED` → state `merged`.
+- `MERGED` → state `merged`. If the board write fails, say so in one line and go on with the
+  cleanup of the rows pr-state returned `MERGED` in this run.
 - `CLOSED` → state `closed`; keep the branch. Tell the user in one line: to resume it, set the
   state by hand (e.g. `approve`) and reopen the PR; otherwise they can delete the branch.
 - `OPEN` → nothing. With forge `git`, list these rows in one line: if one was merged and not

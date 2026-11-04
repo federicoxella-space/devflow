@@ -16,14 +16,11 @@ execution:
     the skill prescribes, in order, and when a command fails, handle the failure exactly as the
     skill says. File changes made with the Write and Edit tools work normally.
 graders:
-  - name: board-row-merged
-    type: regex
-    target: { source: file, path: factory/board.md }
-    pattern: '\|\s*001-hello\s*\|[^\n]*\|\s*merged\s*\|'
-  - name: board-log-transition
-    type: regex
-    target: { source: file, path: factory/board.md }
-    pattern: '001-hello · pr-open → merged'
+  - name: board-merged-written
+    type: tool_used
+    tool: Bash
+    input_match: 'board\.sh[^\n]*001-hello[^\n]*merged'
+    min: 1
   - name: git-merged-script-run
     type: tool_used
     tool: Bash
