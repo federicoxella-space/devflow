@@ -40,6 +40,9 @@
 - Every new `test-*.sh` gets its own step in `.github/workflows/ci.yml`: CI lists the scripts one by one, so a test not added there never runs on PRs.
 - Shell scripts in `skills/` run on macOS bash 3.2: no `mapfile`, associative arrays, `${x,,}` or `EPOCHSECONDS`; `skills/factory/scripts/board.sh` uses `$SECONDS` and `date +%s`.
 - When a skill prescribes shell escaping for user text, it quotes the exact idiom in a code span (`'\''` for a single quote) and the review compares it with the spec: in 017 r1 `skills/factory/SKILL.md:76` said `'''`, which reopened command injection through feature titles.
+- In shell lock code, prepare every value before the atomic `mkdir` and read files with the shell's built-in `read` instead of `$(cat)`: in Git Bash starting a process takes tens of ms, and a `date` call between `mkdir` and the `owner` write in `skills/factory/scripts/board.sh` let two sessions hold the lock at once.
+- A loop that waits on a lock checks its time limit on every path that retries, `continue` included: in 017 r3 the retries at `skills/factory/scripts/board.sh:210,214` skipped the `BOARD_LOCK_WAIT` check, so the promised 10 s limit held only on the main path.
+- In a shell command a skill prescribes, every placeholder taken from a name or from text goes in single quotes, not only the title: `skills/factory/references/workspace.md:8` left `<slug>` unquoted, and validation inside the script cannot stop an expansion that happens before the script runs.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
@@ -50,6 +53,7 @@
 - Every eval `scaffold.sh` checks that the cwd is empty as its first statement after `set -eu`, before any write (git or not), and exits otherwise: `evals/factory/pr-open-merged/scaffold.sh` runs `git reset --hard HEAD~1` and `evals/spec-checker/known-gap/scaffold.sh` writes `factory/config.md`, which would damage the devflow checkout if run by hand outside `claude plugin eval --scaffold`.
 - Parts of a skill needed only in some cases go in `references/<area>.md` in its base directory, with a pointer in `SKILL.md` that says when to read them: `skills/factory/SKILL.md` reached 522 lines loaded whole on every run (~575k tokens/run, issue #25), and the pointers keep the core small as the skill grows.
 - An eval case's prompt or `append_system_prompt` never names the commands, scripts or flags its `tool_used` graders match: the note added to `evals/factory/pr-open-merged/case.yaml` could otherwise make `pull --ff-only` or `branch -D` pass without the skill prescribing them.
+- Literal edits that contain `\n` (or other escapes) are made with Edit or a script file, never with an edit script inside a bash heredoc: in Git Bash the heredoc turned `\n` into a real line break twice in `printf '%s\n'` of `skills/factory/scripts/board.sh`, and in 017 a heredoc dropped the backslash of `'\''` from this playbook.
 ## Reusable code
 - Board parsing: `hooks/board.ts` (`parseBoard`, `summarize`, `isTerminal`).
 - Gate and review outcomes: `hooks/feature.ts` (`parseGate`, `parseReview`).
