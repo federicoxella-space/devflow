@@ -36,7 +36,9 @@ or a failure → `false`.
 ```
 gh label create devflow --color 5319E7 --description "Created by devflow factory"
 gh label create deferred --color FBCA04 --description "Logic deferred from a devflow interview"
-gh issue create --title "<title>" --body-file <body file> --label devflow,deferred,enhancement
+gh issue create --title '<title>' --body-file '<body file>' --label devflow,deferred,enhancement
 ```
+When building the command, write every `'` in `<title>` as `'\''`; the body file is written as is.
+
 Ignore "already exists" from `gh label create`; if a label still cannot be used, create the issue
 without it. Result = the issue URL printed by `gh issue create`.

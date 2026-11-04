@@ -37,7 +37,9 @@ in one line and go on.
 ```
 glab label create --name devflow --color "#5319E7" --description "Created by devflow factory"
 glab label create --name deferred --color "#FBCA04" --description "Logic deferred from a devflow interview"
-glab issue create --title "<title>" --description "$(cat <body file>)" --label devflow,deferred,enhancement --yes
+glab issue create --title '<title>' --description "$(cat '<body file>')" --label devflow,deferred,enhancement --yes
 ```
+When building the command, write every `'` in `<title>` as `'\''`; the body file is written as is.
+
 Ignore "already exists" from `glab label create`; if a label still cannot be used, create the issue
 without it. Result = the issue URL in the output.
