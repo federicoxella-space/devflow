@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.25.1 — 2026-11-04
+- fix(factory): single-quote create-issue arguments in forge files (#47)
+
 ## v0.25.0 — 2026-11-04
 - feat(factory): decide the PR title in the spec, not in the committer (#46)
 
