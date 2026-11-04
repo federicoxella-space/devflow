@@ -11,7 +11,7 @@ its IID is the number after `/-/merge_requests/`.
 ## open-pr
 ```
 git push -u origin <head>
-glab mr create --source-branch <head> --target-branch <base> --title "<title>" --description "$(cat <body file>)" --yes
+glab mr create --source-branch <head> --target-branch <base> --title '<title>' --description "$(cat <body file>)" --yes
 ```
 Reference = the MR URL in the output (the line containing `/-/merge_requests/`).
 
@@ -19,7 +19,7 @@ Reference = the MR URL in the output (the line containing `/-/merge_requests/`).
 Input: reference, head, title, body file, comment file.
 ```
 git push origin "<head>"
-glab mr update <IID> --title "<title>" --description "$(cat "<body file>")"
+glab mr update <IID> --title '<title>' --description "$(cat "<body file>")"
 glab mr note <IID> --message "$(cat "<comment file>")"
 ```
 Push or `glab mr update` fails → `needs-human` with the output. `glab mr note` fails → tell the user

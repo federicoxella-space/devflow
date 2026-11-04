@@ -94,8 +94,8 @@ git commit -m "chore: set up devflow factory"
    it. Approved ones are added to the project playbook.
 7. **Pull request** on the configured forge (merge request on GitLab), titled in Conventional
    Commits format (`feat(scope): ...`), so a squash merge leaves a conventional commit on the base
-   branch. The title is the one you approved in the spec. In git only mode the branch is pushed and the title and description are in
-   `factory/features/<id>/pr.md` for you to open the PR by hand.
+   branch. The title is the one you approved in the spec. In git only mode the branch is pushed and the title and description
+   are in `factory/features/<id>/pr.md` for you to open the PR by hand.
 
 You review and merge the PR. On the next run the factory checks the open PRs: merged ones become
 `merged`, their local branch is deleted and the base branch is updated; PRs closed without merge

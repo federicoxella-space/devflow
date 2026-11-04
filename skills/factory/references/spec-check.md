@@ -13,7 +13,10 @@ Read only the frontmatter `verdict`:
 
 ## pr_title validation
 Right after every `PASS` (in a change, before the comparison with the snapshots) check the spec
-frontmatter. A spec without `pr_title` is written before this rule: skip the checks.
+frontmatter. Skip the checks only for a spec that already existed without `pr_title` before this
+run (a feature resumed in build/approve, or a change whose `spec-c<n>.md` has none and whose
+spec-writer run did not touch the field). A spec the spec-writer wrote or rewrote in this run
+without `pr_title` fails check 1.
 1. `pr_title` is present and matches
    `^(feat|fix|docs|chore|refactor|test|ci|perf|build|style|revert)(\([^()]+\))?!?: [^ ].*$`;
 2. at most 72 characters and no `'`;

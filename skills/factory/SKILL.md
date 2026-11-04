@@ -188,9 +188,10 @@ and run the spec check again before going on. New logic that comes up here or in
 if not, resume the spec-writer to fix it.
 Show the user: first the spec's `## Expected result`, then title, `kind` and why, then (always,
 even with `release: off`) the line `PR title: <pr_title> → bump <bump>`, with `<bump>` from the
-title alone: `!` → `major (minor while the version is 0.x)` (fixed text), `feat` → `minor`, else
-`patch`; read no version (tag, file, config). With `breaking` set add `Breaking change:
-<breaking>`. No `pr_title` in the spec: no line. Then tasks, the `## Done checklist`, `## Agent decisions`, reviewers, out of scope. If the spec has no
+title alone: `!` (any type) → `major (minor while the version is 0.x)` (fixed text), `feat` →
+`minor`, else `patch`; read no version (tag, file, config). With `breaking` set add `Breaking
+change: <breaking>`. No `pr_title` in the spec: no line. Then tasks, the `## Done checklist`,
+`## Agent decisions`, reviewers, out of scope. If the spec has no
 `## Expected result` (written before this section existed), show the rest as usual. Ask with
 AskUserQuestion: **Approve / Request changes / Reject**.
 - Request changes (including a different `kind`) → resume the spec-writer (SendMessage with its
@@ -279,9 +280,10 @@ round (and `workdir` as in Feature checkout). Read `decision.md` frontmatter:
   title, body file). PR title = `pr_title` of the spec (Conventional Commits, so a squash merge
   leaves a conventional commit on the base branch); a spec without `pr_title` (written before it
   existed) uses the `PR title:` line in `gate-r1.md`, and if missing builds it from the spec title:
-  `fix` for a hotfix, else `feat`, scope = the main area touched. Body = spec title as heading +
-  spec goal + (with `breaking` set) a line of its own `BREAKING CHANGE: <breaking>` at line start +
-  done checklist table from `decision.md` + non-blocking review notes + footer
+  `fix` for a hotfix, else `feat`, scope = the main area touched. The forge files pass the title
+  in single quotes; in the fallback title write each `'` as `'\''`. Body = spec title as heading +
+  spec goal + (with `breaking` set) a line of its own `BREAKING CHANGE: <breaking>` at line
+  start + done checklist table from `decision.md` + non-blocking review notes + footer
   `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
   `pr-open` with the reference open-pr returned in the PR column (`-` with forge `git`: pass on its
   message to the user), then, in `branch` mode without `checkout:` only, `git -C "<main>" switch "<base_branch>"`;

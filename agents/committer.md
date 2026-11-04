@@ -56,4 +56,5 @@ If `config.md` has a `## Commit rules` section, it overrides the defaults below 
    preserved). Pick type and scope per task.
 5. If a pre-commit hook fails, do not fix anything: report the hook output.
 
-Reply to the orchestrator with: `OK` and the list of `<short-sha> <task> <subject>`; or `FAILED` and the reason (wrong branch, forbidden files, hook output).
+Reply to the orchestrator with: `OK` and the list of `<short-sha> <task> <subject>`; or `FAILED`
+and the reason (wrong branch, forbidden files, hook output).

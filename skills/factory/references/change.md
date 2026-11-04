@@ -57,7 +57,8 @@ open-pr. Rewrite `pr.md` as above (footer with the total number of rounds); if t
 there counts as different), else the first line of the existing `pr.md`. Without `pr_title`: the
 first line of the existing `pr.md`, unless `title` or `kind` of the spec differ from `spec-c<n>.md`,
 then rebuild it with the fallback rule above. The rewritten body follows the `BREAKING CHANGE` rule
-of step 6. The branch stays the one in the
+of step 6 (the line is dropped if `breaking` was removed). The title goes to update-pr in single
+quotes, as step 6 says. The branch stays the one in the
 board even if `kind` changed. Write `change-<n>.md` in the language of `feature.md`: `Change <n>:
 <text>`, whether the spec was updated (yes/no), the commits of the change's rounds (from
 `gate-r<N>.md`), footer `Factory: <id>`. Call update-pr (reference from the PR column, head =

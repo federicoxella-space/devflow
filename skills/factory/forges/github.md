@@ -10,7 +10,7 @@ Enterprise).
 ## open-pr
 ```
 git push -u origin <head>
-gh pr create --base <base> --head <head> --title "<title>" --body-file <body file>
+gh pr create --base <base> --head <head> --title '<title>' --body-file <body file>
 ```
 Reference = the URL printed by `gh pr create`.
 
@@ -18,7 +18,7 @@ Reference = the URL printed by `gh pr create`.
 Input: reference, head, title, body file, comment file.
 ```
 git push origin "<head>"
-gh pr edit "<reference>" --title "<title>" --body-file "<body file>"
+gh pr edit "<reference>" --title '<title>' --body-file "<body file>"
 gh pr comment "<reference>" --body-file "<comment file>"
 ```
 Push or `gh pr edit` fails → `needs-human` with the output. `gh pr comment` fails → tell the user in
