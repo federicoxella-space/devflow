@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.26.0 — 2026-11-04
+- feat(factory): scan changed files for secrets before commit (#48)
+
 ## v0.25.1 — 2026-11-04
 - fix(factory): single-quote create-issue arguments in forge files (#47)
 
