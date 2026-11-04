@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.25.0 — 2026-11-04
+- feat(factory): decide the PR title in the spec, not in the committer (#46)
+
 ## v0.24.0 — 2026-11-04
 - feat(factory): write the shared board through a locked script (#43)
 
