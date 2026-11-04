@@ -33,7 +33,9 @@ the language of `feature.md`.
 
 ```markdown
 ---
-title: <short imperative title, used as PR title>
+title: <short title, heading of the PR body>
+pr_title: '<type>(<scope>)!: <subject>'   # always; the PR title, decides the release version
+breaking: '<what breaks>'             # only if the spec breaks compatibility; then pr_title has the `!`
 kind: feature                         # feature = new or changed behaviour; hotfix = fix of a
                                       # behaviour that should already work
 reviewers: [code, security, ux, ui]   # code always; security if it touches auth, input, data,
@@ -86,6 +88,17 @@ Rules:
   example in numbered steps. No file names, no implementation details. For a `hotfix`, describe the
   correct behaviour after the fix. Keep it consistent with `## Behaviour` and the checklist; when you
   edit the spec on request, update it too if needed.
+- **PR title.** `pr_title` is always present: Conventional Commits in English, max 72 characters,
+  imperative subject with a lowercase start and no final period. `scope` comes from `## Commit
+  rules` in `config.md` if it lists scopes, else the main area touched (omit it if the work spans
+  the whole project). `type`: `fix` for a `hotfix`, always; for a `feature` `feat` by default, or
+  `refactor`, `docs`, `ci`, `perf`, `build`, `test`, `chore` if the work does not change behaviour
+  for the user; never `fix` on a feature. The value is in single quotes and contains no `'`.
+  `breaking` is present only if the spec breaks compatibility (config, file formats, commands that
+  users or existing files rely on): one line in English, in single quotes, no `'` inside; then, and
+  only then, `pr_title` has `!` after the scope. In a change both fields are part of the spec
+  outside `## Tasks`: edit them only if the work changes. When the orchestrator replies
+  `pr_title invalid: <checks>`, fix only `pr_title`/`breaking` and reply with one line.
 - **Checklist.** First the feature's criteria `AC<n>`: each checkable by a test or a precise manual
   step, written in `verified by`. Then every item of the project playbook's `## Definition of Done`
   as `DoD-<n>` (n = its position there), with the owner from its `[tag]`, or `n/a` and the reason.

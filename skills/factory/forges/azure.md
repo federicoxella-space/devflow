@@ -21,7 +21,7 @@ Scope flags, used by the commands below:
 ## open-pr
 ```
 git push -u origin <head>
-az repos pr create --source-branch <head> --target-branch <base> --title "<title>" --description "$(cat <body file>)" --output json <scope flags>
+az repos pr create --source-branch <head> --target-branch <base> --title '<title>' --description "$(cat <body file>)" --output json <scope flags>
 ```
 Reference = `<repository.webUrl>/pullrequest/<pullRequestId>` from the JSON output.
 
@@ -29,7 +29,7 @@ Reference = `<repository.webUrl>/pullrequest/<pullRequestId>` from the JSON outp
 Input: reference, head, title, body file, comment file.
 ```
 git push origin "<head>"
-az repos pr update --id <id> --title "<title>" --description "$(cat "<body file>")" --output json <org flag>
+az repos pr update --id <id> --title '<title>' --description "$(cat "<body file>")" --output json <org flag>
 ```
 Push or `az repos pr update` fails → `needs-human` with the output.
 

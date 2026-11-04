@@ -72,7 +72,9 @@ git commit -m "chore: set up devflow factory"
    open design decisions; gaps go back to the spec-writer (at most twice) and the remaining ones are
    asked to you as open questions. You first read the expected result (a usage scenario with a concrete example), then
    you approve the spec, the done checklist (acceptance criteria + Definition of Done)
-   and whether it is a `feature/` or a `hotfix/` branch.
+   and whether it is a `feature/` or a `hotfix/` branch. You also approve the PR title and the
+   version bump it produces (`PR title: feat(scope): ... → bump minor`); a breaking change has a
+   `!` in the title and an explicit warning saying what breaks.
 3. **Build**: independent tasks are implemented in parallel by one agent, the implementer, on
    sonnet (`implementer_model` in `config.md`, default `sonnet / medium`). If an implementer stops
    for a missing design decision, the spec-writer completes the spec and the work resumes. If it
@@ -92,8 +94,8 @@ git commit -m "chore: set up devflow factory"
    it. Approved ones are added to the project playbook.
 7. **Pull request** on the configured forge (merge request on GitLab), titled in Conventional
    Commits format (`feat(scope): ...`), so a squash merge leaves a conventional commit on the base
-   branch. In git only mode the branch is pushed and the title and description are in
-   `factory/features/<id>/pr.md` for you to open the PR by hand.
+   branch. The title is the one you approved in the spec. In git only mode the branch is pushed and the title and description
+   are in `factory/features/<id>/pr.md` for you to open the PR by hand.
 
 You review and merge the PR. On the next run the factory checks the open PRs: merged ones become
 `merged`, their local branch is deleted and the base branch is updated; PRs closed without merge
