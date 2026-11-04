@@ -56,6 +56,8 @@ succeeds → `true`; fails → `false` (Boards disabled or no access).
 Azure Boards has no labels: use tags. Try the work item types in order until one is accepted
 (they depend on the process template): `Issue`, `User Story`, `Product Backlog Item`.
 ```
-az boards work-item create --type "<type>" --title "<title>" --description "$(sed 's/$/<br>/' <body file>)" --fields "System.Tags=devflow; deferred" --output json <scope flags>
+az boards work-item create --type '<type>' --title '<title>' --description "$(sed 's/$/<br>/' '<body file>')" --fields "System.Tags=devflow; deferred" --output json <scope flags>
 ```
+When building the command, write every `'` in `<title>` as `'\''`; the body file is written as is.
+
 (`--description` is HTML, hence the `<br>`.) Result = `_links.html.href` from the JSON output.
