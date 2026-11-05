@@ -2,7 +2,8 @@
 
 ## Changing a feature with an open PR
 Entry: `/devflow:factory <id> <text>` or `<id>` alone, on a row in state `pr-open`. Step 2 has
-already run pr-state for it.
+already run pr-state for it. If the first word of `<text>` is `abandon` (case-insensitive), this
+is not a change: read `references/abandon.md` instead and stop here.
 - `MERGED` or `CLOSED` → explain that the feature can no longer be changed, suggest
   `/devflow:factory <text>` to open a new feature with the same text, stop without changing anything.
 - `UNKNOWN` → say the PR state cannot be verified and why, stop.

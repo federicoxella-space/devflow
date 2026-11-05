@@ -156,6 +156,19 @@ only active feature; with several it asks which one, or **New feature**; with no
 oldest queued one. Any other argument is a new feature description. When something needs a human,
 it stops and tells you which files to look at.
 
+**Status and abandon.** `/devflow:factory status` reads only `factory/board.md` (no forge, git or
+board write) and shows the open features (id, title, state, round, PR), a line `N merged, M closed`
+and the next actions with the command to run: `needs-human` features with the reason from the log,
+active ones to resume, open PRs, and the next queued feature.
+
+`/devflow:factory <id> abandon [<reason>]` abandons a feature. The factory shows a plan (state, PR
+to close, worktree and branch to remove or keep, and why) and asks for confirmation. Then it closes
+the PR if it is open (the reason becomes a comment), sets the feature to `closed` with the note
+`abandoned: <reason>`, and removes the worktree and the local branch only if nothing is lost: no
+local changes and every commit on origin or on the base branch (never `--force`). The remote branch
+stays, so the PR can be reopened. A `merged` feature is refused; on a `closed` one only the cleanup
+runs. With forge `git` you close the PR by hand.
+
 ### 3. Follow the run: the flow pane
 
 devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It

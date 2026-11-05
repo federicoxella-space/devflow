@@ -1,7 +1,7 @@
 ---
 name: factory
 description: Run the devflow software factory - interview, spec, parallel build, gate, parallel reviews, approval, pull request - one feature at a time per session, guided by a project playbook.
-argument-hint: "[<feature id> [<change>] | <feature description>]"
+argument-hint: "[status | <feature id> [<change> | abandon [<reason>]] | <feature description>]"
 disable-model-invocation: true
 ---
 
@@ -43,7 +43,8 @@ factory/
     ├── reviews/r<N>-<reviewer>.md
     ├── decision.md            approver
     ├── pr.md                  PR title (first line) and body, written by you
-    └── change-<n>.md          PR comment for change <n>, written by you
+    ├── change-<n>.md          PR comment for change <n>, written by you
+    └── abandon.md             PR comment with the reason of an abandon, written by you
 ```
 
 `board.md`:
@@ -109,11 +110,13 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
 1. `git rev-parse --show-toplevel` must succeed; compute `<session>` and `<main>` (see **Main
    checkout**). If `<main>/factory/config.md` or `<main>/factory/playbook.md`
    is missing, or the argument is `init`, tell the user to run `/devflow:init` and stop.
+   If the whole argument is `status` (case-insensitive, surrounding spaces ignored), read
+   `references/status.md` and stop: no forge file, no local state check, no steps 2-4.
    Read `<main>/factory/config.md` once; its frontmatter drives the run. `implementer_model` and
    `escalation_model` have the form `<model> / <effort>` (effort missing → `medium`); a missing key
    uses its default, `sonnet / medium` and `opus / medium`; `secrets_scan` missing is `auto`. Then read the **forge file**
    `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
-   commands of the six forge operations `auth`, `open-pr`, `update-pr`, `pr-state`,
+   commands of the forge operations `auth`, `open-pr`, `update-pr`, `close-pr`, `pr-state`,
    `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
    If `<session>` ≠ `<main>`, read `## Local state in a worktree` in `references/workspace.md`.
 2. Read `<main>/factory/board.md`. If there are `pr-open` rows, or `merged` rows whose local branch
@@ -123,7 +126,9 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
    - The argument is an existing id (full, or `NNN` matching `NNN-*`) → **resume that feature**,
      in any active state. The first token is the id, the rest (if any) is the change text; see
      **Changing a feature with an open PR** for `pr-open`, `merged` and `closed` rows and for the
-     text on active rows.
+     text on active rows. If the first word of the rest is `abandon` (case-insensitive), it wins
+     over a change text: read `references/abandon.md` (the rest after `abandon` is the reason) and
+     stop; step 2 has already run.
    - The argument is not an id → new feature. With `workspace: branch` keep the old behaviour: an
      active row is resumed and the argument is added as a `queued` feature (tell the user); with
      no active row, create it.
