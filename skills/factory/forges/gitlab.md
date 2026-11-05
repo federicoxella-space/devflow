@@ -25,6 +25,15 @@ glab mr note <IID> --message "$(cat "<comment file>")"
 Push or `glab mr update` fails → `needs-human` with the output. `glab mr note` fails → tell the user
 in one line and go on.
 
+## close-pr
+Input: reference, head, comment file (optional).
+```
+glab mr close <IID>
+glab mr note <IID> --message "$(cat "<comment file>")"
+```
+Close first, then comment if there is a comment file. `glab mr close` fails → return the output to
+the caller. `glab mr note` fails → tell the user in one line and go on.
+
 ## pr-state
 `glab mr view <IID> -F json`, field `state`: `merged` → `MERGED`, `closed` → `CLOSED`, `opened` or
 `locked` → `OPEN`. Command fails → `UNKNOWN`.

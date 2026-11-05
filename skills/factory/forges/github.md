@@ -24,6 +24,15 @@ gh pr comment "<reference>" --body-file "<comment file>"
 Push or `gh pr edit` fails → `needs-human` with the output. `gh pr comment` fails → tell the user in
 one line and go on.
 
+## close-pr
+Input: reference, head, comment file (optional).
+```
+gh pr close "<reference>"
+gh pr comment "<reference>" --body-file "<comment file>"
+```
+Close first, then comment if there is a comment file. `gh pr close` fails → return the output to the
+caller. `gh pr comment` fails → tell the user in one line and go on.
+
 ## pr-state
 `gh pr view <reference> --json state -q .state` → `MERGED`, `CLOSED` or `OPEN`, as is. Command
 fails → `UNKNOWN`.

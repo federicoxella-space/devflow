@@ -24,6 +24,10 @@ Push fails → `needs-human` with the output. Then tell the user: "Branch `<head
 title and description of the pull request by hand from `factory/features/<id>/pr.md`, and add the
 comment from `factory/features/<id>/change-<n>.md`."
 
+## close-pr
+Input: reference, head, comment file (optional). No command. Tell the user: "If a pull request
+exists for the branch `<head>`, close it by hand on your platform."
+
 ## pr-state
 After `git fetch --prune`: `bash <this skill's base directory>/scripts/git-merged.sh <branch> <base>`
 (branch from the board's branch column) → `merged` or `squashed` → `MERGED`, `open` → `OPEN`;
