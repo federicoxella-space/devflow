@@ -51,6 +51,9 @@
 - Changes to secrets scanner allowlists made in a feature (`.gitleaks.toml`, `.gitleaksignore`, new `gitleaks:allow` / `trufflehog:ignore` comments) need human approval: `skills/factory/scripts/secrets-scan.sh` trusts the scanned checkout's allowlist, so an implementer can silence its own finding.
 - User text that a skill passes to `board.sh` (note, log) is checked against what `board.sh` refuses (`|`, line breaks) before any irreversible step: in `skills/factory/references/abandon.md` the PR is closed before `set ... note='abandoned: <reason>'`, so a reason containing `|` leaves the PR closed and the board not updated.
 - Before `git worktree remove` on a feature's worktree, the plan shows any ignored files that will be deleted (`git status --porcelain --ignored`): in `skills/factory/references/abandon.md` and `references/pr-state.md` "clean" ignores ignored files, and removing the worktree without `--force` still deletes them (such as a local `.env`).
+- A `board.sh` command that writes two files writes the destination first, then the source, and a rerun after an interruption never duplicates lines (`archive`: archive, then board).
+- Shell and awk parsers of `board.md`/`archive.md` match headings with a trailing `[ \t\r]*`, so CRLF files still work.
+- A skill command whose placeholder is read from a board or archive cell (branch, PR) quotes it like user text: single quotes, `'` written `'\''`.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
