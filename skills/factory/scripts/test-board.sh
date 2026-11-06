@@ -30,7 +30,7 @@ run() {
   out=$(bash "$script" "$d" "$@" 2> "$tmp/err")
   code=$?
   err=$(cat "$tmp/err")
-  for f in "$d"/factory/board.md.tmp.* "$d"/factory/board.lock.stale.*; do
+  for f in "$d"/factory/board.md.tmp.* "$d"/factory/archive.md.tmp.* "$d"/factory/board.lock.stale.*; do
     if [ -e "$f" ]; then echo "      left $f"; leftover=$((leftover + 1)); rm -rf "$f"; fi
   done
   if [ "$foreign" = 0 ] && [ -e "$d/factory/board.lock" ]; then
@@ -158,6 +158,167 @@ m=$tmp/nolog; mkmain "$m"
 sed '/^## Log/,$d' "$m/factory/board.md" > "$tmp/b" && sed '$d' "$tmp/b" > "$m/factory/board.md"
 run "$m" log 001-alpha 'hello'
 check "log: creates ## Log at the end when missing" same "$(tail -n 3 "$m/factory/board.md" | sed '$d')" "$(printf '\n## Log')"
+
+# --- archive ------------------------------------------------------------------------------------------
+# mkarch <dir>: board with 001-alpha (build), 002-beta (merged), 003-gamma (closed), 004-delta
+# (pr-open), their log lines, an orphan log line (000-gone) and a log line in another format.
+mkarch() {
+  mkdir -p "$1/factory/features"
+  git init -q "$1"
+  {
+    printf '# Factory board\n\n'
+    printf '| id | feature | state | round | branch | PR |\n'
+    printf '|----|---------|-------|-------|--------|----|\n'
+    printf '| 001-alpha | Alpha | build | 1 | feature/001-alpha | |\n'
+    printf '| 002-beta | Beta | merged | 1 | feature/002-beta | https://x/pull/2 |\n'
+    printf '| 003-gamma | Gamma | closed | 2 | feature/003-gamma | https://x/pull/3 |\n'
+    printf '| 004-delta | Delta | pr-open | 1 | feature/004-delta | https://x/pull/4 |\n'
+    printf '\n## Log\n'
+    printf -- '- 2026-01-01 09:00 · 000-gone · removed by the user\n'
+    printf -- '- 2026-01-01 10:00 · 001-alpha · created → interview\n'
+    printf -- '- 2026-01-01 10:01 · 002-beta · created → interview\n'
+    printf -- '- 2026-01-01 10:02 · 003-gamma · created → interview\n'
+    printf -- '- hand-written note without a time\n'
+    printf -- '- 2026-01-02 10:00 · 002-beta · pr-open → merged\n'
+    printf -- '- 2026-01-02 10:01 · 004-delta · approve → pr-open\n'
+    printf -- '- 2026-01-02 10:02 · 003-gamma · pr-open → closed\n'
+  } > "$1/factory/board.md"
+}
+# Board of mkarch after `archive 002-beta 003-gamma`.
+arch_board() {
+  printf '# Factory board\n\n'
+  printf '| id | feature | state | round | branch | PR |\n'
+  printf '|----|---------|-------|-------|--------|----|\n'
+  printf '| 001-alpha | Alpha | build | 1 | feature/001-alpha | |\n'
+  printf '| 004-delta | Delta | pr-open | 1 | feature/004-delta | https://x/pull/4 |\n'
+  printf '\n## Log\n'
+  printf -- '- 2026-01-01 10:00 · 001-alpha · created → interview\n'
+  printf -- '- hand-written note without a time\n'
+  printf -- '- 2026-01-02 10:01 · 004-delta · approve → pr-open\n'
+}
+# Archive created by that run.
+arch_new() {
+  printf '# Factory archive\n\n'
+  printf '| id | feature | state | round | branch | PR |\n'
+  printf '|----|---------|-------|-------|--------|----|\n'
+  printf '| 002-beta | Beta | merged | 1 | feature/002-beta | https://x/pull/2 |\n'
+  printf '| 003-gamma | Gamma | closed | 2 | feature/003-gamma | https://x/pull/3 |\n'
+  printf '\n## Log\n'
+  printf -- '- 2026-01-01 09:00 · 000-gone · removed by the user\n'
+  printf -- '- 2026-01-01 10:01 · 002-beta · created → interview\n'
+  printf -- '- 2026-01-01 10:02 · 003-gamma · created → interview\n'
+  printf -- '- 2026-01-02 10:00 · 002-beta · pr-open → merged\n'
+  printf -- '- 2026-01-02 10:02 · 003-gamma · pr-open → closed\n'
+}
+
+m=$tmp/arch; mkarch "$m"; cp "$m/factory/board.md" "$tmp/arch-before"
+run "$m" archive 002-beta 003-gamma
+check "archive: exit 0, prints nothing" same "$code|$out|$err" "0||"
+arch_board > "$tmp/expected"
+check "archive: board keeps the other rows and log lines byte for byte" cmp -s "$m/factory/board.md" "$tmp/expected"
+arch_new > "$tmp/expected"
+check "archive: archive.md created with rows, their log and orphan log lines" cmp -s "$m/factory/archive.md" "$tmp/expected"
+
+# Interruption between the two writes: archive written, board not. Row 002-beta changed meanwhile.
+cp "$m/factory/archive.md" "$tmp/arch-first"
+sed 's/^| 002-beta | Beta | merged | 1 |/| 002-beta | Beta two | merged | 1 |/' "$tmp/arch-before" > "$m/factory/board.md"
+run "$m" archive 002-beta 003-gamma
+arch_board > "$tmp/expected"
+check "archive: rerun after an interruption -> board as after one run" cmp -s "$m/factory/board.md" "$tmp/expected"
+sed 's/^| 002-beta | Beta | merged | 1 |/| 002-beta | Beta two | merged | 1 |/' "$tmp/arch-first" > "$tmp/expected"
+check "archive: rerun replaces the row with the same id in place, no duplicated log line" \
+  cmp -s "$m/factory/archive.md" "$tmp/expected"
+
+# Existing archive: new rows after its last row, log lines at the end of its `## Log`.
+m=$tmp/arch-add; mkarch "$m"
+{
+  printf '# Factory archive\n\n'
+  printf '| id | feature | state | round | branch | PR |\n'
+  printf '|----|---------|-------|-------|--------|----|\n'
+  printf '| 000-old | Old | merged | 1 | | |\n'
+  printf '\n## Log\n'
+  printf -- '- 2025-12-01 10:00 · 000-old · created → interview\n'
+} > "$m/factory/archive.md"
+cp "$m/factory/archive.md" "$tmp/arch-old"
+run "$m" archive 002-beta
+{
+  sed -n '1,5p' "$tmp/arch-old"
+  printf '| 002-beta | Beta | merged | 1 | feature/002-beta | https://x/pull/2 |\n'
+  sed -n '6,$p' "$tmp/arch-old"
+  printf -- '- 2026-01-01 09:00 · 000-gone · removed by the user\n'
+  printf -- '- 2026-01-01 10:01 · 002-beta · created → interview\n'
+  printf -- '- 2026-01-02 10:00 · 002-beta · pr-open → merged\n'
+} > "$tmp/expected"
+check "archive: existing archive gets the row after its last row and the log at the end" \
+  cmp -s "$m/factory/archive.md" "$tmp/expected"
+check "archive: closed row not named stays in the board with its log" \
+  same "$(count "$m/factory/board.md" '| 003-gamma |') $(count "$m/factory/board.md" ' · 003-gamma · ')" "1 2"
+
+m=$tmp/arch-nolog; mkarch "$m"
+printf '# Factory archive\n\n| id | feature | state | round | branch | PR |\n|----|---------|-------|-------|--------|----|\n' > "$m/factory/archive.md"
+run "$m" archive 003-gamma
+check "archive: adds ## Log to an archive without it" \
+  same "$(sed -n '6,$p' "$m/factory/archive.md")" "$(printf '\n## Log\n- 2026-01-01 09:00 · 000-gone · removed by the user\n- 2026-01-01 10:02 · 003-gamma · created → interview\n- 2026-01-02 10:02 · 003-gamma · pr-open → closed')"
+
+m=$tmp/arch-orphan; mkarch "$m"
+run "$m" archive
+check "archive: no ids -> only orphan log lines move" \
+  same "$code $(count "$m/factory/board.md" '000-gone') $(count "$m/factory/archive.md" '000-gone') $(count "$m/factory/archive.md" '| 00')" "0 0 1 0"
+
+m=$tmp/arch-none; mkmain "$m"; cp "$m/factory/board.md" "$tmp/before"
+run "$m" archive
+check "archive: nothing to move -> exit 0, board unchanged, no archive.md" \
+  same "$code $(cmp -s "$m/factory/board.md" "$tmp/before" && echo same) $(test -e "$m/factory/archive.md" || echo none)" "0 same none"
+
+m=$tmp/arch-bad; mkarch "$m"; cp "$m/factory/board.md" "$tmp/before"
+invalid_archive() { # invalid_archive <description> <args...>: exit 2, board unchanged, no archive.md
+  local d=$1
+  shift
+  run "$m" archive "$@"
+  if [ "$code" = 2 ] && [ -n "$err" ] && cmp -s "$m/factory/board.md" "$tmp/before" \
+    && [ ! -e "$m/factory/archive.md" ]; then
+    echo "PASS  invalid: archive $d"
+  else
+    echo "FAIL  invalid: archive $d (exit $code, stderr '$err')"
+    fails=$((fails + 1))
+  fi
+}
+invalid_archive "id missing" 002-beta 999-none
+invalid_archive "row not merged or closed" 002-beta 001-alpha
+invalid_archive "pr-open row" 004-delta
+invalid_archive "id with |" 'a|b'
+printf '# Factory archive\n\nno table here\n' > "$m/factory/archive.md"
+cp "$m/factory/archive.md" "$tmp/arch-old"
+run "$m" archive 002-beta
+check "invalid: archive with archive.md without a table -> exit 2, no file changed" \
+  same "$code $(cmp -s "$m/factory/board.md" "$tmp/before" && cmp -s "$m/factory/archive.md" "$tmp/arch-old" && echo same)" "2 same"
+
+m=$tmp/arch-held; mkarch "$m"; cp "$m/factory/board.md" "$tmp/before"
+mkdir "$m/factory/board.lock"
+printf '%s\n' "$(date +%s) 99999 4242" > "$m/factory/board.lock/owner"
+foreign=1
+BOARD_LOCK_WAIT=1 run "$m" archive 002-beta
+check "locked: archive exits 1, board unchanged, no archive.md" \
+  same "$code $(cmp -s "$m/factory/board.md" "$tmp/before" && echo same) $(test -e "$m/factory/archive.md" || echo none)" "1 same none"
+rm -rf "$m/factory/board.lock"
+foreign=0
+
+m=$tmp/n-arch; mkmain "$m"
+printf '# Factory archive\n\n| id | feature | state | round | branch | PR |\n|----|---|---|---|---|---|\n| 040-old | Old | merged | 1 | | |\n' > "$m/factory/archive.md"
+run "$m" new gamma interview 'Gamma'
+check "new: highest archive id + 1" same "$code $out" "0 041-gamma"
+
+m=$tmp/log-arch; mkarch "$m"
+run "$m" archive 003-gamma
+cp "$m/factory/board.md" "$tmp/before"; cp "$m/factory/archive.md" "$tmp/arch-old"
+run "$m" log 003-gamma 'branch deleted'
+last=$(tail -n 1 "$m/factory/archive.md")
+check "log: archived id -> line at the end of the archive log" same "$code ${last#- ????-??-?? ??:?? · }" "0 003-gamma · branch deleted"
+check "log: archived id -> rest of the archive unchanged" same "$(sed '$d' "$m/factory/archive.md")" "$(cat "$tmp/arch-old")"
+check "log: archived id -> board unchanged" cmp -s "$m/factory/board.md" "$tmp/before"
+run "$m" log 999-none 'x'
+check "log: id in neither board nor archive -> exit 2, nothing changed" \
+  same "$code $(cmp -s "$m/factory/board.md" "$tmp/before" && echo same)" "2 same"
 
 # --- AC7: invalid input -------------------------------------------------------------------------------
 m=$tmp/bad; mkmain "$m"; cp "$m/factory/board.md" "$tmp/before"
@@ -352,7 +513,7 @@ check "parallel set on abandoned lock: no board.lock.stale.* left" \
 for f in "$m"/factory/board.md.tmp.*; do [ -e "$f" ] && { echo "      left $f"; leftover=$((leftover + 1)); }; done
 
 # --- AC9 and AC10 -------------------------------------------------------------------------------------
-check "no own lock, board.lock.stale.* or temp board file left after any run" same "$leftover" "0"
+check "no own lock, board.lock.stale.*, board.md.tmp.* or archive.md.tmp.* left after any run" same "$leftover" "0"
 gnu_only='stat -''c|date -''d|sed -''i|mv -''T|flo''ck'
 check "no GNU-only options or lock tool in board.sh and test-board.sh" \
   test -z "$(grep -nE "$gnu_only" "$script" "$src/test-board.sh")"

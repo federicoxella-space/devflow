@@ -1,16 +1,19 @@
 # Abandoning a feature
 
 Entry: `/devflow:factory <id> abandon [<reason>]`. Step 2 of `SKILL.md` (pr-state and cleanup) has
-already run: read the row of `<id>` again from `<main>/factory/board.md`. `<reason>` is the rest
-after `abandon`, possibly empty. The remote branch is never deleted, so the PR can be reopened.
+already run: read the row of `<id>` again from `<main>/factory/board.md`; if it is not there, from
+the table of `<main>/factory/archive.md` (an **archived** row). `<reason>` is the rest after
+`abandon`, possibly empty. The remote branch is never deleted, so the PR can be reopened.
 
 **0. Reason.** Before the plan compute the note reason from `<reason>`: `|` → `/`, line breaks and
 every other control character → a space, spaces at the ends removed (`board.sh` refuses `|` and
 control characters). Empty after this → no reason (note `abandoned`, no PR comment). The board note
 uses the normalized reason; the PR comment uses the original text.
 
-**1. State.** `merged` → say "feature already merged, nothing to abandon" and stop. `closed` →
-only the cleanup (points 3 and 4), state unchanged. Any other state → the state becomes `closed`.
+**1. State.** `merged` (archived or not) → say "feature already merged, nothing to abandon" and
+stop. `closed` (archived or not) → only the cleanup (points 3 and 4), state unchanged; on an
+archived row the `log` lines of point 6 go to the archive (`board.sh` does it by itself). Any other
+state → the state becomes `closed`.
 
 **2. PR.** The reference is the PR cell, if not empty.
 - Forge `github`, `gitlab` or `azure`: a `pr-open` row uses the outcome of step 2; another row that
@@ -53,6 +56,8 @@ clean up → say so and stop without a question. Cancel → nothing changes.
   is on origin or on the base branch). A failing command leaves that piece in place: one line to
   the user, go on. Log (`log <id> '<text>'`): "worktree and branch deleted", "worktree removed" or
   "branch deleted", according to what was removed.
+- Row of the board (not archived): after the planned cleanup, `archive '<id>'`, whatever the
+  cleanup left in place (see **Shared board** in `SKILL.md`).
 - Summary of one or two lines: what was done, what was kept and why.
 
 **7. Untouched:** the folder `factory/features/<id>/` (except `abandon.md`), `factory/backlog.md`,

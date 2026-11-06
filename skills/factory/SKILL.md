@@ -8,8 +8,8 @@ disable-model-invocation: true
 # Factory orchestrator
 
 You are the orchestrator. You run the loop below, spawn every agent, run the gate, and you are the
-**only writer** of `factory/board.md`. Agents never touch the board. Pass agents **file paths**, not
-file contents, so your context stays small.
+**only writer** of `factory/board.md` and `factory/archive.md`. Agents never touch them. Pass agents
+**file paths**, not file contents, so your context stays small.
 
 Talk to the user in their language. Artifacts are written in the language of `feature.md`.
 
@@ -29,6 +29,7 @@ factory/
 ├── playbook.md                committed: project rules + Definition of Done (user-approved)
 ├── backlog.md                 committed: deferred logic queued on the board (see Deferring logic)
 ├── board.md                   everything except config.md, playbook.md and backlog.md is gitignored
+├── archive.md                 merged and closed features moved out of board.md, same format
 └── features/<id>/             id = NNN-short-slug, e.g. 003-password-reset
     ├── feature.md             the request, as given by the user
     ├── playbook.md            request, workspace, interview, agent decisions, done checklist
@@ -72,7 +73,13 @@ only the row you name and appends the log lines atomically:
 - `new <slug> <state> <title> [<note>]` creates `features/<NNN>-<slug>/`, adds the row and the log
   `created → <state>`, and prints the id. Only `new` computes the next NNN.
 - `set <id> <key>=<value>...` (keys `state round branch pr feature note`) changes those cells; a new
-  `state` also logs `<old> → <new>` (with `note`). `log <id> <text>` appends a free log line.
+  `state` also logs `<old> → <new>` (with `note`). `log <id> <text>` appends a free log line; for
+  an id that is only in the archive it goes to the archive's log.
+- `archive [<id>...]` moves the rows of the given ids (each must be `merged` or `closed`) and every
+  log line whose id has no row left in the board to `factory/archive.md`: same format as the board,
+  title `# Factory archive`, created by the script. A rerun after an interruption duplicates
+  nothing. `set` changes only the board; the archive is read only where a line here or in a
+  reference says so.
 "Set state `X`", "round", "write the branch / PR in the board" and "log ..." in this file and in
 the references mean `set` and `log`. Arguments taken from the user's text (title, note, text) go in
 single quotes (a `'` inside is written `'\''`). If the script exits non-zero, tell the user its stderr
@@ -119,10 +126,14 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
    commands of the forge operations `auth`, `open-pr`, `update-pr`, `close-pr`, `pr-state`,
    `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
    If `<session>` ≠ `<main>`, read `## Local state in a worktree` in `references/workspace.md`.
-2. Read `<main>/factory/board.md`. If there are `pr-open` rows, or `merged` rows whose local branch
-   still exists, read `references/pr-state.md`.
+2. Read `<main>/factory/board.md`. If there are `pr-open`, `merged` or `closed` rows, or log lines
+   whose id has no row in the board, read `references/pr-state.md` (it also moves finished
+   features to the archive, so the first run after an update migrates an existing board).
 3. Pick the feature to work on. Active = state `interview`, `spec`, `spec-review`, `build`,
    `review` or `approve`.
+   - An id not in the board (full, or `NNN`) is looked up in the table of
+     `<main>/factory/archive.md`, read only in this case: an archived id behaves as a `merged` or
+     `closed` row of the board (see `references/change.md` and `references/abandon.md`).
    - The argument is an existing id (full, or `NNN` matching `NNN-*`) → **resume that feature**,
      in any active state. The first token is the id, the rest (if any) is the change text; see
      **Changing a feature with an open PR** for `pr-open`, `merged` and `closed` rows and for the
@@ -145,8 +156,8 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
 ## The loop
 
 ### Changing a feature with an open PR
-When the argument is an id of a `pr-open`, `merged` or `closed` row, an id with text, or the feature
-playbook has a change `in progress`, read `references/change.md`.
+When the argument is an id of a `pr-open`, `merged` or `closed` row (archived ones included), an id
+with text, or the feature playbook has a change `in progress`, read `references/change.md`.
 
 ### 0. Interview — state `interview`
 You run it (agents cannot talk to the user). Goal: nothing in the spec is guessed.

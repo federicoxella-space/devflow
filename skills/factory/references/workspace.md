@@ -3,13 +3,14 @@
 ## Local state in a worktree
 If `<session>` ≠ `<main>`: the local features are the ids of the
 rows of `<session>/factory/board.md` and the folders `<session>/factory/features/*`. If at least
-one is not in the board of `<main>` (full id): list ids and titles, explain the manual move
+one is neither in the board of `<main>` nor in the table of `<main>/factory/archive.md` (full id):
+list ids and titles, explain the manual move
 (copy the folder into `<main>/factory/features/`; if its id is already used, get the new NNN with
 `board.sh "<main>" new <slug> <state> '<title>'` (it reserves the folder and adds the row and the
 `created` log), copy the local folder's content into the created one and rename the branch, and copy
 only the log lines into the board; with no conflict copy the row as before; then delete
 `<session>/factory/board.md` and the copied folders) and stop without writing anything. Local
-features already in the main board do not block; suggest in one line to delete them.
+features already in the main board or archive do not block; suggest in one line to delete them.
 
 ## Workspace question
 Workspace, before any other question; skip it if `## Workspace` already exists (resume).
