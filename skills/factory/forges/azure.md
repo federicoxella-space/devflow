@@ -44,6 +44,15 @@ az devops invoke --area git --resource pullRequestThreads --route-parameters pro
 ```
 Any comment step fails → tell the user in one line and go on.
 
+## close-pr
+Input: reference, head, comment file (optional).
+```
+az repos pr update --id <id> --status abandoned --output json <org flag>
+```
+Fails → return the output to the caller. Then, if there is a comment file, post it as in the
+"Comment" part of `update-pr` (same steps, same JSON file); any comment step fails → tell the user
+in one line and go on.
+
 ## pr-state
 `az repos pr show --id <id> --output json <org flag>`, field `status`: `completed` → `MERGED`,
 `abandoned` → `CLOSED`, `active` → `OPEN`. Command fails → `UNKNOWN`.
