@@ -166,7 +166,9 @@ to close, worktree and branch to remove or keep, and why) and asks for confirmat
 the PR if it is open (the reason becomes a comment), sets the feature to `closed` with the note
 `abandoned: <reason>`, and removes the worktree and the local branch only if nothing is lost: no
 local changes and every commit on origin or on the base branch (never `--force`). The remote branch
-stays, so the PR can be reopened. A `merged` feature is refused; on a `closed` one only the cleanup
+stays, so the PR can be reopened. A `|` or line break in the reason becomes `/` or a space in the
+board note (the PR comment keeps the original text), and the plan lists the git-ignored files that
+removing the worktree will delete. A `merged` feature is refused; on a `closed` one only the cleanup
 runs. With forge `git` you close the PR by hand.
 
 ### 3. Follow the run: the flow pane
