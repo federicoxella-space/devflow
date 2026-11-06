@@ -30,10 +30,11 @@ list --porcelain` with `branch refs/heads/<branch>`, and `git -C "<folder>" stat
 ignored files that `worktree remove` will delete: list them in the plan.
 
 **4. Local branch** = the branch cell, if it exists (`git -C "<main>" rev-parse --verify --quiet
-"refs/heads/<branch>"`). First `git -C "<main>" fetch --prune`, once; if it fails the branch is kept
-("origin cannot be verified"). It is clean if `git -C "<main>" rev-list --count "<branch>" --not
-"<base_branch>" --remotes=origin` prints `0`; otherwise it is kept, with the number of local-only
-commits. If it is the branch of `<main>` (branch mode without `checkout:`): `<main>` clean
+'refs/heads/<branch>'`; `<branch>` comes from the board cell: in every command of this file it goes
+in single quotes, each `'` in it written `'\''` only in the command). First `git -C "<main>" fetch
+--prune`, once; if it fails the branch is kept ("origin cannot be verified"). It is clean if
+`git -C "<main>" rev-list --count '<branch>' --not "<base_branch>" --remotes=origin` prints `0`;
+otherwise it is kept, with the number of local-only commits. If it is the branch of `<main>` (branch mode without `checkout:`): `<main>` clean
 (`git -C "<main>" status --porcelain` empty) → `git -C "<main>" switch "<base_branch>"` before
 deleting it; not clean → kept. Checked out in another worktree that stays → kept.
 
@@ -52,7 +53,7 @@ clean up → say so and stop without a question. Cancel → nothing changes.
 - `set <id> state=closed note='abandoned'`, or `note='abandoned: <normalized reason>'` with every `'`
   of the reason written `'\''` only in the command (never in a stored file).
 - Planned cleanup: `git -C "<main>" worktree remove "<folder>"` (never `--force`), the `switch` if
-  planned, `git -C "<main>" branch -D "<branch>"` (`-D` is safe: point 4 checked that every commit
+  planned, `git -C "<main>" branch -D '<branch>'` (`-D` is safe: point 4 checked that every commit
   is on origin or on the base branch). A failing command leaves that piece in place: one line to
   the user, go on. Log (`log <id> '<text>'`): "worktree and branch deleted", "worktree removed" or
   "branch deleted", according to what was removed.

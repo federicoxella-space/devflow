@@ -23,21 +23,21 @@ features in parallel, at the cost of a separate folder and its setup. Write the 
 
 ## Approve
 - Approve, `branch` mode without `checkout:` → `git -C "<main>" switch "<base_branch>" && git -C
-  "<main>" pull --ff-only && git -C "<main>" switch -c "<kind>/<id>"` (`feature/<id>` or
+  "<main>" pull --ff-only && git -C "<main>" switch -c '<kind>/<id>'` (`feature/<id>` or
   `hotfix/<id>`), write the branch in the board. If `factory/backlog.md` has uncommitted changes,
   add `!factory/backlog.md` to `.gitignore` if missing, then
   `git -C "<main>" add factory/backlog.md .gitignore && git -C "<main>" commit -m "docs(factory):
   update backlog"` with the footer `Factory: <id>` (a hook rejection → `needs-human` with the
   output). Set state `build`, round `1`.
 - Approve, `branch` mode with `checkout: <dir>` → update `base_branch` in `<main>` as in worktree
-  step 1 below, then `git -C "<dir>" switch -c "<kind>/<id>" "<base_branch>"`, write the branch in
+  step 1 below, then `git -C "<dir>" switch -c '<kind>/<id>' "<base_branch>"`, write the branch in
   the board, and move the feature's backlog lines into `<dir>` as in worktree step 5 (with `<dir>`
   for `<path>`); only that step applies to the backlog, no commit of `factory/backlog.md` in
   `<main>`. Set state `build`, round `1`.
 - Approve, `worktree` mode:
   1. Update `base_branch` without switching branch in `<main>`: `git -C "<main>" pull --ff-only` if
      it is the current branch, else `git -C "<main>" fetch origin <base_branch>:<base_branch>`.
-  2. `git -C "<main>" worktree add -b "<kind>/<id>" "<path>" <base_branch>`; the branch column is
+  2. `git -C "<main>" worktree add -b '<kind>/<id>' "<path>" <base_branch>`; the branch column is
      `<kind>/<id>`, as in `branch` mode; log `spec-review → build · worktree <path>`.
   3. If `worktree_setup` in config is not empty, run it in `<path>`.
   4. An error → `needs-human` with the output. In 1-2 no worktree exists: the user fixes the cause

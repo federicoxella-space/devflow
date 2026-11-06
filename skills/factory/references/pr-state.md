@@ -17,11 +17,11 @@ once, then run **pr-state** for each (PR reference from the PR column, branch fr
 0. If the row's checkout folder exists (the worktree `<path>`, or `<dir>` of a `checkout:` line):
    if it is `<session>` or `<main>`, skip the removal and say so in one line. Otherwise
    `git -C "<main>" worktree remove "<folder>"` (never `--force`), then
-   `git -C "<main>" branch -D "<kind>/<id>"` and log "worktree and branch deleted". If the
+   `git -C "<main>" branch -D '<kind>/<id>'` and log "worktree and branch deleted". If the
    removal fails (e.g. local changes), keep both and say so in one line. Skip step 1 for this
    row.
 1. Without such a folder, if the branch is not checked out in any worktree
-   (`git -C "<main>" worktree list --porcelain`): `git -C "<main>" branch -D "<kind>/<id>"` and
+   (`git -C "<main>" worktree list --porcelain`): `git -C "<main>" branch -D '<kind>/<id>'` and
    log "branch deleted". `-D` because after a squash or rebase merge `-d` refuses; it is safe
    because pr-state, or the user editing the board, has confirmed the merge. If it is checked
    out somewhere, keep it and tell the user in one line.
@@ -32,8 +32,9 @@ once, then run **pr-state** for each (PR reference from the PR column, branch fr
    changes), tell the user in one line and go on.
 3. **Archive.** Re-read the board. The ids to archive are every `closed` row and every `merged` row
    whose local branch no longer exists: empty branch cell, or `git -C "<main>" rev-parse --verify
-   --quiet "refs/heads/<branch>"` fails. A `merged` row whose branch or worktree is left (cleanup
-   failed or skipped) stays in the board and is retried on the next run. If there is at least one
-   id, or a log line whose id has no row in the board, run `archive '<id>' ...` (see **Shared
-   board** in `SKILL.md`; no ids → `archive` alone, for the orphan log lines). A non-zero exit is
-   handled as any other board write.
+   --quiet 'refs/heads/<branch>'` fails (`<branch>` comes from the board cell: write each `'` in it
+   as `'\''` only in the command). A `merged` row whose branch or worktree is left (cleanup failed
+   or skipped) stays in the board and is retried on the next run. If there is at least one id, or a
+   log line whose id has no row in the board, run `archive '<id>' ...` (see **Shared board** in
+   `SKILL.md`, a `'` in an id written `'\''`; no ids → `archive` alone, for the orphan log lines). A
+   non-zero exit is handled as any other board write.

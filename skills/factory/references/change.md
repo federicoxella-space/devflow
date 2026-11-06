@@ -26,9 +26,10 @@ is not a change: read `references/abandon.md` instead and stop here.
    it after `## Deferred` if missing) `- Change <n> — <text> — from round <board round + 1> — in
    progress`, and to `## Interview` the line `**Change <n>.** <text>`. Set state `interview`, log
    `pr-open → interview · change <n>`.
-3. Align the branch: `branch` mode → `git -C "<dir>" switch "<branch>"` (if the local branch is
-   missing: `git -C "<dir>" switch -c "<branch>" --track "origin/<branch>"`), then
-   `git -C "<dir>" pull --ff-only`; `worktree` mode → `git -C "<path>" pull --ff-only`. A missing
+3. Align the branch: `branch` mode → `git -C "<dir>" switch '<branch>'` (if the local branch is
+   missing: `git -C "<dir>" switch -c '<branch>' --track 'origin/<branch>'`; `<branch>` from the
+   board cell, each `'` in it written `'\''` only in the command), then `git -C "<dir>" pull
+   --ff-only`; `worktree` mode → `git -C "<path>" pull --ff-only`. A missing
    `<dir>` or `<path>` → `needs-human`. Any error →
    `needs-human` with the output; the user fixes it and sets the state back to `interview`. The base
    branch is not merged in.
