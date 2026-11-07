@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.28.0 — 2026-11-07
+- feat(factory): archive finished features out of the board (#50)
+
 ## v0.27.0 — 2026-11-06
 - feat(factory): add status and abandon commands (#49)
 
