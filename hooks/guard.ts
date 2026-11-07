@@ -5,6 +5,10 @@ import type { Strings } from './i18n'
 
 const PROJECT_FILES = ['factory/board.md', 'factory/archive.md', 'factory/playbook.md']
 
+// cartella delle regole per feature: la scrive solo l'orchestratore (cartella e qualunque path sotto)
+const RULES_DIR = 'factory/rules'
+const RULES_MSG = `${RULES_DIR}/`
+
 /** `\` → `/`, `/` doppi ridotti, `.` e `..` risolti, minuscolo (confronto case-insensitive) */
 export function normPath(path: string): string {
   const p = path.replace(/\\/g, '/').replace(/\/{2,}/g, '/').toLowerCase()
@@ -71,9 +75,12 @@ export function checkWrite(type: string, path: string, roots: string[], t: Strin
   if (typeof type !== 'string' || typeof path !== 'string' || !path.trim()) return undefined
   const ty = bareType(type)
   const p = normPath(path.trim())
-  const rel = underFactory(p, Array.isArray(roots) ? roots : [])
+  const rs = Array.isArray(roots) ? roots : []
+  const rel = underFactory(p, rs)
   const project = PROJECT_FILES.find(f => f === rel)
   if (project) return t.guard.orchestrator(project)
+  // `underFactory` vuole un path sotto `factory/`: la cartella stessa si prova con un figlio fittizio
+  if (underFactory(`${p}/x`, rs)?.startsWith(RULES_MSG)) return t.guard.orchestrator(RULES_MSG)
   const out = allowedOutput(ty)
   if (out) return out.re.test(p) ? undefined : t.guard.only(ty, out.files)
   if (ty === 'implementer' && rel !== undefined) return t.guard.factory(ty)
@@ -450,10 +457,15 @@ function writeOp(scan: Scan, invs: Invocation[]): string | undefined {
   return hits[0]?.what
 }
 
-/** File del progetto (board o playbook) se `path`, dopo `normPath`, è quel file o finisce con `/<file>` */
+/**
+ * File del progetto (board, archivio o playbook) se `path`, dopo `normPath`, è quel file o finisce con `/<file>`;
+ * `factory/rules/` se è la cartella delle regole o un path sotto di essa (relativo o dopo un `/`)
+ */
 function projectFileOf(path: string): string | undefined {
   const p = normPath(path)
-  return PROJECT_FILES.find(f => p === f || p.endsWith(`/${f}`))
+  const f = PROJECT_FILES.find(f => p === f || p.endsWith(`/${f}`))
+  if (f) return f
+  return /(^|\/)factory\/rules(\/|$)/.test(p) ? RULES_MSG : undefined
 }
 
 /**
