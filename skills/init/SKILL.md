@@ -29,7 +29,7 @@ file.
   a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
   offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
   `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty, without `implementer_model` as `sonnet / medium`, without
-  `escalation_model` as `opus / medium`, without `secrets_scan` as `auto`: nothing
+  `escalation_model` as `opus / medium`, without `secrets_scan` as `auto`, without `budget_tokens` as no limit: nothing
   to migrate.
   Never touch an existing `factory/board.md`.
 
@@ -186,6 +186,7 @@ release: "off"         # auto | off — automatic tag + release on every merged 
 workspace: ask         # ask | branch | worktree — where a new feature runs
 worktree_setup: ""     # worktree only: command run in a new worktree, e.g. npm ci (empty = none)
 secrets_scan: auto     # auto | gitleaks | trufflehog | off — secrets scanner run before each commit
+budget_tokens: ""        # optional: token limit per run (empty or 0 = none)
 ---
 Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
 
