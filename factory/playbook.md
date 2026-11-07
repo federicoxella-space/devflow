@@ -56,6 +56,9 @@
 - A skill command whose placeholder is read from a board or archive cell (branch, PR) quotes it like user text: single quotes, `'` written `'\''`.
 - When a pane layout formula is generalised from a fixed count to n, a test pins the coordinates of the old case: in `hooks/svg.ts` the metrics width went from `(W-70)/4` to a formula that gives different values for 4, and a test that only counted the `rect` elements did not catch the regression.
 - Parsers on the pane render path aggregate with `reduce`, never `Math.max(...array)` over file lines: `hooks/feature.ts` spread every `usage.md` row as arguments, which throws on very large files despite the "never throws" contract.
+- A guard rule that protects a folder also covers the folder path itself, without a trailing `/`, both relative and under a root: `normPath` drops the trailing `/` and `underFactory` in `hooks/guard.ts` only matches `<root>/factory/...`, so without a dedicated case a `Write` on `F:/devflow/factory/rules` escaped the check.
+- An awk script that reads two files with `FNR == NR` handles an empty first file (check `FILENAME` or load it in `BEGIN`): in `skills/factory/scripts/rules.sh` an empty playbook makes the rule file be parsed as the playbook.
+- Scripts that read files out of a git tree checked out from the base branch only process regular blobs (mode `100644`) and skip symlinks: `skills/factory/scripts/rules.sh` reads `factory/rules/*.md` from the checkout, so a symlink merged through a PR would make it read a local file and push that file's content.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.
