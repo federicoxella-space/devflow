@@ -99,7 +99,11 @@ git commit -m "chore: set up devflow factory"
 6. **Rule proposals**: conventions the agents discovered are shown in a single list, each with the
    reason it came up, and you approve them in one answer (`1,3`, `all`, `none`, or `2: new text` to
    rewrite one). Conflicting rules are asked before the list, rules that depend on another after
-   it. Approved ones are added to the project playbook.
+   it. Approved ones are saved in `factory/rules/<id>.md` and committed in the feature branch, so
+   parallel features never conflict on the playbook; agents read them from the first moment. After
+   the PR merges, the next factory run adds them to the end of the playbook sections, removes the
+   file and publishes one commit on the base branch (if the push fails, it says so and retries at
+   the next run).
 7. **Pull request** on the configured forge (merge request on GitLab), titled in Conventional
    Commits format (`feat(scope): ...`), so a squash merge leaves a conventional commit on the base
    branch. The title is the one you approved in the spec. In git only mode the branch is pushed and the title and description
@@ -228,8 +232,8 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   constraints, so they no longer rest on the prompts alone. A reviewer (`review-*`), the approver and
   the spec-checker write only their own result file (`reviews/r<N>-<x>.md`, `decision.md`,
   `spec-check.md`); the spec-writer only `spec.md` and `playbook.md` of its feature; the implementer
-  nothing under `factory/`. No agent writes `factory/board.md`, `factory/archive.md` or the project `factory/playbook.md`,
-  runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
+  nothing under `factory/`. No agent writes `factory/board.md`, `factory/archive.md` the project `factory/playbook.md` or
+  `factory/rules/`, runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
   git state (commit, add, checkout, stash...) or modify files from the shell (redirects, `rm`, `mv`,
   `sed -i`, PowerShell equivalents). Commands run inside another command (`bash -c`, `pwsh -Command`,
   `cmd /c`, `$(...)`) are checked too; quoted text, such as a commit message, is not:
@@ -259,6 +263,7 @@ factory/
 ├── config.md          commands, forge, release, workspace, ui_review... (committed)
 ├── playbook.md        project rules + Definition of Done                (committed)
 ├── backlog.md         deferred logic queued on the board                (committed)
+├── rules/<id>.md      approved rules until their PR merges              (committed)
 ├── board.md           one row per live feature + log                    (gitignored)
 ├── archive.md         merged and closed features moved out of the board (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, PR text     (gitignored)

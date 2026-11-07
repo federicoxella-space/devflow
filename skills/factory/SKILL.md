@@ -28,7 +28,8 @@ factory/
 ├── config.md                  committed: commands, forge (github | gitlab | azure | git), workspace, ...
 ├── playbook.md                committed: project rules + Definition of Done (user-approved)
 ├── backlog.md                 committed: deferred logic queued on the board (see Deferring logic)
-├── board.md                   everything except config.md, playbook.md and backlog.md is gitignored
+├── rules/<id>.md              committed in the feature branch: rules approved at 6b, merged into playbook.md after the PR merges
+├── board.md                   everything except config.md, playbook.md, backlog.md and rules/ is gitignored
 ├── archive.md                 merged and closed features moved out of board.md, same format
 └── features/<id>/             id = NNN-short-slug, e.g. 003-password-reset
     ├── feature.md             the request, as given by the user
@@ -134,6 +135,14 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
 2. Read `<main>/factory/board.md`. If there are `pr-open`, `merged` or `closed` rows, or log lines
    whose id has no row in the board, read `references/pr-state.md` (it also moves finished
    features to the archive, so the first run after an update migrates an existing board).
+2b. Merge the feature rules (every run except `status`): `bash "<base dir of this skill>/scripts/rules.sh"
+   "<main>" '<base_branch>'` (a `'` inside is written `'\''`). It adds the approved rules of
+   merged features to `factory/playbook.md` with one commit on `base_branch`, published, and
+   removes their `factory/rules/<id>.md`. Output `none` → nothing. `merged <id> <id>...` → tell the
+   user in one line and `log '<id>' 'rules merged into playbook'` for each id (an archived id logs
+   into the archive). Exit ≠ 0 → one line with its stderr and "the rules stay in `factory/rules/`
+   and apply; retrying at the next run", then go on. A feature closed without merge touches
+   nothing: its rules file exists only in its own branch.
 3. Pick the feature to work on. Active = state `interview`, `spec`, `spec-review`, `build`,
    `review` or `approve`.
    - An id not in the board (full, or `NNN`) is looked up in the table of
@@ -167,7 +176,8 @@ with text, or the feature playbook has a change `in progress`, read `references/
 ### 0. Interview — state `interview`
 You run it (agents cannot talk to the user). Goal: nothing in the spec is guessed.
 0. Workspace, before any other question: read `## Workspace question` in `references/workspace.md`.
-1. Read `feature.md`, `factory/playbook.md` and the code the request touches.
+1. Read `feature.md`, `factory/playbook.md`, `<main>/factory/rules/*.md` (approved rules not yet
+   merged into the playbook; they apply like it) and the code the request touches.
 2. List for yourself the gaps: everything that cannot be derived from the request, the playbook or
    the code, plus missing details (error behaviour, edge cases, permissions, visible text, data,
    compatibility).
