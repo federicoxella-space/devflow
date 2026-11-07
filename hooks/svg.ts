@@ -185,7 +185,7 @@ export function flowSvg(
     [t.metricTime, clock(view.elapsedMs)],
   ]
   if (view.tokens) metrics.push([t.metricTokens, tokensText(view.tokens)])
-  const bw = Math.floor((W - 20 - 10 * metrics.length) / metrics.length)
+  const bw = Math.floor((W - 30 - 10 * metrics.length) / metrics.length)
   let body = header(t, W, view.featureId, `${view.title} · ${view.branch}`, badge)
   metrics.forEach(([label, value], i) => {
     const x = 20 + i * (bw + 10), w = i === metrics.length - 1 ? W - 20 - x : bw

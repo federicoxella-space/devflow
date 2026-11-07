@@ -164,7 +164,7 @@ export function parseUsage(text: string | undefined): UsageView | undefined {
     }
   }
   if (!limits.length && !rows.length) return undefined
-  const run = Math.max(...limits.map(l => l.run), ...rows.map(r => r.run))
+  const run = [...limits, ...rows].reduce((m, x) => Math.max(m, x.run), 0)
   const cur = rows.filter(r => r.run === run)
   const limit = limits.filter(l => l.run === run).pop()?.limit
   return {

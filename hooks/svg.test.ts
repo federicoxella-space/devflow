@@ -241,3 +241,9 @@ test('token: fase senza agenti in corso mostra gli agenti finiti al posto della 
   expect(source.includes('spec-writer 38k · spec-checker 12k')).toBe(true)
   expect(source.includes(STRINGS.en.desc.spec)).toBe(false)
 })
+
+test('senza tokens: le quattro metriche mantengono x e larghezza di prima (W=680)', () => {
+  const { source } = flowSvg(VIEW, 680, STRINGS.en, 'auto', NOW)
+  const boxes = [...source.matchAll(/<rect x="(\d+)" y="80" width="(\d+)"/g)].map(m => [Number(m[1]), Number(m[2])])
+  expect(boxes).toEqual([[20, 152], [182, 152], [344, 152], [506, 154]])
+})
