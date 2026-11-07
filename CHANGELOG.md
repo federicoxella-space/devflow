@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.28.0 — 2026-11-07
+- feat(factory): archive finished features out of the board (#50)
+
+## v0.27.0 — 2026-11-06
+- feat(factory): add status and abandon commands (#49)
+
+## v0.26.0 — 2026-11-04
+- feat(factory): scan changed files for secrets before commit (#48)
+
+## v0.25.1 — 2026-11-04
+- fix(factory): single-quote create-issue arguments in forge files (#47)
+
+## v0.25.0 — 2026-11-04
+- feat(factory): decide the PR title in the spec, not in the committer (#46)
+
+## v0.24.0 — 2026-11-04
+- feat(factory): write the shared board through a locked script (#43)
+
+## v0.23.0 — 2026-11-03
+- feat(pane): enforce devflow agent constraints with a guard (#41)
+
+## v0.22.3 — 2026-11-02
+- fix(evals): note read-only sandbox in pr-open-merged case (#40)
+
+## v0.22.2 — 2026-11-01
+- refactor(factory): move conditional skill parts into references (#39)
+
+## v0.22.1 — 2026-11-01
+- fix(evals): guard scaffolds against a non-empty current directory (#38)
+
+## v0.22.0 — 2026-11-01
+- feat(evals): add local skill evals for init, factory and spec-checker (#37)
+
 ## v0.21.1 — 2026-10-31
 - ci: check pull requests with type check, validate, tests and title (#36)
 

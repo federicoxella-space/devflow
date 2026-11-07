@@ -58,7 +58,7 @@ const agentLine = ({ Text }: Pick<Els, 'Text'>, a: AgentCard, t: Strings, now: n
   const activity = a.activity === '@thinking' || a.activity === '@starting' ? t.thinking : a.activity
   return (
     <Text key={a.id} color={DARK[modelVar(family(a.model))]}>
-      {`  ${a.description} · ${label} · ${shortModel(a.model)} · ⏱ ${clock((a.endedAt ?? now) - a.startedAt)} · ${activity}`}
+      {`  ${a.description} · ${label} · ${shortModel(a.model)} · ⏱ ${clock((a.endedAt ?? now) - a.startedAt)}${(a.blocked ?? 0) > 0 ? ` · ${t.blocked(a.blocked ?? 0)}` : ''} · ${activity}`}
     </Text>
   )
 }

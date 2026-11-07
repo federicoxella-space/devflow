@@ -48,3 +48,8 @@ test('showsFlow: riga assente → riepilogo; attiva o run attiva → flusso', ()
   expect(showsFlow({ active: false, featureId: 'f' }, row('needs-human'))).toBe(false)
   expect(showsFlow({ active: true, featureId: 'f' }, row('pr-open'))).toBe(true)
 })
+
+test('parseCards: blocked numerico si mantiene, non numerico scarta la card', () => {
+  const ok = { ...card('a', 'running'), blocked: 2 }
+  expect(parseCards({ a: ok, b: { ...ok, id: 'b', blocked: '2' }, c: { ...ok, id: 'c', blocked: null } })).toEqual({ a: ok })
+})

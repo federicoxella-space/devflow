@@ -1,0 +1,25 @@
+schema_version: "1.1"
+name: init-unknown-stack
+description: init on a repo with code but an unknown stack asks the user for the commands and runs no stack interview
+runs: 1
+tags: [init, shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+  prompt: /devflow:init
+graders:
+  - name: names-lua
+    type: regex
+    pattern: 'lua'
+    flags: i
+  - name: asks-commands-no-interview
+    type: llm
+    criteria: |
+      PASS if the final message names Lua as the language found in the repo, asks the user for the
+      build, lint and test commands and for the ui_review setting, and does not run a stack
+      interview: no questions about what to build, users or hosting, no stack recommendation.
+      FAIL if it does not mention Lua, invents the commands without asking, or starts a stack
+      interview.

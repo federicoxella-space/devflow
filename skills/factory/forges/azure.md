@@ -21,7 +21,7 @@ Scope flags, used by the commands below:
 ## open-pr
 ```
 git push -u origin <head>
-az repos pr create --source-branch <head> --target-branch <base> --title "<title>" --description "$(cat <body file>)" --output json <scope flags>
+az repos pr create --source-branch <head> --target-branch <base> --title '<title>' --description "$(cat <body file>)" --output json <scope flags>
 ```
 Reference = `<repository.webUrl>/pullrequest/<pullRequestId>` from the JSON output.
 
@@ -29,7 +29,7 @@ Reference = `<repository.webUrl>/pullrequest/<pullRequestId>` from the JSON outp
 Input: reference, head, title, body file, comment file.
 ```
 git push origin "<head>"
-az repos pr update --id <id> --title "<title>" --description "$(cat "<body file>")" --output json <org flag>
+az repos pr update --id <id> --title '<title>' --description "$(cat "<body file>")" --output json <org flag>
 ```
 Push or `az repos pr update` fails → `needs-human` with the output.
 
@@ -44,6 +44,15 @@ az devops invoke --area git --resource pullRequestThreads --route-parameters pro
 ```
 Any comment step fails → tell the user in one line and go on.
 
+## close-pr
+Input: reference, head, comment file (optional).
+```
+az repos pr update --id <id> --status abandoned --output json <org flag>
+```
+Fails → return the output to the caller. Then, if there is a comment file, post it as in the
+"Comment" part of `update-pr` (same steps, same JSON file); any comment step fails → tell the user
+in one line and go on.
+
 ## pr-state
 `az repos pr show --id <id> --output json <org flag>`, field `status`: `completed` → `MERGED`,
 `abandoned` → `CLOSED`, `active` → `OPEN`. Command fails → `UNKNOWN`.
@@ -56,6 +65,8 @@ succeeds → `true`; fails → `false` (Boards disabled or no access).
 Azure Boards has no labels: use tags. Try the work item types in order until one is accepted
 (they depend on the process template): `Issue`, `User Story`, `Product Backlog Item`.
 ```
-az boards work-item create --type "<type>" --title "<title>" --description "$(sed 's/$/<br>/' <body file>)" --fields "System.Tags=devflow; deferred" --output json <scope flags>
+az boards work-item create --type '<type>' --title '<title>' --description "$(sed 's/$/<br>/' '<body file>')" --fields "System.Tags=devflow; deferred" --output json <scope flags>
 ```
+When building the command, write every `'` in `<title>` as `'\''`; the body file is written as is.
+
 (`--description` is HTML, hence the `<br>`.) Result = `_links.html.href` from the JSON output.

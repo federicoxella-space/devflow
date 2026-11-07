@@ -1,0 +1,22 @@
+schema_version: "1.1"
+name: factory-resume-interview
+runs: 1
+tags: [factory, shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: /devflow:factory 002
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+graders:
+  - name: one-new-question
+    type: llm
+    criteria: |
+      The final message resumes the interview of feature 002-greeting (a `greet` command for
+      cli.py) and asks the user exactly one new question about the feature.
+      PASS if the final message poses a single new question about the feature that is not about
+      the language of the greeting and not about whether to use a branch or a worktree.
+      FAIL if it asks again which language the greeting should use (already answered: English
+      only), asks whether to work in a branch or a worktree, asks several questions at once, or
+      asks no question at all.

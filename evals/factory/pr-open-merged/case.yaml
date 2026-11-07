@@ -1,0 +1,38 @@
+schema_version: "1.1"
+name: factory-pr-open-merged
+runs: 1
+tags: [factory, shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: /devflow:factory
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+  append_system_prompt: >-
+    Environment note: in this run, shell commands that write inside the repository, including its
+    .git directory, fail with a read-only file system error. This is a limit of the evaluation
+    environment and is expected. Do not skip any step of the skill because of it: run every step
+    the skill prescribes, in order, and when a command fails, handle the failure exactly as the
+    skill says. File changes made with the Write and Edit tools work normally.
+graders:
+  - name: board-merged-written
+    type: tool_used
+    tool: Bash
+    input_match: 'board\.sh[^\n]*001-hello[^\n]*merged'
+    min: 1
+  - name: git-merged-script-run
+    type: tool_used
+    tool: Bash
+    input_match: 'git-merged\.sh'
+    min: 1
+  - name: branch-deleted
+    type: tool_used
+    tool: Bash
+    input_match: 'branch -D[^\n]*feature/001-hello'
+    min: 1
+  - name: base-updated
+    type: tool_used
+    tool: Bash
+    input_match: 'pull --ff-only'
+    min: 1

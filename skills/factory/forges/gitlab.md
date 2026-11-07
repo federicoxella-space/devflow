@@ -11,7 +11,7 @@ its IID is the number after `/-/merge_requests/`.
 ## open-pr
 ```
 git push -u origin <head>
-glab mr create --source-branch <head> --target-branch <base> --title "<title>" --description "$(cat <body file>)" --yes
+glab mr create --source-branch <head> --target-branch <base> --title '<title>' --description "$(cat <body file>)" --yes
 ```
 Reference = the MR URL in the output (the line containing `/-/merge_requests/`).
 
@@ -19,11 +19,20 @@ Reference = the MR URL in the output (the line containing `/-/merge_requests/`).
 Input: reference, head, title, body file, comment file.
 ```
 git push origin "<head>"
-glab mr update <IID> --title "<title>" --description "$(cat "<body file>")"
+glab mr update <IID> --title '<title>' --description "$(cat "<body file>")"
 glab mr note <IID> --message "$(cat "<comment file>")"
 ```
 Push or `glab mr update` fails → `needs-human` with the output. `glab mr note` fails → tell the user
 in one line and go on.
+
+## close-pr
+Input: reference, head, comment file (optional).
+```
+glab mr close <IID>
+glab mr note <IID> --message "$(cat "<comment file>")"
+```
+Close first, then comment if there is a comment file. `glab mr close` fails → return the output to
+the caller. `glab mr note` fails → tell the user in one line and go on.
 
 ## pr-state
 `glab mr view <IID> -F json`, field `state`: `merged` → `MERGED`, `closed` → `CLOSED`, `opened` or
@@ -37,7 +46,9 @@ in one line and go on.
 ```
 glab label create --name devflow --color "#5319E7" --description "Created by devflow factory"
 glab label create --name deferred --color "#FBCA04" --description "Logic deferred from a devflow interview"
-glab issue create --title "<title>" --description "$(cat <body file>)" --label devflow,deferred,enhancement --yes
+glab issue create --title '<title>' --description "$(cat '<body file>')" --label devflow,deferred,enhancement --yes
 ```
+When building the command, write every `'` in `<title>` as `'\''`; the body file is written as is.
+
 Ignore "already exists" from `glab label create`; if a label still cannot be used, create the issue
 without it. Result = the issue URL in the output.

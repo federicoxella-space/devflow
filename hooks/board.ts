@@ -64,6 +64,16 @@ export function summarize(board: { rows: BoardRow[]; log: LogLine[] }): BoardSum
   return { queued, open, stuck, merged }
 }
 
+/** Board più archivio per il riepilogo: righe `merged` dell'archivio con id non nel board; log dell'archivio seguito da quello del board */
+export function withArchive(
+  board: { rows: BoardRow[]; log: LogLine[] },
+  archive: { rows: BoardRow[]; log: LogLine[] },
+): { rows: BoardRow[]; log: LogLine[] } {
+  const ids = new Set(board.rows.map(r => r.id))
+  const extra = archive.rows.filter(r => r.state === 'merged' && !ids.has(r.id))
+  return { rows: [...board.rows, ...extra], log: [...archive.log, ...board.log] }
+}
+
 /** Stati in cui una riga è lavoro in corso della factory */
 export const ACTIVE_STATES = new Set(['interview', 'spec', 'spec-review', 'build', 'review', 'approve'])
 

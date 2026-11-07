@@ -108,7 +108,9 @@ const card = (a: AgentCard, y: number, i: number, W: number, t: Strings, now: nu
   const activity = a.activity === '@thinking' || a.activity === '@starting' ? `○ ${t.thinking}` : `↳ ${a.activity}`
   const timeText = `⏱ ${clock((a.endedAt ?? now) - a.startedAt)}`
   const offset = (i * 400) % 1200
-  const line2Max = Math.floor((w - 28 - timeText.length * SMALL - 12) / SMALL)
+  const blockedText = (a.blocked ?? 0) > 0 ? t.blocked(a.blocked ?? 0) : ''
+  const blockedW = blockedText ? (blockedText.length * SMALL + 12) : 0
+  const line2Max = Math.floor((w - 28 - timeText.length * SMALL - 12 - blockedW) / SMALL)
   const showLabel = labelX + label.length * SMALL < x + w - 14 - rightW - 6
   return (
     `<rect x="${x}" y="${y}" width="${w}" height="${CARD_H}" rx="6" fill="none" stroke-width="4" opacity="0.15" style="stroke:var(${v})"/>` +
@@ -118,6 +120,7 @@ const card = (a: AgentCard, y: number, i: number, W: number, t: Strings, now: nu
     (showLabel ? txt('d', labelX, y + 19, esc(label)) : '') +
     txt('m', x + w - 14, y + 19, esc(right), ` text-anchor="end" style="fill:var(${v})"`) +
     txt('d', x + 28, y + 37, esc(cut(activity, line2Max))) +
+    (blockedText ? txt('d', x + w - 14 - timeText.length * SMALL - 12, y + 37, esc(blockedText), ' text-anchor="end" style="fill:var(--rd)"') : '') +
     txt('d', x + w - 14, y + 37, esc(timeText), ' text-anchor="end"')
   )
 }

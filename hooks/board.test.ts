@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { bindFeature, featureOfArg, isTerminal, mainCheckoutOf, parseBoard, soleActive, summarize } from './board'
+import { bindFeature, featureOfArg, isTerminal, mainCheckoutOf, parseBoard, soleActive, summarize, withArchive } from './board'
 
 const BOARD = `# Factory board
 
@@ -59,6 +59,27 @@ test('riepilogo', () => {
   expect(s.merged).toHaveLength(3)
   expect(s.merged.map(m => m.row.id)).toEqual(['009-m4', '008-m3', '007-m2'])
   expect(s.merged[0]?.at).toBe('2026-10-04 09:00')
+})
+test('withArchive: ultime 3 merged anche dall archivio, il board vince a parità di id', () => {
+  const archive = parseBoard([
+    '| id | feature | state | round | branch | PR |',
+    '|----|---------|-------|-------|--------|----|',
+    '| 001-m1 | Archived copy | merged | 1 | | #1 |',
+    '| 020-a | Arch merged | merged | 1 | | #20 |',
+    '| 021-c | Arch closed | closed | 1 | | #21 |',
+    '',
+    '## Log',
+    '- 2026-10-04 12:00 · 020-a · pr-open → merged',
+    '- 2026-09-01 09:00 · 001-m1 · old log',
+  ].join('\n'))
+  const w = withArchive(parseBoard(MIXED), archive)
+  expect(w.rows.filter(r => r.id === '001-m1')).toHaveLength(1)
+  expect(w.rows.find(r => r.id === '001-m1')?.feature).toBe('Merged one')
+  expect(w.rows.some(r => r.id === '021-c')).toBe(false)
+  expect(w.log.slice(0, archive.log.length)).toEqual(archive.log)
+  const s = summarize(w)
+  expect(s.merged.map(m => m.row.id)).toEqual(['020-a', '009-m4', '008-m3'])
+  expect(summarize(withArchive(parseBoard(MIXED), parseBoard(''))).merged.map(m => m.row.id)).toEqual(['009-m4', '008-m3', '007-m2'])
 })
 test('stati terminali', () => {
   expect(isTerminal('merged')).toBe(true)

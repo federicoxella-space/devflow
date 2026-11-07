@@ -10,7 +10,7 @@ Enterprise).
 ## open-pr
 ```
 git push -u origin <head>
-gh pr create --base <base> --head <head> --title "<title>" --body-file <body file>
+gh pr create --base <base> --head <head> --title '<title>' --body-file <body file>
 ```
 Reference = the URL printed by `gh pr create`.
 
@@ -18,11 +18,20 @@ Reference = the URL printed by `gh pr create`.
 Input: reference, head, title, body file, comment file.
 ```
 git push origin "<head>"
-gh pr edit "<reference>" --title "<title>" --body-file "<body file>"
+gh pr edit "<reference>" --title '<title>' --body-file "<body file>"
 gh pr comment "<reference>" --body-file "<comment file>"
 ```
 Push or `gh pr edit` fails → `needs-human` with the output. `gh pr comment` fails → tell the user in
 one line and go on.
+
+## close-pr
+Input: reference, head, comment file (optional).
+```
+gh pr close "<reference>"
+gh pr comment "<reference>" --body-file "<comment file>"
+```
+Close first, then comment if there is a comment file. `gh pr close` fails → return the output to the
+caller. `gh pr comment` fails → tell the user in one line and go on.
 
 ## pr-state
 `gh pr view <reference> --json state -q .state` → `MERGED`, `CLOSED` or `OPEN`, as is. Command
@@ -36,7 +45,9 @@ or a failure → `false`.
 ```
 gh label create devflow --color 5319E7 --description "Created by devflow factory"
 gh label create deferred --color FBCA04 --description "Logic deferred from a devflow interview"
-gh issue create --title "<title>" --body-file <body file> --label devflow,deferred,enhancement
+gh issue create --title '<title>' --body-file '<body file>' --label devflow,deferred,enhancement
 ```
+When building the command, write every `'` in `<title>` as `'\''`; the body file is written as is.
+
 Ignore "already exists" from `gh label create`; if a label still cannot be used, create the issue
 without it. Result = the issue URL printed by `gh issue create`.

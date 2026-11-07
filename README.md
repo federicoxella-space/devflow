@@ -46,6 +46,8 @@ Run once in each repo you want to use the factory in.
   instance it asks the platform and its host. Any other platform works in **git only** mode.
 - Asks where new features run (`workspace`: **Ask**, **Branch** or **Worktree**) and proposes
   `worktree_setup`, the command that prepares a new worktree (e.g. `npm ci`).
+- Writes `secrets_scan: auto` and, if neither gitleaks nor trufflehog is installed, suggests
+  installing one.
 - Optionally enables **automatic releases** (GitHub and GitLab, see below).
 - Drafts the **project playbook**: conventions, patterns, reusable code and the Definition of
   Done. You review it before it is written.
@@ -72,7 +74,9 @@ git commit -m "chore: set up devflow factory"
    open design decisions; gaps go back to the spec-writer (at most twice) and the remaining ones are
    asked to you as open questions. You first read the expected result (a usage scenario with a concrete example), then
    you approve the spec, the done checklist (acceptance criteria + Definition of Done)
-   and whether it is a `feature/` or a `hotfix/` branch.
+   and whether it is a `feature/` or a `hotfix/` branch. You also approve the PR title and the
+   version bump it produces (`PR title: feat(scope): ... → bump minor`); a breaking change has a
+   `!` in the title and an explicit warning saying what breaks.
 3. **Build**: independent tasks are implemented in parallel by one agent, the implementer, on
    sonnet (`implementer_model` in `config.md`, default `sonnet / medium`). If an implementer stops
    for a missing design decision, the spec-writer completes the spec and the work resumes. If it
@@ -81,7 +85,12 @@ git commit -m "chore: set up devflow factory"
    (`escalation_model`, default `opus / medium`) with a handover of the previous attempt; if that
    fails too, the factory stops and asks you. `complex` tasks (security-sensitive, concurrent,
    destructive migrations) start directly on opus. Then build, lint and tests must pass. The factory refuses to commit secrets,
-   `.env` files, build output or large unowned binaries; the changes are committed as
+   `.env` files, build output or large unowned binaries. Before each commit it scans the changed
+   files with gitleaks (or trufflehog), as set by `secrets_scan` in `config.md` (`auto`, `gitleaks`,
+   `trufflehog`, `off`). A finding stops the feature in `needs-human` with a report (file, line, rule,
+   never the value) on how to remove the secret or allow a false positive; with no scanner installed
+   the model's own check is used and the board log says so. The security reviewer runs the same
+   scanner on the PR diff. The changes are committed as
    Conventional Commits, one commit per task.
 4. **Reviews**: code (opus), security, UX and UI reviewers run in parallel; blocking findings go back to
    the implementers.
@@ -92,14 +101,24 @@ git commit -m "chore: set up devflow factory"
    it. Approved ones are added to the project playbook.
 7. **Pull request** on the configured forge (merge request on GitLab), titled in Conventional
    Commits format (`feat(scope): ...`), so a squash merge leaves a conventional commit on the base
-   branch. In git only mode the branch is pushed and the title and description are in
-   `factory/features/<id>/pr.md` for you to open the PR by hand.
+   branch. The title is the one you approved in the spec. In git only mode the branch is pushed and the title and description
+   are in `factory/features/<id>/pr.md` for you to open the PR by hand.
 
 You review and merge the PR. On the next run the factory checks the open PRs: merged ones become
 `merged`, their local branch is deleted and the base branch is updated; PRs closed without merge
 become `closed` and keep their branch. In git only mode merges are detected from git (merge
 commit, fast-forward, rebase, squash); a squash merge with resolved conflicts is not detected, so
 you set that row to `merged` on the board by hand.
+
+**Archive.** So that the board read on every run stays short, finished features leave it: every
+`closed` feature, and every `merged` one once its local branch is gone, moves with all its log
+lines to `factory/archive.md` (same format as the board, created on the first move); log lines of
+features no longer on the board go there too. A `merged` feature whose branch or worktree could not
+be removed stays on the board and is retried on the next run. The first run after an update moves
+the features an existing board already has. To resume a closed feature, move its row and its log
+lines from the archive back to the board by hand, set the state (e.g. `approve`) and reopen the PR.
+An archived id passed to `/devflow:factory` is still recognised: merged and closed features get the
+same answer as before, closed ones with how to resume them.
 
 **Changing a feature with an open PR.** If something is missing after a feature is done, do not
 open a new one: run `/devflow:factory <id> <change>` (for example `/devflow:factory 003 the link
@@ -124,6 +143,15 @@ commits and reviews happen in it, so your checkout stays free. The worktree stay
 merged; the next run then removes it (never with `--force`: if it has local changes it is kept and
 you are told). Each session runs its own feature against the shared board.
 
+Every board write goes through `skills/factory/scripts/board.sh`, which takes a lock
+(`factory/board.lock`), re-reads the board and writes it atomically, so two sessions never lose each
+other's changes. New ids are reserved by creating the feature folder with `mkdir`, so two sessions
+creating a feature at the same time get different numbers. If another session holds the board for
+more than 10 seconds, the factory stops and names the lock file to check (delete it if no session is
+writing); a lock left by an interrupted session for more than 30 seconds is removed automatically.
+The script also moves finished features to the archive (`archive`), under the same lock. The
+board format is unchanged and you can still edit the state cell by hand.
+
 A session opened inside a git worktree of the repo (for example one created by Claude Desktop) uses
 the board and the features of the main checkout, like every other session; a new feature gets an id
 not used by the board, the branches or the existing worktrees. If that worktree already has its own
@@ -139,11 +167,28 @@ only active feature; with several it asks which one, or **New feature**; with no
 oldest queued one. Any other argument is a new feature description. When something needs a human,
 it stops and tells you which files to look at.
 
+**Status and abandon.** `/devflow:factory status` reads only `factory/board.md`, and
+`factory/archive.md` for the counts (no forge, git or board write), and shows the open features (id,
+title, state, round, PR), a line `N merged, M closed` that includes the archived features, and the
+next actions with the command to run: `needs-human` features with the reason from the log,
+active ones to resume, open PRs, and the next queued feature.
+
+`/devflow:factory <id> abandon [<reason>]` abandons a feature. The factory shows a plan (state, PR
+to close, worktree and branch to remove or keep, and why) and asks for confirmation. Then it closes
+the PR if it is open (the reason becomes a comment), sets the feature to `closed` with the note
+`abandoned: <reason>`, and removes the worktree and the local branch only if nothing is lost: no
+local changes and every commit on origin or on the base branch (never `--force`). The remote branch
+stays, so the PR can be reopened. A `|` or line break in the reason becomes `/` or a space in the
+board note (the PR comment keeps the original text), and the plan lists the git-ignored files that
+removing the worktree will delete. After the cleanup the abandoned feature moves to the archive. A
+`merged` feature is refused; on a `closed` one, archived or not, only the cleanup runs. With forge
+`git` you close the PR by hand.
+
 ### 3. Follow the run: the flow pane
 
-devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It only
-observes the session and the files in `factory/`; it never writes the board. It is active in repos
-with a `factory/config.md`.
+devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It
+observes the session and the files in `factory/`; it never writes the board. It also guards the
+devflow agents (see **Guard** below). It is active in repos with a `factory/config.md`.
 
 - **Phases**: a vertical line of the factory phases, each with its state and time.
 - **Agents**: a live card for each devflow agent, coloured by model family, with its task,
@@ -155,13 +200,29 @@ with a `factory/config.md`.
   round counts from the first round of the change; review and gate lines keep the file's round number.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
-  closed), the pane shows a summary of the board instead.
+  closed), the pane shows a summary of the board instead. Its last 3 merged features include the
+  archived ones.
 - **Reload and resume**: the pane survives `/reload-plugins` and `claude --resume`. The session's
   feature, phase times and running agents are rebuilt from the board, the feature files and the
   state the mod keeps for the session. After a resume, or when the factory stops (Esc, error, end
   of turn), the pane keeps showing the flow of the session's feature, with no running agents, while
   it is in progress (interview to approve). Agents that no longer run are shown as ended without
   success. Reloading sends no new toasts or notifications.
+- **Guard**: while the factory runs, the mod refuses the calls of devflow agents that break their
+  constraints, so they no longer rest on the prompts alone. A reviewer (`review-*`), the approver and
+  the spec-checker write only their own result file (`reviews/r<N>-<x>.md`, `decision.md`,
+  `spec-check.md`); the spec-writer only `spec.md` and `playbook.md` of its feature; the implementer
+  nothing under `factory/`. No agent writes `factory/board.md`, `factory/archive.md` or the project `factory/playbook.md`,
+  runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
+  git state (commit, add, checkout, stash...) or modify files from the shell (redirects, `rm`, `mv`,
+  `sed -i`, PowerShell equivalents). Commands run inside another command (`bash -c`, `pwsh -Command`,
+  `cmd /c`, `$(...)`) are checked too; quoted text, such as a commit message, is not:
+  `git commit -m "docs: explain git push"` passes. A command longer than 64 KB, or nested too deeply
+  to be checked to the end, is refused with a request to split or simplify it. A refused call is
+  not run: the agent gets the reason in the pane language and can take another way, and its card shows `⊘ N blocked`. The guard covers the common
+  mistakes, not every possible shell write. It fails open: the main loop, agents of other plugins,
+  unknown agents and sessions without a factory are never touched, nor is any call if the guard
+  itself fails.
 - **Your turn**: a toast when the factory needs you (a system notification too, from the terminal only; the desktop app's own banners cover questions and turn ends while the app is in the background): each interview
   question (as a choice or in plain text), a spec to approve, rule proposals, needs-human, and when
   the PR is opened.
@@ -182,7 +243,8 @@ factory/
 ├── config.md          commands, forge, release, workspace, ui_review... (committed)
 ├── playbook.md        project rules + Definition of Done                (committed)
 ├── backlog.md         deferred logic queued on the board                (committed)
-├── board.md           one row per feature + log                         (gitignored)
+├── board.md           one row per live feature + log                    (gitignored)
+├── archive.md         merged and closed features moved out of the board (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, PR text     (gitignored)
 .devflow/              release scripts, only with automatic releases      (committed)
 ```
@@ -239,6 +301,40 @@ PR is edited:
 The checks use no secrets. They only report: to block the merge, make them required on `main`.
 In GitHub go to Settings → Rules → Rulesets (or Branches → add a rule for `main`), enable "Require
 status checks to pass" and add `checks` and `pr-title`.
+
+### Skill evals
+
+`evals/` holds seven cases for `claude plugin eval`. Each one builds a small example repo with its
+`scaffold.sh`, opens a real Claude session on it with the plugin and checks the result:
+
+- `init-vue-pnpm`: a Vue repo with pnpm gets the `pnpm` commands and no stack interview.
+- `init-go`: a Go repo gets the `go build`, `go vet` and `go test` commands.
+- `init-unknown-stack`: a Lua repo is named and init asks for the commands instead of guessing.
+- `init-empty-repo`: an empty repo starts the stack interview and gets no commands.
+- `factory-pr-open-merged`: a `pr-open` change already merged on the remote is cleaned up and set to
+  `merged`.
+- `factory-resume-interview`: a feature in `interview` asks one new question, not the answered ones.
+- `spec-checker-known-gap`: a spec with a known gap gets the verdict `GAPS` on `T1`.
+
+The evals use real sessions, so they cost tokens and need your Claude credentials: run them only
+locally, never in CI, and run them before you change `init`, `factory` or `spec-checker`. On Linux,
+macOS or WSL2 run all of them:
+
+```bash
+claude plugin eval . --scaffold --ablation none --no-publish --allow-tools Bash,Write,Edit
+```
+
+The cases tagged `shell` (all but the spec-checker one) need Bash. On native Windows Bash is
+refused without a sandbox, so run only the `no-shell` case (`--allow-tools` takes a list, so put
+`--tag` before it):
+
+```bash
+claude plugin eval . --scaffold --ablation none --no-publish --tag no-shell --allow-tools Write,Edit
+```
+
+Add `--runs 3` for a stricter check (each case runs once by default). Results go to
+`evals/results/`, which git ignores. `--no-publish` keeps the HTML report local: without it the
+report is published to claude.ai.
 
 ## devflow's own versions
 

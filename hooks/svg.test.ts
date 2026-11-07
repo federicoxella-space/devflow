@@ -205,3 +205,17 @@ test('riepilogo del board: motivo lungo non si sovrappone al nome', () => {
     }
   }
 })
+
+test('card bloccata: testo in --rd e alt; con 0 o assente nessun testo', () => {
+  const view = (blocked?: number): FlowView => ({
+    ...VIEW, phases: VIEW.phases.map(p => (p.id === 'build' ? { ...p, agents: [card('b1', blocked === undefined ? {} : { blocked })] } : p)),
+  })
+  for (const lang of ['en', 'it'] as const) {
+    const t = STRINGS[lang]
+    expect(typeof t.blocked).toBe('function')
+    const text = t.blocked(2)
+    const { source } = flowSvg(view(2), 600, t, 'dark', NOW)
+    expect(source.includes(`style="fill:var(--rd)">${text}</text>`)).toBe(true)
+    for (const none of [0, undefined]) expect(flowSvg(view(none), 600, t, 'dark', NOW).source.includes('⊘')).toBe(false)
+  }
+})

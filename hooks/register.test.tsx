@@ -148,7 +148,22 @@ test('niente factory: riepilogo del board', async ($, on) => {
   await ui.unmount()
 })
 
-test('repo senza devflow: nessun pane, nessun comando', async ($, on) => {
+test('riepilogo del board con factory/archive.md: le merged archiviate contano', async ($, on) => {
+  const archive = [
+    '# Factory archive', '', '| id | feature | state | round | branch | PR |', '|----|---------|-------|-------|--------|----|',
+    '| 000-arch | Archived | merged | 1 | | #3 |', '| 001-old | Dup | merged | 1 | | #7 |', '', '## Log',
+    '- 2026-10-01 10:00 · 000-arch · pr-open → merged', '',
+  ].join('\n')
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD, 'factory/archive.md': archive } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt).toBe('devflow: Queued 0, Open PRs 0, Stuck 1, Recently merged 2')
+  expect(svg?.source.includes('Archived')).toBe(true)
+  await ui.unmount()
+})
+
+test('repo senza devflow: nessun pane, nessun comando',async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/board.md': BOARD_BUILD } })
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)
@@ -878,6 +893,7 @@ const readPaths = (calls: Calls) => calls.reads.map(p => p.replaceAll('\\', '/')
 test('sessione in un worktree: config, board e feature si leggono dal checkout principale', async ($, on) => {
   const { calls } = stubEngine(on, { files: MAIN_FILES('build') })
   on('process.run', (_, e) => {
+    if (e.argv[1] === 'worktree') return GIT(0, ['worktree /main', 'worktree /wt', ''].join('\n'))
     expect(e.argv).toEqual(['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'])
     return GIT(0, ['/main/.git', ''].join('\n'))
   })
@@ -951,4 +967,84 @@ test('change in corso: round relativo alla change, gate col numero del file', as
   expect(source.includes('R4/4')).toBe(false)
   expect(source.includes('r4')).toBe(true)
   await ui.unmount()
+})
+
+// ───────────── guard sui vincoli degli agenti ─────────────
+
+type Call = Record<string, unknown>
+const call = ($: Parameters<TestBody>[0], c: Call) => $.tool.call(c as never) as Promise<{ deny?: string }>
+
+const guardSession = async ($: Parameters<TestBody>[0], on: On, type = 'devflow:review-code', bash?: (command: string) => Promise<void>) => {
+  const stub = stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD }, bash })
+  on('session.id', () => ({ value: SID }))
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Review del codice', type))
+  return stub
+}
+
+test('guard: Write, Edit, Bash e PowerShell vietati danno deny, contatore e persistenza', async ($, on) => {
+  const { kv } = await guardSession($, on)
+  const a = { agentId: 'a1' }
+  const w = await call($, { tool: 'Edit', file_path: 'src/app.ts', old_string: 'a', new_string: 'b', ...a })
+  expect(w).toEqual({ deny: 'devflow guard: review-code can only write reviews/r<N>-code.md' })
+  const b = await call($, { tool: 'Bash', command: 'git stash', ...a })
+  expect(b).toEqual({ deny: 'devflow guard: review-code is read-only and cannot run git stash' })
+  const w2 = await call($, { tool: 'Write', file_path: 'src/x.ts', content: 'x', ...a })
+  expect(w2.deny).toBeDefined()
+  const p = await call($, { tool: 'PowerShell', command: 'git push', ...a })
+  expect(p).toEqual({ deny: 'devflow guard: subagents cannot run git push' })
+  const stored = [...kv.entries()].find(([k]) => k.startsWith('agents:'))?.[1] as Record<string, { blocked?: number }> | undefined
+  expect(stored?.a1?.blocked).toBe(4)
+  // il file di esito passa
+  const ok = await call($, { tool: 'Write', file_path: 'factory/features/003-reset/reviews/r1-code.md', content: 'x', ...a })
+  expect(ok.deny).toBeUndefined()
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.source.includes('⊘ 4 blocked')).toBe(true)
+  expect(svg?.alt.includes('Review del codice (⊘ 4 blocked)')).toBe(true)
+  await ui.unmount()
+})
+
+test('guard: il terminale mostra il contatore, senza blocchi nessun testo', async ($, on) => {
+  await guardSession($, on)
+  const text = async () => {
+    const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+    const t = (await ui.find({ type: 'Text', text: /Review del codice/ }))?.text ?? ''
+    await ui.unmount()
+    return t
+  }
+  expect((await text()).includes('blocked')).toBe(false)
+  await call($, { tool: 'Bash', command: 'rm -rf x', agentId: 'a1' })
+  expect((await text()).includes('⊘ 1 blocked')).toBe(true)
+})
+
+test('guard: fail open per loop principale e agentId ignoto', async ($, on) => {
+  await guardSession($, on)
+  expect((await call($, { tool: 'Bash', command: 'git push' })).deny).toBeUndefined()
+  expect((await call($, { tool: 'Bash', command: 'git push', agentId: 'zzz' })).deny).toBeUndefined()
+  expect((await call($, { tool: 'Edit', file_path: 'src/a.ts', old_string: 'a', new_string: 'b', agentId: 'zzz' })).deny).toBeUndefined()
+})
+
+test('guard: mod non attiva, nessun rifiuto', async ($, on) => {
+  stubEngine(on, { files: { 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.agent.spawn(spawn('Review del codice', 'devflow:review-code'))
+  expect((await call($, { tool: 'Bash', command: 'git push', agentId: 'a1' })).deny).toBeUndefined()
+})
+
+test('guard: un errore dentro il guard lascia passare la chiamata a next', async ($, on) => {
+  // dopo lo spawn la lettura dell'atom delle card dà null e l'accesso per agentId lancia dentro guardDeny
+  let broken = false
+  on('state.get', (_, e, next) => {
+    if (broken && e.plugin === 'devflow' && e.key === 'agents') return { value: null, version: 0 } as never
+    return next(e)
+  })
+  const { calls } = await guardSession($, on)
+  broken = true
+  const before = calls.invalidations
+  // la Write della board sarebbe vietata; col guard rotto il resto dell'hook gira (boardChanged ridisegna)
+  const r = await call($, { tool: 'Write', file_path: 'factory/board.md', content: BOARD_BUILD, agentId: 'a1' })
+  expect(r.deny).toBeUndefined()
+  expect(calls.invalidations > before).toBe(true)
 })
