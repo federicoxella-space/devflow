@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
-import type { AgentCard, BoardRow, GateResult, ReviewResult, Run } from '../types'
-import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
+import type { AgentCard, BoardRow, GateResult, ReviewResult, Run, UsageView } from '../types'
+import { deriveView, escalatedFrom, fmtTokens, phaseOfAgent, phaseOfState } from './flow'
 
 const card = (type: string, over: Partial<AgentCard> = {}): AgentCard => ({
   id: `${type}-1`, type, description: 'UserRepo', startedAt: 1000, status: 'running', activity: '', ...over,
@@ -246,4 +246,33 @@ test('con start > 1 review, gate e reentry restano sul round assoluto', () => {
   expect(v.gate).toMatchObject({ round: 5, pass: false })
   expect(v.reviews.map(r => r.round)).toEqual([4])
   expect(v.reentry?.from).toBe('gate')
+})
+
+test('fmtTokens', () => {
+  expect([999, 412310, 999499, 999600, 1000000, 1250000, 0].map(fmtTokens)).toEqual(['999', '412k', '999k', '1M', '1M', '1.3M', '0'])
+})
+
+test('usage: tokens e spent per fase, aggregati per agent+task, tipi senza fase ignorati', () => {
+  const usage: UsageView = {
+    run: 0, tokens: 700, limit: 1000, total: 900,
+    agents: [
+      { agent: 'spec-writer', tokens: 100 }, { agent: 'spec-checker', tokens: 50 }, { agent: 'spec-writer', tokens: 20 },
+      { agent: 'implementer', task: 'T1', tokens: 300 }, { agent: 'implementer', task: 'T2', tokens: 200 }, { agent: 'implementer', task: 'T1', tokens: 30 },
+      { agent: 'mystery', tokens: 5 },
+    ],
+  }
+  const v = deriveView({ ...scenario(), usage })
+  expect(v.tokens).toEqual({ run: 700, limit: 1000 })
+  const spent = (id: string) => v.phases.find(p => p.id === id)?.spent
+  expect(spent('spec')).toEqual([{ label: 'spec-writer', tokens: 120 }, { label: 'spec-checker', tokens: 50 }])
+  expect(spent('build')).toEqual([{ label: 'implementer T1', tokens: 330 }, { label: 'implementer T2', tokens: 200 }])
+  expect(spent('gate')).toBeUndefined()
+  const { limit: _drop, ...noLimit } = usage
+  expect(deriveView({ ...scenario(), usage: noLimit }).tokens).toEqual({ run: 700 })
+})
+
+test('senza usage: ne tokens ne spent', () => {
+  const v = deriveView(scenario())
+  expect('tokens' in v).toBe(false)
+  expect(v.phases.some(p => 'spent' in p)).toBe(false)
 })
