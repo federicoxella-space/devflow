@@ -1,4 +1,4 @@
-import type { GateResult, ReviewResult, Verdict } from '../types'
+import type { GateResult, ReviewResult, UsageView, Verdict } from '../types'
 
 const REASON_MAX = 80
 
@@ -134,4 +134,44 @@ export function changeStart(text: string | undefined): number {
     }
   }
   return start
+}
+
+/**
+ * Consumo di token dalla riga di `factory/features/<id>/usage.md` (formato di
+ * skills/factory/references/usage.md). Run corrente = numero piu' alto fra `## Budget` e `## Agents`;
+ * `limit` = ultima riga `limit` del run (assente con `none`); `total` = token di tutti i run.
+ * Nessun dato valido -> `undefined`. Non lancia mai.
+ */
+export function parseUsage(text: string | undefined): UsageView | undefined {
+  if (typeof text !== 'string') return undefined
+  const limits: { run: number; limit?: number }[] = []
+  const rows: { run: number; agent: string; task?: string; tokens: number }[] = []
+  let section = ''
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim()
+    const h = /^##\s+(\S+)[ \t\r]*$/.exec(line)
+    if (h) { section = (h[1] ?? '').toLowerCase(); continue }
+    if (section === 'budget') {
+      const m = /^-\s*run\s+(\d+)\s*·\s*limit\s+(\d+|none)\s*$/i.exec(line)
+      if (!m) continue
+      const limit = /^\d+$/.test(m[2] ?? '') ? Number(m[2]) : undefined
+      limits.push({ run: Number(m[1]), ...(limit !== undefined ? { limit } : {}) })
+    } else if (section === 'agents' && line.startsWith('|')) {
+      const c = line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(x => x.trim())
+      if (c.length < 5 || !/^\d+$/.test(c[0] ?? '') || !c[1] || !/^(\d+|\?)$/.test(c[4] ?? '')) continue
+      const task = c[2] && c[2] !== '-' && c[2] !== '?' ? c[2] : undefined
+      rows.push({ run: Number(c[0]), agent: c[1], ...(task ? { task } : {}), tokens: c[4] === '?' ? 0 : Number(c[4]) })
+    }
+  }
+  if (!limits.length && !rows.length) return undefined
+  const run = [...limits, ...rows].reduce((m, x) => Math.max(m, x.run), 0)
+  const cur = rows.filter(r => r.run === run)
+  const limit = limits.filter(l => l.run === run).pop()?.limit
+  return {
+    run,
+    tokens: cur.reduce((s, r) => s + r.tokens, 0),
+    ...(limit !== undefined ? { limit } : {}),
+    total: rows.reduce((s, r) => s + r.tokens, 0),
+    agents: cur.map(({ agent, task, tokens }) => ({ agent, ...(task ? { task } : {}), tokens })),
+  }
 }

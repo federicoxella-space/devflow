@@ -39,6 +39,7 @@ factory/
     ├── checklist-c<n>.md      snapshot of the Done checklist before change <n>, written by you
     ├── rule-proposals.md      rules proposed by agents, collected by you
     ├── out-of-scope.md        changed files outside the tasks' owned files, written by you
+    ├── usage.md               tokens, tool uses and seconds per agent, written by you (references/usage.md)
     ├── gate-r<N>.md           gate output (tail only)
     ├── handover-<task>-r<N>.md  escalation of a task to `escalation_model`, written by you
     ├── reviews/r<N>-<reviewer>.md
@@ -65,6 +66,10 @@ States: `queued → interview → spec → spec-review → build → review → 
 `needs-human` and `closed` (PR closed without merge).
 `set <id> state=<X>` updates the row and writes the transition log line itself (local time,
 `YYYY-MM-DD HH:MM`); do not add a `log` for the same change.
+
+**Token usage.** Every devflow agent you spawn or resume is recorded in `features/<id>/usage.md`,
+and the optional `budget_tokens` limit is checked after each agent or parallel group, before any
+other step: read `references/usage.md` before the first spawn of a run and apply it from there.
 
 **Shared board.** Several sessions can run different features at once, each writing this board.
 Every write of `board.md` goes through `bash "<base dir of this skill>/scripts/board.sh" "<main>"
@@ -121,7 +126,7 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
    `references/status.md` and stop: no forge file, no local state check, no steps 2-4.
    Read `<main>/factory/config.md` once; its frontmatter drives the run. `implementer_model` and
    `escalation_model` have the form `<model> / <effort>` (effort missing → `medium`); a missing key
-   uses its default, `sonnet / medium` and `opus / medium`; `secrets_scan` missing is `auto`. Then read the **forge file**
+   uses its default, `sonnet / medium` and `opus / medium`; `secrets_scan` missing is `auto`; `budget_tokens` is optional (see `references/usage.md`). Then read the **forge file**
    `forges/<forge>.md` in this skill's base directory (`forge` absent → `github`): it gives the
    commands of the forge operations `auth`, `open-pr`, `update-pr`, `close-pr`, `pr-state`,
    `issues-enabled`, `create-issue`. This file names only the operations; "PR" also means a GitLab merge request.
@@ -302,7 +307,8 @@ round (and `workdir` as in Feature checkout). Read `decision.md` frontmatter:
   `fix` for a hotfix, else `feat`, scope = the main area touched. The forge files pass the title
   in single quotes; in the fallback title write each `'` as `'\''`. Body = spec title as heading +
   spec goal + (with `breaking` set) a line of its own `BREAKING CHANGE: <breaking>` at line
-  start + done checklist table from `decision.md` + non-blocking review notes + footer
+  start + done checklist table from `decision.md` + non-blocking review notes + the `Tokens:` line
+  of `references/usage.md` + footer
   `Built by devflow factory, <N> review round(s)` and a last line `Factory: <id>`. Set state
   `pr-open` with the reference open-pr returned in the PR column (`-` with forge `git`: pass on its
   message to the user), then, in `branch` mode without `checkout:` only, `git -C "<main>" switch "<base_branch>"`;

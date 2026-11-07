@@ -48,6 +48,7 @@ Run once in each repo you want to use the factory in.
   `worktree_setup`, the command that prepares a new worktree (e.g. `npm ci`).
 - Writes `secrets_scan: auto` and, if neither gitleaks nor trufflehog is installed, suggests
   installing one.
+- Writes an empty `budget_tokens` (see **Token usage and budget** below).
 - Optionally enables **automatic releases** (GitHub and GitLab, see below).
 - Drafts the **project playbook**: conventions, patterns, reusable code and the Definition of
   Done. You review it before it is written.
@@ -137,6 +138,17 @@ change. The result goes to the same PR: new commits, updated title and descripti
 `Change <n>: <change>` that summarises the change. In git only mode the branch is pushed and you
 update the PR by hand from `pr.md` and `change-<n>.md`.
 
+**Token usage and budget.** For every devflow agent that finishes, the factory writes tokens, tool
+uses and seconds to `factory/features/<id>/usage.md` (gitignored; the orchestrator session itself is
+not counted). The PR body gets a line `Tokens: <run> (feature: <total>) · agent time: <duration>`
+(the feature total only if it differs from the run). To cap a run, set `budget_tokens: 1000000` in
+`factory/config.md` (empty, absent or `0` = no limit; a non-numeric value is ignored with a
+warning). After each agent, or each parallel group, if the run is over the limit the feature goes
+to `needs-human` with the note `budget exceeded: <total> / <limit> tokens · resume from <state>` and
+a per-agent summary. A running agent is never interrupted. To continue, put the state back on the
+board and re-run `/devflow:factory <id>`: you get another full budget starting from the tokens
+already used. Each change starts a new run from zero; `usage.md` keeps the whole history.
+
 **Worktrees and parallel sessions.** In worktree mode the spec approval creates
 `../<repo>.worktrees/<id>` on the branch `<kind>/<id>`, runs `worktree_setup` there, and the build,
 commits and reviews happen in it, so your checkout stays free. The worktree stays until the PR is
@@ -198,6 +210,10 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   shows on its implementer card as `implementer ← sonnet` (the model of the previous attempt).
 - **Header**: current phase, active agents, round (of `max_rounds + 1`: the first round plus the rework rounds) and total time. In a change the
   round counts from the first round of the change; review and gate lines keep the file's round number.
+  With a `usage.md` it adds a fifth metric, the tokens of the current run (`412k/1M` with a
+  `budget_tokens` limit, `412k` without).
+- **Tokens per phase**: a phase with no running agent shows the finished agents of the current run
+  with their tokens (`spec-writer 38k · spec-checker 12k`) instead of its description.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
   closed), the pane shows a summary of the board instead. Its last 3 merged features include the

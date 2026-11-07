@@ -25,7 +25,8 @@ is not a change: read `references/abandon.md` instead and stop here.
 2. `n` = number of lines in the feature playbook's `## Changes` + 1. Append to `## Changes` (create
    it after `## Deferred` if missing) `- Change <n> — <text> — from round <board round + 1> — in
    progress`, and to `## Interview` the line `**Change <n>.** <text>`. Set state `interview`, log
-   `pr-open → interview · change <n>`.
+   `pr-open → interview · change <n>`. Append `- run <n> · limit <L>` under `## Budget` in `usage.md`
+   (`<L>` = `budget_tokens` or `none`; format in `references/usage.md`).
 3. Align the branch: `branch` mode → `git -C "<dir>" switch '<branch>'` (if the local branch is
    missing: `git -C "<dir>" switch -c '<branch>' --track 'origin/<branch>'`; `<branch>` from the
    board cell, each `'` in it written `'\''` only in the command), then `git -C "<dir>" pull
@@ -59,7 +60,8 @@ In a change, the comparison with the snapshots (above) and the jump to `build` h
 
 ## Approval
 **With a change `in progress`** (also on resume in `approve`) use **update-pr** instead of
-open-pr. Rewrite `pr.md` as above (footer with the total number of rounds); if the spec has
+open-pr. Rewrite `pr.md` as above (footer with the total number of rounds, `Tokens:` line with the new
+totals); if the spec has
 `pr_title`, the title is that `pr_title` when it differs from the one in `spec-c<n>.md` (absent
 there counts as different), else the first line of the existing `pr.md`. Without `pr_title`: the
 first line of the existing `pr.md`, unless `title` or `kind` of the spec differ from `spec-c<n>.md`,

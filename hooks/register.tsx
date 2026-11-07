@@ -3,10 +3,10 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run, SessionRecord } from '../types'
+import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run, SessionRecord, UsageView } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
 import { bindFeature, featureOfArg, mainCheckoutOf, parseBoard, soleActive, summarize, withArchive } from './board'
-import { changeStart, parseGate, parseReview } from './feature'
+import { changeStart, parseGate, parseReview, parseUsage } from './feature'
 import { checkShell, checkWrite, worktreeRoots } from './guard'
 import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
 import { parseForge, resolveLang, STRINGS } from './i18n'
@@ -218,7 +218,7 @@ const persistAgents = async ($: $, run: Run) => {
 }
 
 /** Gate, review e round di partenza della change, riletti a ogni render (file piccoli, nessuna cache) */
-const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[]; start: number }> => {
+const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; reviews: ReviewResult[]; start: number; usage?: UsageView }> => {
   const dir = fromRoot(`factory/features/${id}`)
   const files = async (path: string) => quiet(async () => (await $.fs.list(path)).filter(f => f.kind === 'file').map(f => f.name), [] as string[])
   const gates: GateResult[] = []
@@ -232,7 +232,8 @@ const loadFeature = async ($: $, id: string): Promise<{ gates: GateResult[]; rev
     if (r) reviews.push(r)
   }
   const start = changeStart((await readText($, `${dir}/playbook.md`)) ?? undefined)
-  return { gates, reviews, start }
+  const usage = parseUsage((await readText($, `${dir}/usage.md`)) ?? undefined)
+  return { gates, reviews, start, ...(usage ? { usage } : {}) }
 }
 
 // ───────────── transizioni ─────────────
@@ -708,8 +709,8 @@ export const register: Register = (on, options) => {
       try {
         const now = await $.clock.now()
         const agents = Object.values(await quiet(() => read($, agentsAtom), {} as Record<string, AgentCard>))
-        const { gates, reviews, start } = await loadFeature($, row.id)
-        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge, start })
+        const { gates, reviews, start, usage } = await loadFeature($, row.id)
+        const view = deriveView({ run, row, agents, reviews, gates, maxRounds, now, forge, start, ...(usage ? { usage } : {}) })
         if (!Svg) return flowTerminal(els, view, t, now)
         const { source, height } = flowSvg(view, W, t, mode, now)
         const shown = view.phases.flatMap(p => p.agents).map(a => `${a.type} ${a.description}${(a.blocked ?? 0) > 0 ? ` (${t.blocked(a.blocked ?? 0)})` : ''}`)

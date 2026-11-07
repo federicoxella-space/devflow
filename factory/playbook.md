@@ -54,6 +54,8 @@
 - A `board.sh` command that writes two files writes the destination first, then the source, and a rerun after an interruption never duplicates lines (`archive`: archive, then board).
 - Shell and awk parsers of `board.md`/`archive.md` match headings with a trailing `[ \t\r]*`, so CRLF files still work.
 - A skill command whose placeholder is read from a board or archive cell (branch, PR) quotes it like user text: single quotes, `'` written `'\''`.
+- When a pane layout formula is generalised from a fixed count to n, a test pins the coordinates of the old case: in `hooks/svg.ts` the metrics width went from `(W-70)/4` to a formula that gives different values for 4, and a test that only counted the `rect` elements did not catch the regression.
+- Parsers on the pane render path aggregate with `reduce`, never `Math.max(...array)` over file lines: `hooks/feature.ts` spread every `usage.md` row as arguments, which throws on very large files despite the "never throws" contract.
 ## Patterns
 - New forge: add `skills/factory/forges/<forge>.md` with the same sections as `github.md` (auth, open-pr, pr-state, issues-enabled, create-issue, ...), then the detection table in `skills/init/SKILL.md` and `parseForge` in `hooks/i18n.ts`.
 - New subagent: `agents/<name>.md` with frontmatter `name`, `description` ("devflow factory - ... Spawned by /devflow:factory, not for direct use."), `tools`, `model`.

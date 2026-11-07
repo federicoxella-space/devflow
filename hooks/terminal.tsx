@@ -3,7 +3,9 @@
 import type { EngineInterface } from 'claude-code'
 
 import type { AgentCard, BoardRow, BoardSummary, FlowView, PhaseStatus } from '../types'
+import { tokensText } from './flow'
 import type { Strings } from './i18n'
+import { spentText } from './svg'
 import { DARK, family, modelVar, shortModel } from './palette'
 
 type Els = Pick<ReturnType<EngineInterface['ui']['resolve']>, 'Box' | 'Text'>
@@ -20,7 +22,7 @@ export const flowTerminal = ({ Box, Text }: Els, view: FlowView, t: Strings, now
   const hasPills = view.reviews.length > 0
   return (
     <Box flexDirection="column">
-      <Text bold>{`${view.featureId} · ${view.title} · ${view.branch} · R${view.round}/${view.maxRounds} · ⏱ ${clock(view.elapsedMs)}`}</Text>
+      <Text bold>{`${view.featureId} · ${view.title} · ${view.branch} · R${view.round}/${view.maxRounds} · ⏱ ${clock(view.elapsedMs)}${view.tokens ? ` · ${tokensText(view.tokens)}` : ''}`}</Text>
       {view.phases.map(p => {
         const base = t.phases[p.id]
         const title = p.id === 'build' && view.round > 1 ? t.roundTitle(base, view.round)
@@ -45,6 +47,7 @@ export const flowTerminal = ({ Box, Text }: Els, view: FlowView, t: Strings, now
             {p.id === 'gate' && view.gate ? (
               <Text color={view.gate.pass ? 'success' : 'error'}>{`  ${view.gate.pass ? t.gatePass(view.gate.round) : t.gateFail(view.gate.round, view.gate.reason ?? '')}`}</Text>
             ) : null}
+            {p.spent?.length && !p.agents.length ? <Text dimColor>{`  ${spentText(p.spent)}`}</Text> : null}
             {p.agents.map(a => agentLine({ Text }, a, t, now))}
           </Box>
         )
