@@ -265,6 +265,27 @@ run "$m" archive
 check "archive: no ids -> only orphan log lines move" \
   same "$code $(count "$m/factory/board.md" '000-gone') $(count "$m/factory/archive.md" '000-gone') $(count "$m/factory/archive.md" '| 00')" "0 0 1 0"
 
+# CRLF board and archive: parsed like LF files, written back with LF line endings.
+m=$tmp/arch-crlf; mkarch "$m"
+sed 's/$/\r/' "$m/factory/board.md" > "$tmp/crlf" && mv "$tmp/crlf" "$m/factory/board.md"
+run "$m" archive 002-beta 003-gamma
+arch_board > "$tmp/expected"
+check "archive: CRLF board -> exit 0, board as with LF, written with LF" \
+  same "$code $(cmp -s "$m/factory/board.md" "$tmp/expected" && echo same)" "0 same"
+arch_new > "$tmp/expected"
+check "archive: CRLF board -> archive.md as with LF" cmp -s "$m/factory/archive.md" "$tmp/expected"
+sed 's/$/\r/' "$m/factory/archive.md" > "$tmp/crlf" && mv "$tmp/crlf" "$m/factory/archive.md"
+sed 's/$/\r/' "$tmp/arch-before" > "$m/factory/board.md"
+run "$m" archive 002-beta 003-gamma
+check "archive: rerun on CRLF board and archive -> one ## Log, no duplicated row or log line" \
+  cmp -s "$m/factory/archive.md" "$tmp/expected"
+
+m=$tmp/set-crlf; mkarch "$m"
+sed 's/$/\r/' "$m/factory/board.md" > "$tmp/crlf" && mv "$tmp/crlf" "$m/factory/board.md"
+run "$m" set 004-delta pr=https://x/pull/40
+check "set: CRLF board -> last cell replaced, no extra cell" \
+  same "$code $(grep -c '^| 004-delta | Delta | pr-open | 1 | feature/004-delta | https://x/pull/40 |$' "$m/factory/board.md")" "0 1"
+
 m=$tmp/arch-none; mkmain "$m"; cp "$m/factory/board.md" "$tmp/before"
 run "$m" archive
 check "archive: nothing to move -> exit 0, board unchanged, no archive.md" \

@@ -108,6 +108,8 @@ lock_abs=$(cd "$fdir" && { pwd -W 2> /dev/null || pwd; })/board.lock
 # Table edits. Mode rows: prints "<id>\t<state>" per row, exits 4 without a table. Mode new: adds
 # B_ROW after the last row. Mode set: changes the B_S cells of the first row whose id is B_ID.
 # Mode copy: prints the file unchanged. Only the first table counts; other lines pass untouched.
+# Both awk programs drop a trailing CR from every line, so a CRLF board or archive is parsed like an
+# LF one and written back with LF line endings.
 AWK='
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 function cells(line, c,   s, n, i) {
@@ -118,7 +120,7 @@ function cells(line, c,   s, n, i) {
 }
 BEGIN { mode = ENVIRON["B_MODE"]; id = ENVIRON["B_ID"] }
 {
-  line = $0
+  line = $0; sub(/\r$/, "", line)
   if (!done && line ~ /^\|/) { intable = 1; n++ }
   else if (intable) { intable = 0; done = 1; if (mode == "new") print ENVIRON["B_ROW"] }
   if (intable && n > 2) {
@@ -174,7 +176,7 @@ BEGIN {
   k = split(ENVIRON["B_KEEP"], a, "\n"); for (i = 1; i <= k; i++) if (a[i] != "") keep[a[i]] = 1
 }
 FNR == NR {
-  line = $0
+  line = $0; sub(/\r$/, "", line)
   if (!bdone && line ~ /^\|/) { bin = 1; bn++ } else if (bin) { bin = 0; bdone = 1 }
   if (bin && bn > 2) {
     cells(line, c)
@@ -187,7 +189,7 @@ FNR == NR {
   next
 }
 {
-  line = $0
+  line = $0; sub(/\r$/, "", line)
   if (!adone && line ~ /^\|/) { ain = 1; an++ } else if (ain) { ain = 0; adone = 1; flushrows() }
   if (ain && an > 2) { cells(line, c); if (c[1] in byid) { line = byid[c[1]]; placed[c[1]] = 1 } }
   if (alog) {
