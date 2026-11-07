@@ -148,7 +148,22 @@ test('niente factory: riepilogo del board', async ($, on) => {
   await ui.unmount()
 })
 
-test('repo senza devflow: nessun pane, nessun comando', async ($, on) => {
+test('riepilogo del board con factory/archive.md: le merged archiviate contano', async ($, on) => {
+  const archive = [
+    '# Factory archive', '', '| id | feature | state | round | branch | PR |', '|----|---------|-------|-------|--------|----|',
+    '| 000-arch | Archived | merged | 1 | | #3 |', '| 001-old | Dup | merged | 1 | | #7 |', '', '## Log',
+    '- 2026-10-01 10:00 · 000-arch · pr-open → merged', '',
+  ].join('\n')
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD, 'factory/archive.md': archive } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const svg = svgOf(await ui.find({ type: 'Svg' }))
+  expect(svg?.alt).toBe('devflow: Queued 0, Open PRs 0, Stuck 1, Recently merged 2')
+  expect(svg?.source.includes('Archived')).toBe(true)
+  await ui.unmount()
+})
+
+test('repo senza devflow: nessun pane, nessun comando',async ($, on) => {
   const { calls } = stubEngine(on, { files: { 'factory/board.md': BOARD_BUILD } })
   on('ui.render', ($, e) => {
     const { Text } = $.ui.resolve(e)

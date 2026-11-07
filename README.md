@@ -110,6 +110,16 @@ become `closed` and keep their branch. In git only mode merges are detected from
 commit, fast-forward, rebase, squash); a squash merge with resolved conflicts is not detected, so
 you set that row to `merged` on the board by hand.
 
+**Archive.** So that the board read on every run stays short, finished features leave it: every
+`closed` feature, and every `merged` one once its local branch is gone, moves with all its log
+lines to `factory/archive.md` (same format as the board, created on the first move); log lines of
+features no longer on the board go there too. A `merged` feature whose branch or worktree could not
+be removed stays on the board and is retried on the next run. The first run after an update moves
+the features an existing board already has. To resume a closed feature, move its row and its log
+lines from the archive back to the board by hand, set the state (e.g. `approve`) and reopen the PR.
+An archived id passed to `/devflow:factory` is still recognised: merged and closed features get the
+same answer as before, closed ones with how to resume them.
+
 **Changing a feature with an open PR.** If something is missing after a feature is done, do not
 open a new one: run `/devflow:factory <id> <change>` (for example `/devflow:factory 003 the link
 must expire after 30 minutes`). The factory checks that the PR is still open, goes back to the
@@ -139,7 +149,8 @@ other's changes. New ids are reserved by creating the feature folder with `mkdir
 creating a feature at the same time get different numbers. If another session holds the board for
 more than 10 seconds, the factory stops and names the lock file to check (delete it if no session is
 writing); a lock left by an interrupted session for more than 30 seconds is removed automatically.
-The board format is unchanged and you can still edit the state cell by hand.
+The script also moves finished features to the archive (`archive`), under the same lock. The
+board format is unchanged and you can still edit the state cell by hand.
 
 A session opened inside a git worktree of the repo (for example one created by Claude Desktop) uses
 the board and the features of the main checkout, like every other session; a new feature gets an id
@@ -156,9 +167,10 @@ only active feature; with several it asks which one, or **New feature**; with no
 oldest queued one. Any other argument is a new feature description. When something needs a human,
 it stops and tells you which files to look at.
 
-**Status and abandon.** `/devflow:factory status` reads only `factory/board.md` (no forge, git or
-board write) and shows the open features (id, title, state, round, PR), a line `N merged, M closed`
-and the next actions with the command to run: `needs-human` features with the reason from the log,
+**Status and abandon.** `/devflow:factory status` reads only `factory/board.md`, and
+`factory/archive.md` for the counts (no forge, git or board write), and shows the open features (id,
+title, state, round, PR), a line `N merged, M closed` that includes the archived features, and the
+next actions with the command to run: `needs-human` features with the reason from the log,
 active ones to resume, open PRs, and the next queued feature.
 
 `/devflow:factory <id> abandon [<reason>]` abandons a feature. The factory shows a plan (state, PR
@@ -168,8 +180,9 @@ the PR if it is open (the reason becomes a comment), sets the feature to `closed
 local changes and every commit on origin or on the base branch (never `--force`). The remote branch
 stays, so the PR can be reopened. A `|` or line break in the reason becomes `/` or a space in the
 board note (the PR comment keeps the original text), and the plan lists the git-ignored files that
-removing the worktree will delete. A `merged` feature is refused; on a `closed` one only the cleanup
-runs. With forge `git` you close the PR by hand.
+removing the worktree will delete. After the cleanup the abandoned feature moves to the archive. A
+`merged` feature is refused; on a `closed` one, archived or not, only the cleanup runs. With forge
+`git` you close the PR by hand.
 
 ### 3. Follow the run: the flow pane
 
@@ -187,7 +200,8 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   round counts from the first round of the change; review and gate lines keep the file's round number.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
-  closed), the pane shows a summary of the board instead.
+  closed), the pane shows a summary of the board instead. Its last 3 merged features include the
+  archived ones.
 - **Reload and resume**: the pane survives `/reload-plugins` and `claude --resume`. The session's
   feature, phase times and running agents are rebuilt from the board, the feature files and the
   state the mod keeps for the session. After a resume, or when the factory stops (Esc, error, end
@@ -198,7 +212,7 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   constraints, so they no longer rest on the prompts alone. A reviewer (`review-*`), the approver and
   the spec-checker write only their own result file (`reviews/r<N>-<x>.md`, `decision.md`,
   `spec-check.md`); the spec-writer only `spec.md` and `playbook.md` of its feature; the implementer
-  nothing under `factory/`. No agent writes `factory/board.md` or the project `factory/playbook.md`,
+  nothing under `factory/`. No agent writes `factory/board.md`, `factory/archive.md` or the project `factory/playbook.md`,
   runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
   git state (commit, add, checkout, stash...) or modify files from the shell (redirects, `rm`, `mv`,
   `sed -i`, PowerShell equivalents). Commands run inside another command (`bash -c`, `pwsh -Command`,
@@ -229,7 +243,8 @@ factory/
 ├── config.md          commands, forge, release, workspace, ui_review... (committed)
 ├── playbook.md        project rules + Definition of Done                (committed)
 ├── backlog.md         deferred logic queued on the board                (committed)
-├── board.md           one row per feature + log                         (gitignored)
+├── board.md           one row per live feature + log                    (gitignored)
+├── archive.md         merged and closed features moved out of the board (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, PR text     (gitignored)
 .devflow/              release scripts, only with automatic releases      (committed)
 ```

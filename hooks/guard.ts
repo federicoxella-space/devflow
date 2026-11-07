@@ -3,7 +3,7 @@
 // Copre gli errori comuni, non è un parser completo della shell (vedi spec 016, Out of scope).
 import type { Strings } from './i18n'
 
-const PROJECT_FILES = ['factory/board.md', 'factory/playbook.md']
+const PROJECT_FILES = ['factory/board.md', 'factory/archive.md', 'factory/playbook.md']
 
 /** `\` → `/`, `/` doppi ridotti, `.` e `..` risolti, minuscolo (confronto case-insensitive) */
 export function normPath(path: string): string {

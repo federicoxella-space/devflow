@@ -6,13 +6,18 @@ already run pr-state for it. If the first word of `<text>` is `abandon` (case-in
 is not a change: read `references/abandon.md` instead and stop here.
 - `MERGED` or `CLOSED` → explain that the feature can no longer be changed, suggest
   `/devflow:factory <text>` to open a new feature with the same text, stop without changing anything.
+  For `CLOSED` add how to resume it (step 2 has moved it to `factory/archive.md`): move its row and
+  its log lines from the archive back to the table and the log of the board by hand, set the state
+  (e.g. `approve`) and reopen the PR.
 - `UNKNOWN` → say the PR state cannot be verified and why, stop.
 - `OPEN`, `<id>` alone → show the state and the PR link, ask in plain text which change to make; an
   empty answer → stop without changing anything.
 - `OPEN`, with text → start the change.
 - `<id> <text>` on an active row: state `interview` → append `**Note.** <text>` to `## Interview`
   and resume; any other active state, `queued` or `needs-human` → tell the user the text is
-  ignored and resume as usual. On `merged`/`closed` rows: as above.
+  ignored and resume as usual. On `merged`/`closed` rows: as above. An id found only in the table
+  of `factory/archive.md` (step 3 of `SKILL.md`), alone or with text, is a `merged` or `closed` row:
+  the `MERGED`/`CLOSED` message above, with the resume steps for `closed`; pr-state is not run.
 
 **Start of a change.**
 1. In `branch` mode `git -C "<dir>" status --porcelain` must be empty; otherwise say so and stop, registering
@@ -21,9 +26,10 @@ is not a change: read `references/abandon.md` instead and stop here.
    it after `## Deferred` if missing) `- Change <n> — <text> — from round <board round + 1> — in
    progress`, and to `## Interview` the line `**Change <n>.** <text>`. Set state `interview`, log
    `pr-open → interview · change <n>`.
-3. Align the branch: `branch` mode → `git -C "<dir>" switch "<branch>"` (if the local branch is
-   missing: `git -C "<dir>" switch -c "<branch>" --track "origin/<branch>"`), then
-   `git -C "<dir>" pull --ff-only`; `worktree` mode → `git -C "<path>" pull --ff-only`. A missing
+3. Align the branch: `branch` mode → `git -C "<dir>" switch '<branch>'` (if the local branch is
+   missing: `git -C "<dir>" switch -c '<branch>' --track 'origin/<branch>'`; `<branch>` from the
+   board cell, each `'` in it written `'\''` only in the command), then `git -C "<dir>" pull
+   --ff-only`; `worktree` mode → `git -C "<path>" pull --ff-only`. A missing
    `<dir>` or `<path>` → `needs-human`. Any error →
    `needs-human` with the output; the user fixes it and sets the state back to `interview`. The base
    branch is not merged in.

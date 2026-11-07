@@ -86,6 +86,14 @@ test('AC4: board e playbook del progetto solo per l’orchestratore', () => {
   expect(checkWrite('committer', 'factory/board.md', ROOTS, it)).toBe('devflow guard: solo l’orchestratore scrive factory/board.md')
 })
 
+test('archive.md: solo l’orchestratore lo scrive (Write/Edit)', () => {
+  for (const type of ['implementer', 'committer', 'review-code', 'future-agent']) {
+    expect(w(type, 'factory/archive.md')).toBe('devflow guard: only the orchestrator writes factory/archive.md')
+    expect(w(type, '/home/u/wt/feature-016/factory/Archive.md')).toBe('devflow guard: only the orchestrator writes factory/archive.md')
+  }
+  expect(checkWrite('committer', 'factory/archive.md', ROOTS, it)).toBe('devflow guard: solo l’orchestratore scrive factory/archive.md')
+})
+
 test('AC5: push, force, no-verify e reset --hard vietati a tutti', () => {
   for (const type of ['implementer', 'committer', 'review-code', 'future-agent']) {
     expect(sh(type, 'git push')).toBe('devflow guard: subagents cannot run git push')
@@ -178,6 +186,11 @@ test('AC7: nessuna scrittura da shell su board e playbook del progetto', () => {
     expect(sh(type, 'cp factory/playbook.md factory/board.md')).toBe('devflow guard: only the orchestrator writes factory/playbook.md')
     expect(sh(type, 'cat factory/board.md')).toBeUndefined()
     expect(sh(type, 'grep x factory\\playbook.md 2>/dev/null')).toBeUndefined()
+  }
+  for (const type of ['implementer', 'committer']) {
+    expect(sh(type, 'echo x >> factory/archive.md')).toBe('devflow guard: only the orchestrator writes factory/archive.md')
+    expect(sh(type, 'Set-Content -Path:factory/archive.md x')).toBe('devflow guard: only the orchestrator writes factory/archive.md')
+    expect(sh(type, 'cat factory/archive.md')).toBeUndefined()
   }
   expect(checkShell('implementer', 'rm factory/board.md', it)).toBe('devflow guard: solo l’orchestratore scrive factory/board.md')
 })

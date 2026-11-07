@@ -4,8 +4,12 @@
 # Usage:
 #   board.sh <main> new <slug> <state> <title> [<note>]   prints the created id
 #   board.sh <main> set <id> <key>=<value>...             keys: state round branch pr feature note
-#   board.sh <main> log <id> <text>
+#   board.sh <main> log <id> <text>                       an id only in the archive logs there
+#   board.sh <main> archive [<id>...]                     moves merged/closed rows to archive.md
 # Exit: 0 ok, 1 board locked by another session, 2 invalid input, 3 I/O error.
+# archive.md has the board format (`# Factory archive`). `archive` moves the rows of the given ids
+# and every log line whose id has no row left in the board; it writes the archive first, then the
+# board, and a rerun after an interruption replaces rows by id and skips log lines already there.
 # Env: BOARD_LOCK_WAIT (seconds to wait for the lock, default 10), BOARD_LOCK_STALE (seconds after
 # which a lock is abandoned, default 30). Portable to Linux, macOS (bash 3.2) and Git Bash: no
 # GNU-only options, no external lock tool. Values are written with printf '%s', never evaluated.
@@ -33,15 +37,17 @@ check_state() {
   die 2 "unknown state: $1"
 }
 
-[ $# -ge 2 ] || die 2 "usage: board.sh <main> new|set|log ..."
+[ $# -ge 2 ] || die 2 "usage: board.sh <main> new|set|log|archive ..."
 main=$1 cmd=$2
 shift 2
-case $cmd in new|set|log) ;; *) die 2 "unknown command: $cmd" ;; esac
+case $cmd in new|set|log|archive) ;; *) die 2 "unknown command: $cmd" ;; esac
 
 fdir=$main/factory
 board=$fdir/board.md
+archive=$fdir/archive.md
 lock=$fdir/board.lock
 tmp=$fdir/board.md.tmp.$$
+atmp=$fdir/archive.md.tmp.$$
 [ -f "$board" ] || die 2 "no board: $board"
 
 wait_s=${BOARD_LOCK_WAIT:-10}
@@ -92,6 +98,9 @@ case $cmd in
     [ -n "$text" ] || die 2 "empty log text"
     check_value text "$text"
     ;;
+  archive)
+    for id in "$@"; do check_value id "$id"; done
+    ;;
 esac
 
 lock_abs=$(cd "$fdir" && { pwd -W 2> /dev/null || pwd; })/board.lock
@@ -99,6 +108,8 @@ lock_abs=$(cd "$fdir" && { pwd -W 2> /dev/null || pwd; })/board.lock
 # Table edits. Mode rows: prints "<id>\t<state>" per row, exits 4 without a table. Mode new: adds
 # B_ROW after the last row. Mode set: changes the B_S cells of the first row whose id is B_ID.
 # Mode copy: prints the file unchanged. Only the first table counts; other lines pass untouched.
+# Both awk programs drop a trailing CR from every line, so a CRLF board or archive is parsed like an
+# LF one and written back with LF line endings.
 AWK='
 function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
 function cells(line, c,   s, n, i) {
@@ -109,7 +120,7 @@ function cells(line, c,   s, n, i) {
 }
 BEGIN { mode = ENVIRON["B_MODE"]; id = ENVIRON["B_ID"] }
 {
-  line = $0
+  line = $0; sub(/\r$/, "", line)
   if (!done && line ~ /^\|/) { intable = 1; n++ }
   else if (intable) { intable = 0; done = 1; if (mode == "new") print ENVIRON["B_ROW"] }
   if (intable && n > 2) {
@@ -131,11 +142,78 @@ END {
   if (mode == "new" && !done) print ENVIRON["B_ROW"]
 }'
 
+# Archive move. Input: the board, then the archive (or its empty skeleton on stdin). B_MOVE: ids to
+# move, B_KEEP: ids of the board rows that stay, one per line. Board pass: writes to B_BOARD_OUT the
+# board without the moved rows and the `## Log` lines whose id is not in B_KEEP. Archive pass: prints
+# the archive with each moved row in place of the first table row with its id, or after the last
+# row, and the moved log lines not already in its log at the end of `## Log` (added when missing).
+# Exit 4: the archive has no table; exit 5: nothing to move.
+ARCH_AWK='
+function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
+function cells(line, c,   s, n, i) {
+  s = line; sub(/^\|/, "", s); sub(/\|[ \t]*$/, "", s)
+  n = split(s, c, "|")
+  for (i = 1; i <= n; i++) c[i] = trim(c[i])
+  return n
+}
+function logid(line,   s, i) {
+  if (line !~ /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9] · /) return ""
+  s = line; sub(/^- [^ ]+ [^ ]+ · /, "", s)
+  i = index(s, " · ")
+  return i > 1 ? substr(s, 1, i - 1) : ""
+}
+function out(s) { print s; last = s }
+function flushrows(   i) {
+  for (i = 1; i <= nm; i++) if (!(mid[i] in placed)) { out(byid[mid[i]]); placed[mid[i]] = 1 }
+}
+function flushlog(   i) {
+  for (i = 1; i <= nl; i++) if (!(mlog[i] in seen)) out(mlog[i])
+  logged = 1
+}
+BEGIN {
+  bout = ENVIRON["B_BOARD_OUT"]
+  k = split(ENVIRON["B_MOVE"], a, "\n"); for (i = 1; i <= k; i++) if (a[i] != "") mv[a[i]] = 1
+  k = split(ENVIRON["B_KEEP"], a, "\n"); for (i = 1; i <= k; i++) if (a[i] != "") keep[a[i]] = 1
+}
+FNR == NR {
+  line = $0; sub(/\r$/, "", line)
+  if (!bdone && line ~ /^\|/) { bin = 1; bn++ } else if (bin) { bin = 0; bdone = 1 }
+  if (bin && bn > 2) {
+    cells(line, c)
+    if (c[1] in mv) { if (!(c[1] in byid)) mid[++nm] = c[1]; byid[c[1]] = line; next }
+  }
+  if (line ~ /^## Log[ \t]*$/) blog = 1
+  else if (line ~ /^#/) blog = 0
+  else if (blog) { id = logid(line); if (id != "" && !(id in keep)) { mlog[++nl] = line; next } }
+  print line > bout
+  next
+}
+{
+  line = $0; sub(/\r$/, "", line)
+  if (!adone && line ~ /^\|/) { ain = 1; an++ } else if (ain) { ain = 0; adone = 1; flushrows() }
+  if (ain && an > 2) { cells(line, c); if (c[1] in byid) { line = byid[c[1]]; placed[c[1]] = 1 } }
+  if (alog) {
+    if (line ~ /^#/) { flushlog(); alog = 0 }
+    else if (line ~ /^[ \t]*$/) { held = held line "\n"; next }
+    else seen[line] = 1
+  }
+  if (held != "") { printf "%s", held; held = "" }
+  out(line)
+  if (!logged && line ~ /^## Log[ \t]*$/) alog = 1
+}
+END {
+  if (an == 0) exit 4
+  if (nm == 0 && nl == 0) exit 5
+  if (ain) flushrows()
+  if (alog) { flushlog(); printf "%s", held }
+  else if (!logged) { if (last != "") print ""; print "## Log"; flushlog() }
+}'
+
 owned=0 me='' created_dir='' stale_dir=''
 
 release() {
   local code=$?
-  rm -f "$tmp"
+  rm -f "$tmp" "$atmp"
   if [ -n "$stale_dir" ]; then rm -rf "$stale_dir"; fi
   if [ -n "$created_dir" ] && [ "$code" -ne 0 ]; then rmdir "$created_dir" 2> /dev/null || true; fi
   read_owner "$lock/owner"
@@ -254,13 +332,18 @@ read_rows() {
   }
 }
 
-# Looks up <id>: sets old_state, exit 2 when the board has no such row.
-find_row() {
+# has_row <id> <rows>: sets old_state, returns 1 when <rows> has no such id.
+has_row() {
   local rid rstate
   while IFS=$'\t' read -r rid rstate; do
     if [ "$rid" = "$1" ]; then old_state=$rstate; return 0; fi
-  done <<< "$rows"
-  die 2 "no row $1 in $board"
+  done <<< "$2"
+  return 1
+}
+
+# Looks up <id> in the board: sets old_state, exit 2 when the board has no such row.
+find_row() {
+  has_row "$1" "$rows" || die 2 "no row $1 in $board"
 }
 
 # Writes the table edit of <mode> to the temp file.
@@ -268,17 +351,19 @@ edit_to_tmp() {
   B_MODE=$1 awk "$AWK" "$board" > "$tmp" || die 3 "cannot write $tmp"
 }
 
-# Appends "- YYYY-MM-DD HH:MM · <entry>" to the temp file, creating `## Log` when missing.
+# add_log <temp> <entry>: appends "- YYYY-MM-DD HH:MM · <entry>" to <temp>, creating `## Log`
+# when missing.
 add_log() {
-  if ! grep -q '^## Log[[:space:]]*$' "$tmp"; then
-    if [ -n "$(tail -n 1 "$tmp")" ]; then printf '\n' >> "$tmp" || die 3 "cannot write $tmp"; fi
-    printf '## Log\n' >> "$tmp" || die 3 "cannot write $tmp"
+  if ! grep -q '^## Log[[:space:]]*$' "$1"; then
+    if [ -n "$(tail -n 1 "$1")" ]; then printf '\n' >> "$1" || die 3 "cannot write $1"; fi
+    printf '## Log\n' >> "$1" || die 3 "cannot write $1"
   fi
-  printf -- '- %s · %s\n' "$(date '+%Y-%m-%d %H:%M')" "$1" >> "$tmp" || die 3 "cannot write $tmp"
+  printf -- '- %s · %s\n' "$(date '+%Y-%m-%d %H:%M')" "$2" >> "$1" || die 3 "cannot write $1"
 }
 
-# Replaces the board with the temp file: 5 more attempts 0.2 s apart (Windows: file in use). The
-# lock must still be ours: if another session took it over, nothing is written (exit 1).
+# commit <temp> <file>: replaces <file> (board or archive) with <temp>, 5 more attempts 0.2 s apart
+# (Windows: file in use). The lock must still be ours: if another session took it over, nothing is
+# written (exit 1).
 commit() {
   local i=0
   read_owner "$lock/owner"
@@ -290,9 +375,9 @@ commit() {
   done
   [ "$owner_c" = "$me" ] || die 1 "board locked by another session: $lock_abs"
   i=0
-  until mv -f "$tmp" "$board" 2> /dev/null; do
+  until mv -f "$1" "$2" 2> /dev/null; do
     i=$((i + 1))
-    [ "$i" -le 5 ] || die 3 "cannot replace $board"
+    [ "$i" -le 5 ] || die 3 "cannot replace $2"
     sleep 0.2
   done
 }
@@ -313,6 +398,10 @@ read_rows
 case $cmd in
   new)
     while IFS=$'\t' read -r rid _; do consider "$rid"; done <<< "$rows"
+    if [ -f "$archive" ]; then
+      arows=$(B_MODE=rows awk "$AWK" "$archive" 2> /dev/null) || arows=''
+      while IFS=$'\t' read -r rid _; do consider "$rid"; done <<< "$arows"
+    fi
     for d in "$fdir/features"/*; do
       [ -e "$d" ] || continue
       consider "${d##*/}"
@@ -343,8 +432,8 @@ case $cmd in
     done
 
     B_ROW="| $new_id | $title | $state | | | |" edit_to_tmp new
-    add_log "$new_id · created → $state${note:+ $note}"
-    commit
+    add_log "$tmp" "$new_id · created → $state${note:+ $note}"
+    commit "$tmp" "$board"
     created_dir=''
     printf '%s\n' "$new_id"
     ;;
@@ -352,14 +441,56 @@ case $cmd in
     find_row "$id"
     B_ID=$id edit_to_tmp set
     if [ -n "$B_S3" ] && [ "$B_V3" != "$old_state" ]; then
-      add_log "$id · $old_state → $B_V3${note:+ $note}"
+      add_log "$tmp" "$id · $old_state → $B_V3${note:+ $note}"
     fi
-    commit
+    commit "$tmp" "$board"
     ;;
   log)
-    find_row "$id"
-    edit_to_tmp copy
-    add_log "$id · $text"
-    commit
+    if has_row "$id" "$rows"; then
+      edit_to_tmp copy
+      add_log "$tmp" "$id · $text"
+      commit "$tmp" "$board"
+    else
+      # An archived feature (e.g. the cleanup of a closed one) logs in the archive.
+      arows=''
+      if [ -f "$archive" ]; then arows=$(B_MODE=rows awk "$AWK" "$archive" 2> /dev/null) || arows=''; fi
+      has_row "$id" "$arows" || die 2 "no row $id in $board or $archive"
+      B_MODE=copy awk "$AWK" "$archive" > "$atmp" || die 3 "cannot write $atmp"
+      add_log "$atmp" "$id · $text"
+      commit "$atmp" "$archive"
+    fi
+    ;;
+  archive)
+    move=''
+    for id in "$@"; do
+      find_row "$id"
+      case $old_state in
+        merged|closed) ;;
+        *) die 2 "row $id is $old_state: only merged or closed rows are archived" ;;
+      esac
+      move=$move$id$'\n'
+    done
+    keep=''
+    while IFS=$'\t' read -r rid _; do
+      case $'\n'$move in *$'\n'"$rid"$'\n'*) ;; *) keep=$keep$rid$'\n' ;; esac
+    done <<< "$rows"
+    export B_MOVE="$move" B_KEEP="$keep" B_BOARD_OUT="$tmp"
+    rc=0
+    if [ -f "$archive" ]; then
+      awk "$ARCH_AWK" "$board" "$archive" > "$atmp" || rc=$?
+    else
+      printf '# Factory archive\n\n| id | feature | state | round | branch | PR |\n|----|---------|-------|-------|--------|----|\n\n## Log\n' \
+        | awk "$ARCH_AWK" "$board" - > "$atmp" || rc=$?
+    fi
+    case $rc in
+      0) ;;
+      4) die 2 "no table in $archive" ;;
+      5) exit 0 ;;
+      *) die 3 "cannot write $atmp or $tmp" ;;
+    esac
+    # Archive first: after an interruption between the two, a rerun finds the rows still in the
+    # board, replaces them in the archive and skips the log lines already there.
+    commit "$atmp" "$archive"
+    commit "$tmp" "$board"
     ;;
 esac

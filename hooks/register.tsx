@@ -5,7 +5,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { AgentCard, BoardRow, Forge, GateResult, LogLine, PhaseId, ReviewResult, Run, SessionRecord } from '../types'
 import { type Attention, Notified, onBoardChange, onQuestion } from './attention'
-import { bindFeature, featureOfArg, mainCheckoutOf, parseBoard, soleActive, summarize } from './board'
+import { bindFeature, featureOfArg, mainCheckoutOf, parseBoard, soleActive, summarize, withArchive } from './board'
 import { changeStart, parseGate, parseReview } from './feature'
 import { checkShell, checkWrite, worktreeRoots } from './guard'
 import { deriveView, escalatedFrom, phaseOfAgent, phaseOfState } from './flow'
@@ -722,7 +722,9 @@ export const register: Register = (on, options) => {
     }
 
     try {
-      const summary = summarize(board)
+      // archivio mancante o illeggibile → vuoto: riepilogo come senza archivio
+      const archive = parseBoard((await readText($, fromRoot('factory/archive.md'))) ?? '')
+      const summary = summarize(withArchive(board, archive))
       if (!Svg) return boardTerminal(els, summary, t)
       const { source, height } = boardSvg(summary, W, t, mode)
       return <Svg source={source} alt={boardAlt(summary, t)} width={W} height={height} />
