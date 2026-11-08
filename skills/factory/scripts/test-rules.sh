@@ -29,7 +29,7 @@ add_rules() {
   shift 2
   mkdir -p "$tmp/$r/factory/rules"
   printf '%s\n' "$@" > "$tmp/$r/factory/rules/$f"
-  git -C "$tmp/$r" add -A
+  git -C "$tmp/$r" add -- "factory/rules/$f"
   git -C "$tmp/$r" commit -qm "rules $f"
   git -C "$tmp/$r" push -q origin main 2> /dev/null
 }
@@ -104,6 +104,65 @@ eq "crlf: existing line not duplicated" "$(git -C "$tmp/d" show origin/main:fact
 eq "crlf: no new section" "$(git -C "$tmp/d" show origin/main:factory/playbook.md | grep -c '^## Conventions')" 1
 eq "invalid name: kept" "$(git -C "$tmp/d" ls-tree --name-only origin/main factory/rules/ | wc -l | tr -d ' ')" 1
 grep -q 'invalid name' "$tmp/err" && ok "invalid name: warning" || bad "invalid name: warning"
+
+# AC12 files that are not regular: symlink (120000) and executable (100755), written in the index
+# so the test does not need filesystem symlinks.
+# add_entry <repo> <mode> <path> <content>: stages a blob with the given mode.
+add_entry() {
+  local h
+  h=$(printf '%s\n' "$4" | git -C "$tmp/$1" hash-object -w --stdin)
+  git -C "$tmp/$1" update-index --add --cacheinfo "$2,$h,$3"
+}
+printf '%s\n' '## Conventions' '- SECRET' > "$tmp/secret.md"
+new_repo s
+add_entry s 120000 factory/rules/link.md "$tmp/secret.md"
+add_entry s 100755 factory/rules/exec.md '## Conventions'$'\n''- EXECRULE'
+git -C "$tmp/s" commit -qm 'non regular'
+git -C "$tmp/s" push -q origin main 2> /dev/null
+before=$(git -C "$tmp/s.git" rev-parse main)
+run "$tmp/s" main
+eq "non regular only: output" "$out" none
+eq "non regular only: exit" "$code" 0
+eq "non regular only: no commit" "$(git -C "$tmp/s.git" rev-parse main)" "$before"
+eq "non regular only: worktrees" "$(git -C "$tmp/s" worktree list | wc -l | tr -d ' ')" 1
+git -C "$tmp/s" pull -q --ff-only 2> /dev/null
+add_rules s ok.md '# Rules ok' '## Conventions' '- cok'
+run "$tmp/s" main
+eq "non regular: exit" "$code" 0
+eq "non regular: output" "$out" "merged ok"
+eq "non regular: warnings" "$(grep -c 'not a regular file' "$tmp/err")" 2
+grep -q 'link.md' "$tmp/err" && ok "non regular: symlink warned" || bad "non regular: symlink warned"
+grep -q 'exec.md' "$tmp/err" && ok "non regular: executable warned" || bad "non regular: executable warned"
+pb=$(git -C "$tmp/s.git" show main:factory/playbook.md)
+case "$pb" in *SECRET* | *EXECRULE*) bad "non regular: content not merged" ;; *) ok "non regular: content not merged" ;; esac
+eq "non regular: valid rule merged" "$(printf '%s\n' "$pb" | grep -c -e '- cok')" 1
+eq "non regular: commit diff clean" "$(git -C "$tmp/s.git" show main | grep -c -e SECRET -e EXECRULE)" 0
+eq "non regular: files kept" "$(git -C "$tmp/s.git" ls-tree --name-only main factory/rules/ | tr '\n' ' ')" \
+  "factory/rules/exec.md factory/rules/link.md "
+eq "non regular: footer" "$(git -C "$tmp/s.git" log -1 --format=%B main | grep '^Factory: ')" "Factory: ok"
+
+# AC13 empty and missing playbook
+# playbook_case <repo> <empty|missing>
+playbook_case() {
+  new_repo "$1"
+  if [ "$2" = empty ]; then
+    : > "$tmp/$1/factory/playbook.md"
+    git -C "$tmp/$1" add -A
+  else
+    git -C "$tmp/$1" rm -q factory/playbook.md
+  fi
+  git -C "$tmp/$1" commit -qm "$2 playbook"
+  git -C "$tmp/$1" push -q origin main 2> /dev/null
+  add_rules "$1" e.md '# Rules e' 'stray line' '## Conventions' '- ce' '## Definition of Done' '- [code] de'
+  run "$tmp/$1" main
+  eq "$2 playbook: exit" "$code" 0
+  eq "$2 playbook: output" "$out" "merged e"
+  eq "$2 playbook: content" "$(git -C "$tmp/$1.git" show main:factory/playbook.md)" \
+    "$(printf '%s\n' '## Conventions' '- ce' '## Definition of Done' '- [code] de')"
+  eq "$2 playbook: file removed" "$(git -C "$tmp/$1.git" ls-tree -r --name-only main | grep -c rules/)" 0
+}
+playbook_case pe empty
+playbook_case pm missing
 
 # AC6 invalid input
 run "$tmp/a" 'a..b'

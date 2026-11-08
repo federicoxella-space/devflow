@@ -23,15 +23,18 @@ if [ ! -d "$main" ] || ! git -C "$main" rev-parse --git-dir > /dev/null 2>&1; th
   exit 2
 fi
 
-# Lists the rule file paths (factory/rules/*.md, direct children) of a ref, in name order.
+# Lists the rule files (factory/rules/*.md, direct children) of a ref, in name order, one
+# `<mode><TAB><path>` per line: the mode tells regular blobs (100644) from symlinks (120000),
+# executables (100755) and submodules (160000).
 rule_files() {
-  git -C "$main" ls-tree -r -z --name-only "$1" -- factory/rules/ 2> /dev/null \
-    | while IFS= read -r -d '' p; do
+  git -C "$main" ls-tree -r -z "$1" -- factory/rules/ 2> /dev/null \
+    | while IFS= read -r -d '' e; do
+        p=${e#*$'\t'}
         case "$p" in
           factory/rules/*/* | *$'\n'*) continue ;;
-          factory/rules/*.md) printf '%s\n' "$p" ;;
+          factory/rules/*.md) printf '%s\t%s\n' "${e%% *}" "$p" ;;
         esac
-      done | sort
+      done | sort -t "$(printf '\t')" -k 2
 }
 
 # Echoes the first existing ref of the arguments if it has rule files; nothing otherwise.
@@ -79,10 +82,12 @@ if ! out=$(git -C "$main" worktree add -q --detach "$tmp" "$remote_ref" 2>&1); t
   exit 3
 fi
 
-# awk program: argv[1] = playbook, argv[2] = rule file. Prints the new playbook.
+# awk program: argv[1] = playbook, argv[2] = rule file. Prints the new playbook. The two files
+# are told apart by FILENAME, not by FNR == NR: with an empty playbook the rule file would be
+# read as the playbook.
 merge_awk='
 function strip(s) { sub(/[ \t\r]+$/, "", s); return s }
-FNR == NR {
+FILENAME == ARGV[1] {
   line = $0
   if (line ~ /^## /) {
     t = strip(line); ns++; idx[t] = ns; n[ns] = 0; hdr[ns] = line
@@ -122,11 +127,16 @@ if [ ! -f "$playbook" ]; then
 fi
 list=$(rule_files "$remote_ref")
 name_re='^[A-Za-z0-9._-]+\.md$'
-while IFS= read -r path; do
+while IFS=$'\t' read -r mode path; do
   [ -n "$path" ] || continue
   name=${path#factory/rules/}
   if ! [[ $name =~ $name_re ]]; then
     echo "skipped rule file with an invalid name: $name" >&2
+    continue
+  fi
+  # A symlink, executable or submodule is never read (nor is a symlink target).
+  if [ "$mode" != 100644 ]; then
+    echo "skipped rule file that is not a regular file: $name" >&2
     continue
   fi
   if ! awk "$merge_awk" "$playbook" "$tmp/$path" > "$tmp/.playbook.new"; then
