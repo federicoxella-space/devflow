@@ -6,6 +6,7 @@
 #   board.sh <main> set <id> <key>=<value>...             keys: state round branch pr feature note
 #   board.sh <main> log <id> <text>                       an id only in the archive logs there
 #   board.sh <main> archive [<id>...]                     moves merged/closed rows to archive.md
+#   board.sh <main> move <id> before|after <ref>          reorders two queued rows, no log line
 # Exit: 0 ok, 1 board locked by another session, 2 invalid input, 3 I/O error.
 # archive.md has the board format (`# Factory archive`). `archive` moves the rows of the given ids
 # and every log line whose id has no row left in the board; it writes the archive first, then the
@@ -37,10 +38,10 @@ check_state() {
   die 2 "unknown state: $1"
 }
 
-[ $# -ge 2 ] || die 2 "usage: board.sh <main> new|set|log|archive ..."
+[ $# -ge 2 ] || die 2 "usage: board.sh <main> new|set|log|archive|move ..."
 main=$1 cmd=$2
 shift 2
-case $cmd in new|set|log|archive) ;; *) die 2 "unknown command: $cmd" ;; esac
+case $cmd in new|set|log|archive|move) ;; *) die 2 "unknown command: $cmd" ;; esac
 
 fdir=$main/factory
 board=$fdir/board.md
@@ -101,13 +102,22 @@ case $cmd in
   archive)
     for id in "$@"; do check_value id "$id"; done
     ;;
+  move)
+    [ $# -eq 3 ] || die 2 "usage: board.sh <main> move <id> before|after <ref>"
+    id=$1 pos=$2 ref=$3
+    case $pos in before|after) ;; *) die 2 "expected before or after: $pos" ;; esac
+    check_value id "$id"
+    check_value ref "$ref"
+    [ "$id" != "$ref" ] || die 2 "cannot move $id relative to itself"
+    ;;
 esac
 
 lock_abs=$(cd "$fdir" && { pwd -W 2> /dev/null || pwd; })/board.lock
 
 # Table edits. Mode rows: prints "<id>\t<state>" per row, exits 4 without a table. Mode new: adds
 # B_ROW after the last row. Mode set: changes the B_S cells of the first row whose id is B_ID.
-# Mode copy: prints the file unchanged. Only the first table counts; other lines pass untouched.
+# Mode move: puts the row B_ID right before/after (B_POS) the row B_REF. Mode copy: prints the file
+# unchanged. Only the first table counts; other lines pass untouched.
 # Both awk programs drop a trailing CR from every line, so a CRLF board or archive is parsed like an
 # LF one and written back with LF line endings.
 AWK='
@@ -125,6 +135,10 @@ BEGIN { mode = ENVIRON["B_MODE"]; id = ENVIRON["B_ID"] }
   else if (intable) { intable = 0; done = 1; if (mode == "new") print ENVIRON["B_ROW"] }
   if (intable && n > 2) {
     nc = cells(line, c)
+    if (mode == "move") {
+      if (c[1] == id && !ri) ri = NR
+      if (c[1] == ENVIRON["B_REF"] && !rf) rf = NR
+    }
     if (mode == "rows") print c[1] "\t" c[3]
     if (mode == "set" && !found && c[1] == id) {
       found = 1
@@ -135,10 +149,20 @@ BEGIN { mode = ENVIRON["B_MODE"]; id = ENVIRON["B_ID"] }
       for (i = 1; i <= nc; i++) line = line (c[i] == "" ? " " : " " c[i] " ") "|"
     }
   }
-  if (mode != "rows") print line
+  if (mode == "move") L[NR] = line
+  else if (mode != "rows") print line
 }
 END {
   if (n == 0) exit 4
+  if (mode == "move") {
+    if (!ri || !rf) exit 5
+    for (i = 1; i <= NR; i++) {
+      if (i == ri) continue
+      if (i == rf && ENVIRON["B_POS"] == "before") print L[ri]
+      print L[i]
+      if (i == rf && ENVIRON["B_POS"] == "after") print L[ri]
+    }
+  }
   if (mode == "new" && !done) print ENVIRON["B_ROW"]
 }'
 
@@ -459,6 +483,14 @@ case $cmd in
       add_log "$atmp" "$id · $text"
       commit "$atmp" "$archive"
     fi
+    ;;
+  move)
+    find_row "$id"
+    [ "$old_state" = queued ] || die 2 "row $id is $old_state: only queued rows are moved"
+    find_row "$ref"
+    [ "$old_state" = queued ] || die 2 "row $ref is $old_state: only queued rows are moved"
+    B_ID=$id B_REF=$ref B_POS=$pos edit_to_tmp move
+    commit "$tmp" "$board"
     ;;
   archive)
     move=''
