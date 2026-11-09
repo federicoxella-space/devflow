@@ -15,7 +15,9 @@ When you get an input `workdir: <path>` (a git worktree), run every git and proj
 dir and `factory/` stay those of the main checkout. Without `workdir`, work in the current
 directory.
 Also read `factory/playbook.md` (project rules: a violation counts like a broken convention) and the
-`## Done checklist` in `<feature dir>/playbook.md`.
+`## Done checklist` in `<feature dir>/playbook.md`. Then read `factory/rules/*.md` (in `<path>` if you
+get `workdir`, otherwise in the `rules/` folder next to the playbook you were given): approved rules not
+yet merged into the playbook, they count like it.
 
 Look at `git diff <base>...HEAD` and at `spec.md`. Check what the diff actually touches:
 - input validation and injection (SQL/ORM raw queries, command, path traversal, XSS, template

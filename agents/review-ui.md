@@ -14,7 +14,9 @@ When you get an input `workdir: <path>` (a git worktree), run every git and proj
 dir and `factory/` stay those of the main checkout. Without `workdir`, work in the current
 directory.
 Also read `factory/playbook.md` (project rules: a violation counts like a broken convention) and the
-`## Done checklist` in `<feature dir>/playbook.md`.
+`## Done checklist` in `<feature dir>/playbook.md`. Then read `factory/rules/*.md` (in `<path>` if you
+get `workdir`, otherwise in the `rules/` folder next to the playbook you were given): approved rules not
+yet merged into the playbook, they count like it.
 
 Scope: visual design, not behaviour (flows belong to the ux reviewer).
 - uses the project's existing components, design tokens, theme (Material, Tailwind, Bootstrap, ...)

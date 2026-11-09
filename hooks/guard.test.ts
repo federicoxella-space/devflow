@@ -94,6 +94,27 @@ test('archive.md: solo l’orchestratore lo scrive (Write/Edit)', () => {
   expect(checkWrite('committer', 'factory/archive.md', ROOTS, it)).toBe('devflow guard: solo l’orchestratore scrive factory/archive.md')
 })
 
+test('027 AC7: factory/rules/ solo per l’orchestratore (Write/Edit)', () => {
+  const msg = 'devflow guard: only the orchestrator writes factory/rules/'
+  for (const type of ['implementer', 'committer', 'review-code', 'approver', 'spec-checker', 'spec-writer', 'devflow:future-agent']) {
+    expect(w(type, 'factory/rules/027-a.md')).toBe(msg)
+    expect(w(type, 'factory/rules')).toBe(msg)
+    expect(w(type, 'factory/rules/')).toBe(msg)
+    expect(w(type, './Factory/Rules/sub/x.md')).toBe(msg)
+    expect(w(type, 'src/../factory/rules/a.md')).toBe(msg)
+    expect(w(type, 'F:\\devflow\\factory\\rules\\027-a.md')).toBe(msg)
+    expect(w(type, 'F:\\DevFlow\\factory\\rules')).toBe(msg)
+    expect(w(type, '/home/u/wt/feature-016/factory/rules/a.md')).toBe(msg)
+  }
+  expect(w('committer', 'factory/rulesx.md')).toBeUndefined()
+  expect(w('committer', 'factory/rules.md')).toBeUndefined()
+  expect(w('committer', 'skills/factory/rules/a.md')).toBeUndefined()
+  expect(w('committer', '/elsewhere/factory/rules/a.md')).toBeUndefined()
+  expect(w('spec-writer', 'factory/features/027-a/playbook.md')).toBeUndefined()
+  expect(checkWrite('committer', 'factory/rules/a.md', ROOTS, it)).toBe('devflow guard: solo l’orchestratore scrive factory/rules/')
+  expect(checkWrite('committer', 'factory/rules/a.md', ROOTS, it)).toBe(it.guard.orchestrator('factory/rules/'))
+})
+
 test('AC5: push, force, no-verify e reset --hard vietati a tutti', () => {
   for (const type of ['implementer', 'committer', 'review-code', 'future-agent']) {
     expect(sh(type, 'git push')).toBe('devflow guard: subagents cannot run git push')
@@ -193,6 +214,30 @@ test('AC7: nessuna scrittura da shell su board e playbook del progetto', () => {
     expect(sh(type, 'cat factory/archive.md')).toBeUndefined()
   }
   expect(checkShell('implementer', 'rm factory/board.md', it)).toBe('devflow guard: solo l’orchestratore scrive factory/board.md')
+})
+
+test('027 AC7: nessuna scrittura da shell su factory/rules/', () => {
+  const msg = en.guard.orchestrator('factory/rules/')
+  for (const type of ['implementer', 'committer', 'review-code', 'approver', 'spec-checker', 'spec-writer', 'future-agent']) {
+    expect(sh(type, 'echo x > factory/rules/027-a.md')).toBe(msg)
+    expect(sh(type, 'echo x >> factory/rules/027-a.md')).toBe(msg)
+    expect(sh(type, 'rm -r factory/rules')).toBe(msg)
+    expect(sh(type, 'rm -rf factory/rules/')).toBe(msg)
+    expect(sh(type, 'Set-Content factory\\rules\\a.md x')).toBe(msg)
+    expect(sh(type, 'Set-Content -Path:factory/rules/a.md x')).toBe(msg)
+    expect(sh(type, 'Set-Content -Path F:\\devflow\\factory\\rules\\a.md -Value x')).toBe(msg)
+    expect(sh(type, 'Remove-Item -Recurse "F:/my repo/factory/rules"')).toBe(msg)
+    expect(sh(type, 'cp x.md /home/u/wt/feature-016/factory/rules/a.md')).toBe(msg)
+    expect(sh(type, 'sed -i s/a/b/ factory/rules/a.md')).toBe(msg)
+    expect(sh(type, 'bash -c "echo x >> factory/rules/a.md"')).toBe(msg)
+    expect(sh(type, 'cat factory/rules/a.md')).toBeUndefined()
+    expect(sh(type, 'ls factory/rules')).toBeUndefined()
+    expect(sh(type, 'grep -n x factory\\rules\\a.md 2>/dev/null')).toBeUndefined()
+  }
+  expect(sh('implementer', 'echo x > factory/rulesx.md')).toBeUndefined()
+  expect(sh('implementer', 'rm skills/factory/rulesets/a.md')).toBeUndefined()
+  expect(checkShell('implementer', 'rm -r factory/rules', it)).toBe(it.guard.orchestrator('factory/rules/'))
+  expect(checkShell('implementer', 'rm -r factory/rules', it)).toBe('devflow guard: solo l’orchestratore scrive factory/rules/')
 })
 
 test('AC15: il testo quotato fuori dai comandi annidati non è un comando', () => {

@@ -11,7 +11,9 @@ of `factory/config.md` and `factory/playbook.md` (project playbook), the output 
 <path>` if the feature has a worktree (read code files under `<path>`; paths in the feature dir and
 `factory/` stay those of the main checkout). Read-only on everything except your output file.
 
-Read the project playbook, `<feature dir>/spec.md`, the `## Done checklist` in
+Read the project playbook, then `factory/rules/*.md` (in `<path>` if you get `workdir`, otherwise in
+the `rules/` folder next to the playbook: approved rules not yet merged, they count like the
+playbook), `<feature dir>/spec.md`, the `## Done checklist` in
 `<feature dir>/playbook.md`, `config.md`, and the files the spec's Context and `## Tasks` name.
 
 For each task in `## Tasks`, check that an implementer can execute it with only the spec, the
