@@ -1,7 +1,7 @@
 // Disegni SVG del pannello: stesso layout, classi e animazioni SMIL del mockup, a larghezza variabile.
 // Niente sfondo: Claude Code dipinge il suo. Colori solo come variabili CSS di `styleBlock`.
 import type { AgentCard, BoardRow, BoardSummary, FlowView, PhaseId } from '../types'
-import { PHASES } from './flow'
+import { PHASES, fmtTokens, tokensText } from './flow'
 import type { Strings } from './i18n'
 import { type PaletteMode, family, modelVar, shortModel, styleBlock } from './palette'
 
@@ -91,6 +91,10 @@ const phaseDesc = (t: Strings, id: PhaseId, view: FlowView): string =>
   : id === 'finish' ? t.finishDesc(view.forge ?? 'github')
   : t.desc[id]
 
+/** `spec-writer 38k · spec-checker 12k` */
+export const spentText = (spent: { label: string; tokens: number }[]): string =>
+  spent.map(s => `${s.label} ${fmtTokens(s.tokens)}`).join(' · ')
+
 const dot = (cx: number, cy: number, r: number, fill: string, style: string) =>
   `<polygon transform="translate(${n(cx)} ${n(cy)})" points="${hexPoints(r)}" ${fill} style="${style}"/>`
 
@@ -174,16 +178,17 @@ export function flowSvg(
     : `${allDone ? t.allDone : '—'} · R${view.round}/${view.maxRounds}`
 
   // metriche
-  const bw = Math.floor((W - 70) / 4)
-  const metrics = [
+  const metrics: (readonly [string, string])[] = [
     [t.metricPhase, active ? t.short[active.id] : allDone ? t.allDone.toLowerCase() : '—'],
     [t.metricAgents, t.agentsActive(agentCount)],
     [t.metricRound, `${view.round} / ${view.maxRounds}`],
     [t.metricTime, clock(view.elapsedMs)],
-  ] as const
+  ]
+  if (view.tokens) metrics.push([t.metricTokens, tokensText(view.tokens)])
+  const bw = Math.floor((W - 30 - 10 * metrics.length) / metrics.length)
   let body = header(t, W, view.featureId, `${view.title} · ${view.branch}`, badge)
   metrics.forEach(([label, value], i) => {
-    const x = 20 + i * (bw + 10), w = i === 3 ? W - 20 - x : bw
+    const x = 20 + i * (bw + 10), w = i === metrics.length - 1 ? W - 20 - x : bw
     body +=
       `<rect x="${x}" y="80" width="${w}" height="${CARD_H}" rx="6" fill="none" style="stroke:var(--ln)"/>` +
       txt('l', x + 12, 98, esc(label)) + txt('b', x + 12, 116, esc(cut(value, Math.floor((w - 20) / 7.8))))
@@ -272,7 +277,8 @@ export function flowSvg(
     } else if (wait) {
       g += txt('d', X0, subY, esc(t.yourTurn), ' style="fill:var(--br)"')
     } else {
-      const parts = p.agents.length ? agentSub(p.agents) : [{ text: phaseDesc(t, p.id, view) }]
+      const parts = p.agents.length ? agentSub(p.agents)
+        : [{ text: p.spent?.length ? spentText(p.spent) : phaseDesc(t, p.id, view) }]
       g += txt('d', X0, subY, subSvg(parts, textRoom))
       if (view.reentry?.from === p.id)
         arrows.push({ fromX: X0 + Math.min(parts.map(x => x.text).join('').length, textRoom) * SMALL + 10, fromY: subY - 4 })

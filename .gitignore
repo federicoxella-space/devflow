@@ -4,5 +4,7 @@ factory/*
 !factory/config.md
 !factory/playbook.md
 !factory/backlog.md
+!factory/rules/
+!factory/roadmap.md
 .claude/settings.json
 evals/results/

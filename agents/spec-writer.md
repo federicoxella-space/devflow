@@ -7,7 +7,9 @@ model: opus
 
 You write the spec for one feature. You get: the feature dir, the paths of `factory/config.md` and
 `factory/playbook.md` (project playbook), the `ui_review` mode. Read, in order: the project
-playbook, `<feature dir>/playbook.md` (request, interview, agent decisions, deferred), `config.md`,
+playbook, `factory/rules/*.md` (in `<workdir>` if you get `workdir`, otherwise in the `rules/` folder
+next to the playbook: approved rules not yet merged, they count like the playbook),
+`<feature dir>/playbook.md` (request, interview, agent decisions, deferred), `config.md`,
 the project's `CLAUDE.md` if present, then only the code the playbook does not already cover. Do not
 re-ask questions already answered in `## Interview`. Every item of `## Deferred` goes in
 `## Out of scope` with its issue or queued id; no task or criterion covers it.
@@ -101,7 +103,8 @@ Rules:
   `pr_title invalid: <checks>`, fix only `pr_title`/`breaking` and reply with one line.
 - **Checklist.** First the feature's criteria `AC<n>`: each checkable by a test or a precise manual
   step, written in `verified by`. Then every item of the project playbook's `## Definition of Done`
-  as `DoD-<n>` (n = its position there), with the owner from its `[tag]`, or `n/a` and the reason.
+  as `DoD-<n>` (n = its position there; the items of the `## Definition of Done` of the `rules/`
+  files follow, in file name order), with the owner from its `[tag]`, or `n/a` and the reason.
   With `ui_review: none`, `ux` and `ui` items are `n/a`. Every owner that is not `n/a` or `gate`
   must be in `reviewers`.
 - **Tasks.** Split into several tasks only if at least two of them own disjoint files; otherwise one

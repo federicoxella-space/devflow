@@ -9,6 +9,8 @@ export type BoardRow = { id: string; feature: string; state: BoardState | string
 export type Verdict = 'PASS' | 'CHANGES'
 export type ReviewResult = { reviewer: string; round: number; verdict: Verdict; reason?: string }
 export type GateResult = { round: number; pass: boolean; reason?: string }
+/** Consumo di token del run corrente da `usage.md` (`total` = tutti i run) */
+export type UsageView = { run: number; tokens: number; limit?: number; total: number; agents: { agent: string; task?: string; tokens: number }[] }
 export type LogLine = { at: string; id: string; text: string }
 export type BoardSummary = {
   queued: BoardRow[]
@@ -35,7 +37,9 @@ export type Run = {
 }
 export type FlowView = {
   featureId: string; title: string; branch: string; round: number; maxRounds: number; elapsedMs: number
-  phases: { id: PhaseId; status: PhaseStatus; durationMs?: number; agents: AgentCard[] }[]
+  phases: { id: PhaseId; status: PhaseStatus; durationMs?: number; agents: AgentCard[]; /** agenti finiti del run corrente con i loro token */ spent?: { label: string; tokens: number }[] }[]
+  /** `run` = token del run corrente; `limit` assente senza budget */
+  tokens?: { run: number; limit?: number }
   reentry?: { from: PhaseId; to: PhaseId; reason: string }
   reviews: ReviewResult[]
   gate?: GateResult

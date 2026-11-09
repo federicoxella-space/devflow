@@ -22,14 +22,15 @@ file.
 `git rev-parse --show-toplevel` must succeed. Then:
 - no `factory/config.md` → run every step below;
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
-  `!factory/playbook.md` and `!factory/backlog.md` lines to `.gitignore` if missing);
+  `!factory/playbook.md`, `!factory/backlog.md`, `!factory/rules/` and `!factory/roadmap.md` lines
+  to `.gitignore` if missing);
 - both present → ask what to redo, with AskUserQuestion `multiSelect`: **Config**, **Forge**,
   **Release**, **Playbook** (none selected = nothing). Config = steps 1, 1a and 2. Forge = only step 1b, then update the forge
   fields of `factory/config.md`; Release = only step 1c, which also updates the release files after
   a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
   offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
   `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty, without `implementer_model` as `sonnet / medium`, without
-  `escalation_model` as `opus / medium`, without `secrets_scan` as `auto`: nothing
+  `escalation_model` as `opus / medium`, without `secrets_scan` as `auto`, without `budget_tokens` as no limit: nothing
   to migrate.
   Never touch an existing `factory/board.md`.
 
@@ -186,6 +187,7 @@ release: "off"         # auto | off — automatic tag + release on every merged 
 workspace: ask         # ask | branch | worktree — where a new feature runs
 worktree_setup: ""     # worktree only: command run in a new worktree, e.g. npm ci (empty = none)
 secrets_scan: auto     # auto | gitleaks | trufflehog | off — secrets scanner run before each commit
+budget_tokens: ""        # optional: token limit per run (empty or 0 = none)
 ---
 Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
 
@@ -219,7 +221,8 @@ path when there is one. Keep it short: only rules an agent would otherwise have 
 Definition of Done items are `- [<owner>] <item>`, owner one of `gate`, `code`, `security`, `ux`,
 `ui`; `DoD-<n>` is the item's position. Always include the two first items above; add stack-specific
 ones. Show the draft, apply the user's edits, write the file. From then on it changes only through
-rule proposals approved during `/devflow:factory`.
+rule proposals approved during `/devflow:factory`, which wait in `factory/rules/<id>.md` until the
+PR merges and are then merged into it.
 
 ## 4. Board and .gitignore
 
@@ -246,6 +249,8 @@ factory/*
 !factory/config.md
 !factory/playbook.md
 !factory/backlog.md
+!factory/rules/
+!factory/roadmap.md
 ```
 
 ## 5. Hand-over

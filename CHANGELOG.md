@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.30.0 — 2026-11-09
+- feat(factory): keep approved rules in per-feature files until merge (#53)
+
+## v0.29.0 — 2026-11-07
+- feat(factory): track token usage per feature with an optional budget (#52)
+
 ## v0.28.0 — 2026-11-07
 - feat(factory): archive finished features out of the board (#50)
 

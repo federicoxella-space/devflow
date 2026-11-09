@@ -19,7 +19,8 @@ If you get `handover: <path>`, read it first: a previous implementer already tri
 working tree contains its attempt. Start from that state, use the handover (reason, gate and review
 files, diff) to find what went wrong, and do not redo what is already right.
 
-1. Read the project playbook first, then the spec, the `## Done checklist` in
+1. Read the project playbook first, then `factory/rules/*.md` (in `<path>` if you get `workdir`,
+   otherwise next to the playbook: approved rules not yet merged, they count like the playbook), then the spec, the `## Done checklist` in
    `<feature dir>/playbook.md`, `config.md` (commands and notes) and the project's `CLAUDE.md` if
    present. Follow the playbook and existing patterns; read the files listed in the spec's Context
    before writing.

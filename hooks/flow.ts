@@ -1,5 +1,5 @@
 import { family, shortModel } from './palette'
-import type { AgentCard, BoardRow, FlowView, Forge, GateResult, PhaseId, PhaseStatus, ReviewResult, Run } from '../types'
+import type { AgentCard, BoardRow, FlowView, Forge, GateResult, PhaseId, PhaseStatus, ReviewResult, Run, UsageView } from '../types'
 
 export const PHASES = ['interview', 'spec', 'build', 'gate', 'commit', 'review', 'approver', 'finish'] as const satisfies readonly PhaseId[]
 
@@ -36,6 +36,30 @@ export const escalatedFrom = (
   return f === 'other' ? shortModel(prev.model) : f
 }
 
+/** `999` -> `999`, `412310` -> `412k`, `1250000` -> `1.3M` */
+export const fmtTokens = (n: number): string => {
+  if (!(n >= 1000)) return String(Math.max(0, Math.round(n || 0)))
+  if (n < 999500) return `${Math.round(n / 1000)}k`
+  return `${String(Math.round(n / 100000) / 10).replace(/\.0$/, '')}M`
+}
+
+/** Testo dei token per metrica e terminale: `412k/1M` o `412k` */
+export const tokensText = (tk: { run: number; limit?: number }): string =>
+  tk.limit !== undefined ? `${fmtTokens(tk.run)}/${fmtTokens(tk.limit)}` : fmtTokens(tk.run)
+
+/** Agenti del run corrente per fase, aggregati per agent+task in ordine di prima comparsa */
+const spentByPhase = (usage: UsageView, id: PhaseId): { label: string; tokens: number }[] => {
+  const out = new Map<string, { label: string; tokens: number }>()
+  for (const a of usage.agents) {
+    if (phaseOfAgent(a.agent) !== id) continue
+    const label = a.task ? `${a.agent} ${a.task}` : a.agent
+    const cur = out.get(label)
+    if (cur) cur.tokens += a.tokens
+    else out.set(label, { label, tokens: a.tokens })
+  }
+  return [...out.values()]
+}
+
 export const phaseOfState = (state: string): PhaseId | undefined => {
   switch (state) {
     case 'interview': return 'interview'
@@ -52,6 +76,8 @@ type Input = {
   run: Run; row: BoardRow; agents: AgentCard[]; reviews: ReviewResult[]; gates: GateResult[]; maxRounds: number; now: number; forge?: Forge
   /** round da cui parte la change in corso (1 = nessuna change) */
   start?: number
+  /** consumo di token da usage.md */
+  usage?: UsageView
 }
 
 const latestReviews = (reviews: ReviewResult[], round: number) => {
@@ -64,7 +90,7 @@ const latestReviews = (reviews: ReviewResult[], round: number) => {
 const latestGate = (gates: GateResult[], round: number) =>
   gates.filter(g => g.round <= round).sort((a, b) => b.round - a.round)[0]
 
-export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now, forge = 'github', start: fromRound = 1 }: Input): FlowView => {
+export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRounds, now, forge = 'github', start: fromRound = 1, usage }: Input): FlowView => {
   const agents = allAgents.filter(a => a.startedAt >= run.startedAt)
   const running = agents.filter(a => a.status === 'running')
   const runningIdx = running.map(a => phaseOfAgent(a.type)).filter((p): p is PhaseId => !!p).map(idx)
@@ -127,9 +153,11 @@ export const deriveView = ({ run, row, agents: allAgents, reviews, gates, maxRou
         id, status: statuses[i] ?? 'todo',
         ...(statuses[i] === 'done' && s !== undefined && e !== undefined && e >= s ? { durationMs: e - s } : {}),
         agents: shown ? running.filter(a => phaseOfAgent(a.type) === id) : [],
+        ...(usage && spentByPhase(usage, id).length ? { spent: spentByPhase(usage, id) } : {}),
       }
     }),
     ...(reentry ? { reentry } : {}),
+    ...(usage ? { tokens: { run: usage.tokens, ...(usage.limit !== undefined ? { limit: usage.limit } : {}) } } : {}),
     reviews: shownReviews,
     ...(gate ? { gate } : {}),
     questions: run.questions,

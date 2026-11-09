@@ -48,6 +48,7 @@ Run once in each repo you want to use the factory in.
   `worktree_setup`, the command that prepares a new worktree (e.g. `npm ci`).
 - Writes `secrets_scan: auto` and, if neither gitleaks nor trufflehog is installed, suggests
   installing one.
+- Writes an empty `budget_tokens` (see **Token usage and budget** below).
 - Optionally enables **automatic releases** (GitHub and GitLab, see below).
 - Drafts the **project playbook**: conventions, patterns, reusable code and the Definition of
   Done. You review it before it is written.
@@ -98,7 +99,11 @@ git commit -m "chore: set up devflow factory"
 6. **Rule proposals**: conventions the agents discovered are shown in a single list, each with the
    reason it came up, and you approve them in one answer (`1,3`, `all`, `none`, or `2: new text` to
    rewrite one). Conflicting rules are asked before the list, rules that depend on another after
-   it. Approved ones are added to the project playbook.
+   it. Approved ones are saved in `factory/rules/<id>.md` and committed in the feature branch, so
+   parallel features never conflict on the playbook; agents read them from the first moment. After
+   the PR merges, the next factory run adds them to the end of the playbook sections, removes the
+   file and publishes one commit on the base branch (if the push fails, it says so and retries at
+   the next run).
 7. **Pull request** on the configured forge (merge request on GitLab), titled in Conventional
    Commits format (`feat(scope): ...`), so a squash merge leaves a conventional commit on the base
    branch. The title is the one you approved in the spec. In git only mode the branch is pushed and the title and description
@@ -137,6 +142,17 @@ change. The result goes to the same PR: new commits, updated title and descripti
 `Change <n>: <change>` that summarises the change. In git only mode the branch is pushed and you
 update the PR by hand from `pr.md` and `change-<n>.md`.
 
+**Token usage and budget.** For every devflow agent that finishes, the factory writes tokens, tool
+uses and seconds to `factory/features/<id>/usage.md` (gitignored; the orchestrator session itself is
+not counted). The PR body gets a line `Tokens: <run> (feature: <total>) · agent time: <duration>`
+(the feature total only if it differs from the run). To cap a run, set `budget_tokens: 1000000` in
+`factory/config.md` (empty, absent or `0` = no limit; a non-numeric value is ignored with a
+warning). After each agent, or each parallel group, if the run is over the limit the feature goes
+to `needs-human` with the note `budget exceeded: <total> / <limit> tokens · resume from <state>` and
+a per-agent summary. A running agent is never interrupted. To continue, put the state back on the
+board and re-run `/devflow:factory <id>`: you get another full budget starting from the tokens
+already used. Each change starts a new run from zero; `usage.md` keeps the whole history.
+
 **Worktrees and parallel sessions.** In worktree mode the spec approval creates
 `../<repo>.worktrees/<id>` on the branch `<kind>/<id>`, runs `worktree_setup` there, and the build,
 commits and reviews happen in it, so your checkout stays free. The worktree stays until the PR is
@@ -164,14 +180,15 @@ checkout; otherwise it keeps it and tells you in one line.
 
 `/devflow:factory <id>` (or just `<NNN>`) resumes that feature. With no argument it resumes the
 only active feature; with several it asks which one, or **New feature**; with none it starts the
-oldest queued one. Any other argument is a new feature description. When something needs a human,
+first queued one in board order (`/devflow:plan` sets that order). Any other argument is a new
+feature description. When something needs a human,
 it stops and tells you which files to look at.
 
 **Status and abandon.** `/devflow:factory status` reads only `factory/board.md`, and
 `factory/archive.md` for the counts (no forge, git or board write), and shows the open features (id,
 title, state, round, PR), a line `N merged, M closed` that includes the archived features, and the
 next actions with the command to run: `needs-human` features with the reason from the log,
-active ones to resume, open PRs, and the next queued feature.
+active ones to resume, open PRs, and the next queued feature (the first in board order).
 
 `/devflow:factory <id> abandon [<reason>]` abandons a feature. The factory shows a plan (state, PR
 to close, worktree and branch to remove or keep, and why) and asks for confirmation. Then it closes
@@ -183,6 +200,28 @@ board note (the PR comment keeps the original text), and the plan lists the git-
 removing the worktree will delete. After the cleanup the abandoned feature moves to the archive. A
 `merged` feature is refused; on a `closed` one, archived or not, only the cleanup runs. With forge
 `git` you close the PR by hand.
+
+### 2b. Plan a big goal: `/devflow:plan [<goal>]`
+
+For a goal too big for one feature (say "a notes app with login and sync"), `/devflow:plan` builds
+a roadmap of milestones, each split into features that the factory runs one after the other. It
+reads the project (config, playbook, rules, board, archive, code; never the forge issues), then
+asks one question at a time until milestones and features are clear. It shows the whole roadmap
+(for each milestone number, title, goal and done-when criterion; for each feature title and
+description) and asks **Approve / Request changes / Reject**. Nothing is written before you approve.
+
+After approval every new feature becomes a `queued` row on the board with its description in
+`features/<id>/feature.md`, in the order of the roadmap, and `factory/roadmap.md` is saved. If the
+main checkout is on the base branch with an empty stage, `plan` commits it
+(`docs(plan): create roadmap` or `docs(plan): update roadmap`, only `factory/roadmap.md` and, if
+needed, the `!factory/roadmap.md` line of `.gitignore`); it never pushes. Then run
+`/devflow:factory` with no argument: it takes the first queued feature in board order.
+
+Run `/devflow:plan` again to see the roadmap with the state of each feature (queued, in progress,
+PR open, merged, closed) and of each milestone (done when it has a merged feature and the others
+are merged or closed). You can add milestones and features, and remove or reorder those still
+queued; started or finished features are never touched. The roadmap file holds no states: they come
+from the board and the archive.
 
 ### 3. Follow the run: the flow pane
 
@@ -198,6 +237,10 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   shows on its implementer card as `implementer ← sonnet` (the model of the previous attempt).
 - **Header**: current phase, active agents, round (of `max_rounds + 1`: the first round plus the rework rounds) and total time. In a change the
   round counts from the first round of the change; review and gate lines keep the file's round number.
+  With a `usage.md` it adds a fifth metric, the tokens of the current run (`412k/1M` with a
+  `budget_tokens` limit, `412k` without).
+- **Tokens per phase**: a phase with no running agent shows the finished agents of the current run
+  with their tokens (`spec-writer 38k · spec-checker 12k`) instead of its description.
 - **Board summary**: when the session has no feature of its own (a new session that has not run
   `/devflow:factory` yet), or its feature is no longer in progress (pr-open, merged, needs-human,
   closed), the pane shows a summary of the board instead. Its last 3 merged features include the
@@ -212,8 +255,8 @@ devflow agents (see **Guard** below). It is active in repos with a `factory/conf
   constraints, so they no longer rest on the prompts alone. A reviewer (`review-*`), the approver and
   the spec-checker write only their own result file (`reviews/r<N>-<x>.md`, `decision.md`,
   `spec-check.md`); the spec-writer only `spec.md` and `playbook.md` of its feature; the implementer
-  nothing under `factory/`. No agent writes `factory/board.md`, `factory/archive.md` or the project `factory/playbook.md`,
-  runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
+  nothing under `factory/`. No agent writes `factory/board.md`, `factory/archive.md` the project `factory/playbook.md` or
+  `factory/rules/`, runs `git push`, `--force`, `--no-verify` or `git reset --hard`. The read-only agents cannot change
   git state (commit, add, checkout, stash...) or modify files from the shell (redirects, `rm`, `mv`,
   `sed -i`, PowerShell equivalents). Commands run inside another command (`bash -c`, `pwsh -Command`,
   `cmd /c`, `$(...)`) are checked too; quoted text, such as a commit message, is not:
@@ -243,6 +286,8 @@ factory/
 ├── config.md          commands, forge, release, workspace, ui_review... (committed)
 ├── playbook.md        project rules + Definition of Done                (committed)
 ├── backlog.md         deferred logic queued on the board                (committed)
+├── rules/<id>.md      approved rules until their PR merges              (committed)
+├── roadmap.md         milestones and features written by /devflow:plan  (committed)
 ├── board.md           one row per live feature + log                    (gitignored)
 ├── archive.md         merged and closed features moved out of the board (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, PR text     (gitignored)

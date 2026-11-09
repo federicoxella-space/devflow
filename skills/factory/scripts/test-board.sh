@@ -533,6 +533,87 @@ check "parallel set on abandoned lock: no board.lock.stale.* left" \
   same "$(ls -d "$m"/factory/board.lock.stale.* 2> /dev/null)" ""
 for f in "$m"/factory/board.md.tmp.*; do [ -e "$f" ] && { echo "      left $f"; leftover=$((leftover + 1)); }; done
 
+# --- move ---------------------------------------------------------------------------------------------
+# mkmove <dir>: board with queued 010-a, 011-b, 012-c, 013-d, a build row 001-alpha and a log.
+mkmove() {
+  mkdir -p "$1/factory/features"
+  git init -q "$1"
+  {
+    printf '# Factory board\n\n'
+    printf '| id | feature | state | round | branch | PR |\n'
+    printf '|----|---------|-------|-------|--------|----|\n'
+    printf '| 001-alpha | Alpha | build | 1 | feature/001-alpha | |\n'
+    printf '| 010-a | A | queued | | | |\n'
+    printf '| 011-b | B | queued | | | |\n'
+    printf '| 012-c | C | queued |\n'
+    printf '| 013-d | D | queued | | | |\n'
+    printf '\n## Log\n- 2026-01-01 10:00 · 001-alpha · created → interview\n'
+  } > "$1/factory/board.md"
+}
+# ids <dir>: row ids of the board, space separated.
+ids() { awk -F'|' '/^\| [0-9]/ { gsub(/ /, "", $2); printf "%s ", $2 }' "$1/factory/board.md"; }
+# mvcase <description> <id> <pos> <ref> <expected ids>
+mvcase() {
+  m=$tmp/mv-$((++mvn)); mkmove "$m"
+  run "$m" move "$2" "$3" "$4"
+  check "move: $1" same "$code $(ids "$m")" "0 $5"
+  check "move: $1: log unchanged" same "$(sed -n '/^## Log/,$p' "$m/factory/board.md")" \
+    "$(printf '## Log\n- 2026-01-01 10:00 · 001-alpha · created → interview')"
+}
+mvn=0
+mvcase "before" 013-d before 010-a "001-alpha 013-d 010-a 011-b 012-c "
+mvcase "after" 010-a after 012-c "001-alpha 011-b 012-c 010-a 013-d "
+mvcase "after the last row" 010-a after 013-d "001-alpha 011-b 012-c 013-d 010-a "
+mvcase "already in place" 011-b after 010-a "001-alpha 010-a 011-b 012-c 013-d "
+
+m=$tmp/mv-same; mkmove "$m"
+run "$m" move 011-b before 010-a
+check "move: other rows and cells byte for byte" has "$m/factory/board.md" "| 012-c | C | queued |"
+check "move: row moved intact" has "$m/factory/board.md" "| 011-b | B | queued | | | |"
+cp "$m/factory/board.md" "$tmp/mv-before"
+run "$m" move 011-b before 010-a
+check "move: repeat leaves the board equal" cmp -s "$m/factory/board.md" "$tmp/mv-before"
+
+m=$tmp/mv-crlf; mkmove "$m"
+sed 's/$/\r/' "$m/factory/board.md" > "$tmp/crlf" && cp "$tmp/crlf" "$m/factory/board.md"
+run "$m" move 013-d before 010-a
+cr=$'\r'
+check "move: CRLF board is parsed, CR dropped" same "$code $(ids "$m")$(grep -c "$cr" "$m/factory/board.md")" \
+  "0 001-alpha 013-d 010-a 011-b 012-c 0"
+
+# invalid input: exit 2, board unchanged
+mvbad() { # mvbad <description> <args...>
+  local d=$1
+  shift
+  m=$tmp/mv-bad-$((++mvn)); mkmove "$m"
+  cp "$m/factory/board.md" "$tmp/mv-orig"
+  run "$m" move "$@"
+  check "move: $d: exit 2" same "$code" "2"
+  check "move: $d: board unchanged" cmp -s "$m/factory/board.md" "$tmp/mv-orig"
+}
+mvbad "two arguments" 010-a before
+mvbad "four arguments" 010-a before 011-b 012-c
+mvbad "no arguments"
+mvbad "bad word" 010-a next 011-b
+mvbad "same id" 010-a before 010-a
+mvbad "pipe in id" 'a|b' before 011-b
+mvbad "pipe in ref" 010-a before 'a|b'
+mvbad "control character" 010-a before $'011-b\t'
+mvbad "id not in board" 099-x before 011-b
+mvbad "ref not in board" 010-a before 099-x
+mvbad "id not queued" 001-alpha before 011-b
+mvbad "ref not queued" 010-a after 001-alpha
+
+m=$tmp/mv-lock; mkmove "$m"
+mkdir "$m/factory/board.lock"
+printf '%s\n' "$(date +%s) 99999 4242" > "$m/factory/board.lock/owner"
+cp "$m/factory/board.md" "$tmp/mv-orig"
+foreign=1
+BOARD_LOCK_WAIT=1 run "$m" move 013-d before 010-a
+foreign=0
+check "move: lock of another session: exit 1, board unchanged" \
+  same "$code $(cmp -s "$m/factory/board.md" "$tmp/mv-orig" && echo same)" "1 same"
+
 # --- AC9 and AC10 -------------------------------------------------------------------------------------
 check "no own lock, board.lock.stale.*, board.md.tmp.* or archive.md.tmp.* left after any run" same "$leftover" "0"
 gnu_only='stat -''c|date -''d|sed -''i|mv -''T|flo''ck'

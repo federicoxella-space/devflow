@@ -51,7 +51,7 @@ export function summarize(board: { rows: BoardRow[]; log: LogLine[] }): BoardSum
     }
     return undefined
   }
-  const queued = board.rows.filter(r => r.state === 'queued').sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+  const queued = board.rows.filter(r => r.state === 'queued') // ordine del board = ordine di esecuzione
   const open = board.rows.filter(r => r.state === 'pr-open')
   const stuck = board.rows
     .filter(r => r.state === 'needs-human' || !WAITING.has(r.state))

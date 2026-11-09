@@ -614,6 +614,48 @@ test('terminale: righe di fase, card dell agente e rientro come Text', async ($,
   await ui.unmount()
 })
 
+const USAGE_MD = [
+  '# Token usage · 003-reset', '', '## Budget', '- run 0 · limit 1000000', '',
+  '## Agents', '| run | agent | task | model | tokens | tool uses | seconds |', '|-----|-------|------|-------|--------|-----------|---------|',
+  '| 0 | spec-writer | - | opus | 38210 | 14 | 92 |', '| 0 | spec-checker | - | opus | 12000 | 5 | 30 |', '',
+].join('\n')
+const USAGE_FILES = { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD, 'factory/features/003-reset/usage.md': USAGE_MD }
+
+test('usage.md: metrica token e token per fase nell SVG', async ($, on) => {
+  stubEngine(on, { files: USAGE_FILES })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Coder', 'devflow:implementer'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  expect(source.includes('50k/1M')).toBe(true)
+  expect(source.includes('spec-writer 38k · spec-checker 12k')).toBe(true)
+  await ui.unmount()
+})
+
+test('usage.md: terminale con token in intestazione e riga dim', async ($, on) => {
+  stubEngine(on, { files: USAGE_FILES })
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Coder', 'devflow:implementer'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /003-reset/ }))?.text).toMatch(/ · 50k\/1M$/)
+  expect(await ui.find({ type: 'Text', text: /spec-writer 38k · spec-checker 12k/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('senza usage.md: nessuna metrica token e nessun errore', async ($, on) => {
+  stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': BOARD_BUILD } })
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  await $.tool.call({ tool: 'Skill', skill: 'devflow:factory' })
+  await $.agent.spawn(spawn('Coder', 'devflow:implementer'))
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  const source = svgOf(await ui.find({ type: 'Svg' }))?.source ?? ''
+  expect(source.includes('003-reset')).toBe(true)
+  expect(source.includes('TOKEN')).toBe(false)
+  await ui.unmount()
+})
+
 test('terminale: niente factory, riepilogo del board con riga in coda', async ($, on) => {
   const queued = BOARD_BUILD.replace('| build | 1 |', '| queued | 0 |')
   stubEngine(on, { files: { 'factory/config.md': CONFIG, 'factory/board.md': queued } })

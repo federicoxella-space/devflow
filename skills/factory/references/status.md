@@ -20,7 +20,7 @@ If the board does not exist or has no rows, say "No features on the board." and 
      `/devflow:factory <id>` to resume each.
    - `pr-open`: the PR link from the PR cell; empty or `-` → the branch cell (status does not
      read the forge), waiting for review or merge.
-   - Next in the queue: the `queued` row with the lowest id; action `/devflow:factory` if there
+   - Next in the queue: the first `queued` row in board order; action `/devflow:factory` if there
      are no active rows, otherwise `/devflow:factory` "when no feature is active".
 
 Answer in the user's language. Then stop.

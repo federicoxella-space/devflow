@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { changeStart, parseGate, parseReview } from './feature'
+import { changeStart, parseGate, parseReview, parseUsage } from './feature'
 
 const REVIEW_CHANGES = `---
 verdict: CHANGES        # CHANGES if and only if Blocking is not empty
@@ -139,4 +139,32 @@ test('changeStart: default 1', () => {
   expect(changeStart(playbook('- Change 1 — x — from round abc — in progress'))).toBe(1)
   expect(changeStart(playbook('- Change 1 — x — from round 0 — in progress'))).toBe(1)
   expect(changeStart(playbook('Change 1 from round 4 in progress'))).toBe(1)
+})
+
+const USAGE = [
+  '# Token usage · 021', '', '## Budget', '- run 0 · limit 1000000', '- run 1 · limit 500000', '- run 1 · limit none', '',
+  '## Agents', '| run | agent | task | model | tokens | tool uses | seconds |', '|-----|-------|------|-------|--------|-----------|---------|',
+  '| 0 | spec-writer | - | opus | 38210 | 14 | 92 |', '| 1 | implementer | T1 | sonnet | 1000 | 3 | 10 |',
+  '| 1 | implementer | T1 | - | ? | ? | ? |', '| 1 | spec-checker | - | opus | 200 | 1 | 5 |', '',
+].join('\n')
+
+test('parseUsage: run corrente, limit dell ultima riga, total di tutti i run, ? vale 0', () => {
+  expect(parseUsage(USAGE)).toEqual({
+    run: 1, tokens: 1200, total: 39410,
+    agents: [{ agent: 'implementer', task: 'T1', tokens: 1000 }, { agent: 'implementer', task: 'T1', tokens: 0 }, { agent: 'spec-checker', tokens: 200 }],
+  })
+})
+test('parseUsage: limit numerico e CRLF con heading con spazi finali', () => {
+  const text = ['# T', '## Budget  ', '- run 0 · limit 1000', '## Agents\t', '| 0 | spec-writer | - | opus | 5 | 1 | 2 |', ''].join('\r\n')
+  expect(parseUsage(text)).toEqual({ run: 0, tokens: 5, limit: 1000, total: 5, agents: [{ agent: 'spec-writer', tokens: 5 }] })
+})
+test('parseUsage: il run piu alto puo venire dalla sola sezione Budget', () => {
+  const text = ['## Budget', '- run 0 · limit 10', '- run 2 · limit 20', '## Agents', '| 0 | spec-writer | - | - | 7 | 1 | 1 |'].join('\n')
+  expect(parseUsage(text)).toEqual({ run: 2, tokens: 0, limit: 20, total: 7, agents: [] })
+})
+test('parseUsage: vuoto, senza righe valide o non stringa -> undefined, mai eccezioni', () => {
+  expect(parseUsage('')).toBeUndefined()
+  expect(parseUsage('# Token usage\n\n## Agents\n| run | agent |\n|---|---|\n| x | y |\n')).toBeUndefined()
+  expect(parseUsage(undefined)).toBeUndefined()
+  expect(parseUsage(42 as never)).toBeUndefined()
 })
