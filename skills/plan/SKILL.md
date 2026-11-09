@@ -104,10 +104,15 @@ Done when: <completion criterion>
 
 ## 8. Commit
 
-Commit only if all hold: `git -C "<main>" branch --show-current` is `base_branch`;
+First the `.gitignore`: a project initialised before `/devflow:plan` ignores `factory/roadmap.md`
+(`factory/*` without the exception), so it would never show in `git status`. If `.gitignore` has
+no `!factory/roadmap.md`, add it, but only if `git -C "<main>" diff --quiet -- .gitignore`
+succeeds (no other change there). If it has other changes, do not touch it and say that this is
+the reason there is no commit.
+
+Then commit only if all hold: `git -C "<main>" branch --show-current` is `base_branch`;
 `git -C "<main>" diff --cached --quiet` succeeds (empty stage); `factory/roadmap.md` appears in
-`git -C "<main>" status --porcelain`. If `.gitignore` has no `!factory/roadmap.md`, add it, but only
-if `git -C "<main>" diff --quiet -- .gitignore` succeeds (no other change there). Then:
+`git -C "<main>" status --porcelain`. Then:
 
 ```
 git -C "<main>" add factory/roadmap.md .gitignore
