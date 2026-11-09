@@ -22,7 +22,8 @@ file.
 `git rev-parse --show-toplevel` must succeed. Then:
 - no `factory/config.md` → run every step below;
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
-  `!factory/playbook.md`, `!factory/backlog.md` and `!factory/rules/` lines to `.gitignore` if missing);
+  `!factory/playbook.md`, `!factory/backlog.md`, `!factory/rules/` and `!factory/roadmap.md` lines
+  to `.gitignore` if missing);
 - both present → ask what to redo, with AskUserQuestion `multiSelect`: **Config**, **Forge**,
   **Release**, **Playbook** (none selected = nothing). Config = steps 1, 1a and 2. Forge = only step 1b, then update the forge
   fields of `factory/config.md`; Release = only step 1c, which also updates the release files after
@@ -249,6 +250,7 @@ factory/*
 !factory/playbook.md
 !factory/backlog.md
 !factory/rules/
+!factory/roadmap.md
 ```
 
 ## 5. Hand-over

@@ -50,7 +50,8 @@ test('board malformato non lancia', () => {
 })
 test('riepilogo', () => {
   const s = summarize(parseBoard(MIXED))
-  expect(s.queued.map(r => r.id)).toEqual(['005-a', '006-b'])
+  expect(s.queued.map(r => r.id)).toEqual(['006-b', '005-a'])
+  expect(s.queued).toHaveLength(2)
   expect(s.open.map(r => r.id)).toEqual(['004-pr'])
   expect(s.stuck.map(x => x.row.state)).toEqual(['needs-human', 'build', 'boh'])
   expect(s.stuck[0]?.reason).toBe('needs-human: gate keeps failing')

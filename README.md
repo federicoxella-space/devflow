@@ -180,14 +180,15 @@ checkout; otherwise it keeps it and tells you in one line.
 
 `/devflow:factory <id>` (or just `<NNN>`) resumes that feature. With no argument it resumes the
 only active feature; with several it asks which one, or **New feature**; with none it starts the
-oldest queued one. Any other argument is a new feature description. When something needs a human,
+first queued one in board order (`/devflow:plan` sets that order). Any other argument is a new
+feature description. When something needs a human,
 it stops and tells you which files to look at.
 
 **Status and abandon.** `/devflow:factory status` reads only `factory/board.md`, and
 `factory/archive.md` for the counts (no forge, git or board write), and shows the open features (id,
 title, state, round, PR), a line `N merged, M closed` that includes the archived features, and the
 next actions with the command to run: `needs-human` features with the reason from the log,
-active ones to resume, open PRs, and the next queued feature.
+active ones to resume, open PRs, and the next queued feature (the first in board order).
 
 `/devflow:factory <id> abandon [<reason>]` abandons a feature. The factory shows a plan (state, PR
 to close, worktree and branch to remove or keep, and why) and asks for confirmation. Then it closes
@@ -199,6 +200,28 @@ board note (the PR comment keeps the original text), and the plan lists the git-
 removing the worktree will delete. After the cleanup the abandoned feature moves to the archive. A
 `merged` feature is refused; on a `closed` one, archived or not, only the cleanup runs. With forge
 `git` you close the PR by hand.
+
+### 2b. Plan a big goal: `/devflow:plan [<goal>]`
+
+For a goal too big for one feature (say "a notes app with login and sync"), `/devflow:plan` builds
+a roadmap of milestones, each split into features that the factory runs one after the other. It
+reads the project (config, playbook, rules, board, archive, code; never the forge issues), then
+asks one question at a time until milestones and features are clear. It shows the whole roadmap
+(for each milestone number, title, goal and done-when criterion; for each feature title and
+description) and asks **Approve / Request changes / Reject**. Nothing is written before you approve.
+
+After approval every new feature becomes a `queued` row on the board with its description in
+`features/<id>/feature.md`, in the order of the roadmap, and `factory/roadmap.md` is saved. If the
+main checkout is on the base branch with an empty stage, `plan` commits it
+(`docs(plan): create roadmap` or `docs(plan): update roadmap`, only `factory/roadmap.md` and, if
+needed, the `!factory/roadmap.md` line of `.gitignore`); it never pushes. Then run
+`/devflow:factory` with no argument: it takes the first queued feature in board order.
+
+Run `/devflow:plan` again to see the roadmap with the state of each feature (queued, in progress,
+PR open, merged, closed) and of each milestone (done when it has a merged feature and the others
+are merged or closed). You can add milestones and features, and remove or reorder those still
+queued; started or finished features are never touched. The roadmap file holds no states: they come
+from the board and the archive.
 
 ### 3. Follow the run: the flow pane
 
@@ -264,6 +287,7 @@ factory/
 ├── playbook.md        project rules + Definition of Done                (committed)
 ├── backlog.md         deferred logic queued on the board                (committed)
 ├── rules/<id>.md      approved rules until their PR merges              (committed)
+├── roadmap.md         milestones and features written by /devflow:plan  (committed)
 ├── board.md           one row per live feature + log                    (gitignored)
 ├── archive.md         merged and closed features moved out of the board (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, PR text     (gitignored)

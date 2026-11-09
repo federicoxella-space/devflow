@@ -29,7 +29,8 @@ factory/
 ├── playbook.md                committed: project rules + Definition of Done (user-approved)
 ├── backlog.md                 committed: deferred logic queued on the board (see Deferring logic)
 ├── rules/<id>.md              committed in the feature branch: rules approved at 6b, merged into playbook.md after the PR merges
-├── board.md                   everything except config.md, playbook.md, backlog.md and rules/ is gitignored
+├── roadmap.md                 committed: milestones and features written by /devflow:plan
+├── board.md                   everything except config.md, playbook.md, backlog.md, rules/ and roadmap.md is gitignored
 ├── archive.md                 merged and closed features moved out of board.md, same format
 └── features/<id>/             id = NNN-short-slug, e.g. 003-password-reset
     ├── feature.md             the request, as given by the user
@@ -158,8 +159,8 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
      active row is resumed and the argument is added as a `queued` feature (tell the user); with
      no active row, create it.
    - No argument: exactly one active row → resume it; several → AskUserQuestion with the active
-     rows (id, title, state) and **New feature** (then ask for its description); none → the oldest
-     `queued` row; if none, show the board and stop.
+     rows (id, title, state) and **New feature** (then ask for its description); none → the first
+     `queued` row in board order; if none, show the board and stop.
    - Creating a feature: slug from the text, `new` it as `interview` (see **Shared board**), write
      `feature.md` in the folder `new` created.
    - Resuming: if it has no `features/<id>/playbook.md` (old format), set it back to `interview`
