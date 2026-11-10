@@ -11,7 +11,11 @@ git config user.name eval
 git config user.email eval@example.invalid
 git config commit.gpgsign false
 
-: > gradlew
+cat > gradlew <<'SH'
+#!/bin/sh
+exec gradle "$@"
+SH
+chmod +x gradlew
 
 cat > settings.gradle.kts <<'KTS'
 rootProject.name = "tool"
@@ -27,4 +31,34 @@ plugins {
 repositories {
     mavenCentral()
 }
+
+dependencies {
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
 KTS
+
+mkdir -p src/main/kotlin src/test/kotlin
+
+cat > src/main/kotlin/Main.kt <<'KT'
+fun greet(name: String): String = "hello " + name
+
+fun main() {
+    println(greet("world"))
+}
+KT
+
+cat > src/test/kotlin/MainTest.kt <<'KT'
+import kotlin.test.Test
+import kotlin.test.assertEquals
+
+class MainTest {
+    @Test
+    fun greetsByName() {
+        assertEquals("hello kotlin", greet("kotlin"))
+    }
+}
+KT

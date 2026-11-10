@@ -11,7 +11,11 @@ git config user.name eval
 git config user.email eval@example.invalid
 git config commit.gpgsign false
 
-: > mvnw
+cat > mvnw <<'SH'
+#!/bin/sh
+exec mvn "$@"
+SH
+chmod +x mvnw
 
 cat > pom.xml <<'XML'
 <project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -19,6 +23,14 @@ cat > pom.xml <<'XML'
   <groupId>example.com</groupId>
   <artifactId>tool</artifactId>
   <version>0.1.0</version>
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>5.10.2</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
   <build>
     <plugins>
       <plugin>
@@ -33,3 +45,32 @@ cat > pom.xml <<'XML'
   </build>
 </project>
 XML
+
+mkdir -p src/main/java/com/example/tool src/test/java/com/example/tool
+
+cat > src/main/java/com/example/tool/Greeter.java <<'JAVA'
+package com.example.tool;
+
+public final class Greeter {
+    private Greeter() {}
+
+    public static String greet(String name) {
+        return "hello " + name;
+    }
+}
+JAVA
+
+cat > src/test/java/com/example/tool/GreeterTest.java <<'JAVA'
+package com.example.tool;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import org.junit.jupiter.api.Test;
+
+class GreeterTest {
+    @Test
+    void greetsByName() {
+        assertEquals("hello java", Greeter.greet("java"));
+    }
+}
+JAVA
