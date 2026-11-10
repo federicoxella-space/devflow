@@ -1,0 +1,27 @@
+schema_version: "1.1"
+name: init-gradle-lint
+description: init on a Gradle repo proposes the lint task of each configured plugin, no stack interview
+runs: 1
+tags: [init, shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash, Write, Edit]
+  prompt: /devflow:init
+graders:
+  - name: lint-command
+    type: regex
+    pattern: '\./gradlew spotlessCheck detekt'
+  - name: test-command
+    type: regex
+    pattern: '\./gradlew build'
+  - name: proposes-commands-no-interview
+    type: llm
+    criteria: |
+      PASS if the final message proposes the build, lint and test commands detected for the repo
+      and does not run a stack interview: no questions about what to build, who the users are or
+      where to host it, and no recommendation of a technology stack.
+      FAIL if it asks what the user wants to build, asks about users or hosting, recommends a
+      stack, or proposes no commands.
