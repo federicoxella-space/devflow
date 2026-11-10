@@ -38,6 +38,9 @@ Run once in each repo you want to use the factory in.
 - **Existing project**: detects the stack (Node and its frontends, Angular, .NET, Maven, Gradle,
   Python, Go, Rust, PHP, Ruby, Makefile/justfile; monorepos and several apps) and proposes the
   `build`, `lint` and `test` commands for you to confirm, preferring the project's own scripts.
+  For Maven and Gradle it proposes the lint of the configured plugins (Checkstyle, Spotless, PMD,
+  ktlint, detekt); for Python the type check (mypy, pyright) as build, and the `uv run` or
+  `poetry run` runner taken from the lockfile.
   An existing project with an unknown stack is asked for its commands, never scaffolded.
 - **Empty repo**: interviews you one question at a time (what you are building, constraints,
   preferences), recommends a stack for you to approve, and queues a feature that scaffolds the
