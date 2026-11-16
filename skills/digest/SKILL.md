@@ -30,11 +30,14 @@ Read `<main>/factory/config.md`, `playbook.md`, `<main>/factory/rules/*.md`, `<m
 Only `playbook.md` is analysed. The other files are read to find duplicates and are not modified,
 except for the rules a promotion adds (step 7).
 
-`<last>` is the date on the `Date:` line of `digest.md`; if the file is missing, there is no limit.
+`<last>` is the date on the `Date:` line of `digest.md`. It must match
+`^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2})?$`: the file is committed and its text goes into a
+git command. If the file is missing there is no limit; if the value does not match, treat it as
+missing (no `--since`, no date filter) and say in the report that the previous date was not valid.
 
 ## 3. Analysed features
 
-The ids that have a log line in the board or the archive dated after `<last>` and a folder
+The ids that have a log line in the board or the archive dated after the valid `<last>` (all of them if there is none) and a folder
 `<main>/factory/features/<id>/`. With no such folder, go on with the other sources and say so in
 the report.
 
@@ -89,7 +92,9 @@ valid answer, write nothing.
 ## 7. Apply
 
 Only after the answer. Before the first write, note which of the files to touch already have
-changes: `git -C "<main>" diff --quiet -- '<file>'` (non-zero = changes already there).
+changes: `git -C "<main>" diff --quiet -- '<file>'` (non-zero = changes already there), or
+`git -C "<main>" ls-files --others --exclude-standard -- '<file>'` prints something (an untracked
+file that already exists counts as changed too).
 
 - **modify, merge, remove:** edit `<main>/factory/playbook.md`.
 - **promote:** remove the rule from the playbook and append it at the end of `<main>/CLAUDE.md`
@@ -135,7 +140,7 @@ changes before step 7. Add only the files touched among `factory/playbook.md`, `
 `CLAUDE.md`, `.claude/rules/<file>.md`, `factory/backlog.md`, `.gitignore`:
 
 ```
-git -C "<main>" add <touched files>
+git -C "<main>" add '<touched file>' '<touched file>' ...
 git -C "<main>" commit -m 'docs(digest): apply rules digest'
 ```
 
