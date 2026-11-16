@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.31.0 — 2026-11-16
+- feat(init): propose lint for maven and gradle, type check for python (#55)
+
 ## v0.30.0 — 2026-11-09
 - feat(factory): keep approved rules in per-feature files until merge (#53)
 
