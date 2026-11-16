@@ -45,9 +45,9 @@ modules) or that hold their own manifest one level down.
 | `angular.json` | `npx ng build` | `npx ng lint` | `npx ng test --watch=false --browsers=ChromeHeadless` |
 | `package.json` (any other) | `<pm> run build` | `<pm> run lint` | `<pm> test` (see below) |
 | `*.sln` / `*.csproj` | `dotnet build` | `dotnet format --verify-no-changes` | `dotnet test` |
-| `pom.xml` | | | `mvn -q verify` (`./mvnw` if present) |
-| `build.gradle*` | | | `./gradlew build` (`gradle` without a wrapper) |
-| `pyproject.toml`, `setup.py`, `requirements*.txt` | | `ruff check .` | `pytest -q` |
+| `pom.xml` | | `mvn -q <goals>` (see below) | `mvn -q verify` (`./mvnw` if present) |
+| `build.gradle*` | | `./gradlew <tasks>` (see below) | `./gradlew build` (`gradle` without a wrapper) |
+| `pyproject.toml`, `setup.py`, `requirements*.txt` | `mypy .` / `pyright` (see below) | `ruff check .` | `pytest -q` |
 | `go.mod` | `go build ./...` | `go vet ./...` | `go test ./...` |
 | `Cargo.toml` | `cargo build` | `cargo clippy -- -D warnings` | `cargo test` |
 | `composer.json` | | `vendor/bin/phpstan analyse` | `vendor/bin/phpunit` |
@@ -61,6 +61,37 @@ The table is a starting point; what the project already has wins:
   its tool is configured: no `lint` script → empty lint; no `ruff`/`phpstan`/`rubocop`/`clippy`
   config or dependency → leave lint empty or propose the linter the project does configure
   (`flake8`, `golangci-lint` with `.golangci.yml`, ...).
+  The rules below add to this one: when a CI file or project script already runs lint or type
+  check, propose that instead.
+- **Maven and Gradle lint**: run it as the test column does (`./mvnw` if `mvnw` exists in the
+  root, otherwise `mvn`; `./gradlew` if `gradlew` exists, otherwise `gradle`). Add one goal/task
+  for each tool the project configures, in this fixed order, in a single command; no tool →
+  empty lint.
+
+  | tool | Maven plugin (in `<plugins>` or `<pluginManagement>` of any `pom.xml`) | goal | Gradle plugin id | task |
+  |---|---|---|---|---|
+  | Checkstyle | `maven-checkstyle-plugin` | `checkstyle:check` | `checkstyle` | `checkstyleMain` |
+  | Spotless | `spotless-maven-plugin` | `spotless:check` | `com.diffplug.spotless` | `spotlessCheck` |
+  | PMD | `maven-pmd-plugin` | `pmd:check` | `pmd` | `pmdMain` |
+  | ktlint | `ktlint-maven-plugin` | `ktlint:check` | `org.jlleitschuh.gradle.ktlint` | `ktlintCheck` |
+  | detekt | `detekt-maven-plugin` | `detekt:check` | `io.gitlab.arturbosch.detekt` | `detekt` |
+
+  Maven: look at the root and module `pom.xml` files; the command runs from the root. Gradle: a
+  plugin counts when applied in any `build.gradle`/`build.gradle.kts` (root or modules) or in a
+  convention plugin script under `buildSrc/` or `build-logic/`, in any form (`id("...")`,
+  `id '...'`, a core plugin name, `apply plugin:`, or `alias(libs.plugins.<x>)` that
+  `gradle/libs.versions.toml` maps to that id). Other plugins (e.g. other ktlint wrappers) are
+  not detected. Example: `./gradlew spotlessCheck detekt`.
+- **Python type check and runner**: mypy is configured with `[tool.mypy]` in `pyproject.toml`,
+  `mypy.ini`, `.mypy.ini`, `[mypy]` in `setup.cfg`, or `mypy` among the dependencies
+  (`pyproject.toml`, dev groups included, or `requirements*.txt`); pyright with `[tool.pyright]`,
+  `pyrightconfig.json`, or `pyright` among the dependencies. Only mypy → build `mypy .`; only
+  pyright → `pyright`; both → `mypy . && pyright`; neither → empty build. Lint stays `ruff check .`
+  under the rule above. Runner from the lockfile, for every Python command proposed (ruff, pytest,
+  mypy, pyright; in a chain each part gets its own prefix): `uv.lock` → `uv run <cmd>`,
+  `poetry.lock` → `poetry run <cmd>`, otherwise no prefix (also with `Pipfile.lock` or only
+  `requirements*.txt`); with both lockfiles `uv.lock` wins. With several apps, pick the runner
+  from the lockfile in each app's folder. Example: `uv run mypy .`.
 - **Node package manager** `<pm>` from the lockfile: `pnpm-lock.yaml` → `pnpm`, `yarn.lock` →
   `yarn`, `bun.lock*` → `bun`, otherwise `npm`. The test command must not stay in watch mode:
   vitest → `<pm> test -- --run`, jest → `<pm> test -- --watchAll=false`, otherwise `<pm> test`.
