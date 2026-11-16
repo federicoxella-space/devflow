@@ -226,6 +226,23 @@ are merged or closed). You can add milestones and features, and remove or reorde
 queued; started or finished features are never touched. The roadmap file holds no states: they come
 from the board and the archive.
 
+### 2c. Review the rules: /devflow:digest
+
+The playbook grows with every feature and nobody checks whether its rules are still useful.
+`/devflow:digest` rereads the rules of `factory/playbook.md` and looks for evidence for each one:
+the reviews and gates of recent features, the files and folders the rule cites, the fix commits and
+the current code. Then it shows a numbered list of proposals: edit a rule, merge two, remove an
+obsolete one, move it to `CLAUDE.md` or `.claude/rules/` so it applies to every Claude session, or
+turn it into an automatic check, built later as a new `queued` feature (the rule stays in the
+playbook). Rules with no evidence stay as they are. Answer as for rule proposals (`1,3`, `all`,
+`none`, `2: <new text>`); nothing is written before you answer.
+
+Approved proposals are applied and the report is saved in `factory/digest.md`. If the main checkout
+is on the base branch with an empty stage, the digest commits the touched files
+(`docs(digest): apply rules digest`); it never pushes, so push before the next `/devflow:factory`.
+`/devflow:factory` prints a one-line reminder after `digest_every` merged features since the last
+digest (`config.md`, default 10, `0` = off); it never blocks.
+
 ### 3. Follow the run: the flow pane
 
 devflow ships a Claude Code mod (`hooks/`) that draws a side pane while the factory runs. It
@@ -291,6 +308,7 @@ factory/
 ├── backlog.md         deferred logic queued on the board                (committed)
 ├── rules/<id>.md      approved rules until their PR merges              (committed)
 ├── roadmap.md         milestones and features written by /devflow:plan  (committed)
+├── digest.md          last rules digest report, by /devflow:digest      (committed)
 ├── board.md           one row per live feature + log                    (gitignored)
 ├── archive.md         merged and closed features moved out of the board (gitignored)
 └── features/<id>/     playbook, spec, gate output, reviews, PR text     (gitignored)
@@ -352,7 +370,7 @@ status checks to pass" and add `checks` and `pr-title`.
 
 ### Skill evals
 
-`evals/` holds seven cases for `claude plugin eval`. Each one builds a small example repo with its
+`evals/` holds eleven cases for `claude plugin eval`. Each one builds a small example repo with its
 `scaffold.sh`, opens a real Claude session on it with the plugin and checks the result:
 
 - `init-vue-pnpm`: a Vue repo with pnpm gets the `pnpm` commands and no stack interview.
@@ -363,6 +381,8 @@ status checks to pass" and add `checks` and `pr-title`.
   `merged`.
 - `factory-resume-interview`: a feature in `interview` asks one new question, not the answered ones.
 - `spec-checker-known-gap`: a spec with a known gap gets the verdict `GAPS` on `T1`.
+- `digest-stale-path`: a playbook rule that cites a missing file gets a proposal to remove or fix
+  it, a rule with no evidence gets none, and the digest says there are no feature folders.
 
 The evals use real sessions, so they cost tokens and need your Claude credentials: run them only
 locally, never in CI, and run them before you change `init`, `factory` or `spec-checker`. On Linux,

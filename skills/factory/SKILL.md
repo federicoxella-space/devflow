@@ -30,7 +30,8 @@ factory/
 ├── backlog.md                 committed: deferred logic queued on the board (see Deferring logic)
 ├── rules/<id>.md              committed in the feature branch: rules approved at 6b, merged into playbook.md after the PR merges
 ├── roadmap.md                 committed: milestones and features written by /devflow:plan
-├── board.md                   everything except config.md, playbook.md, backlog.md, rules/ and roadmap.md is gitignored
+├── digest.md                  committed: last rules digest report, written by /devflow:digest
+├── board.md                   everything except config.md, playbook.md, backlog.md, rules/, roadmap.md and digest.md is gitignored
 ├── archive.md                 merged and closed features moved out of board.md, same format
 └── features/<id>/             id = NNN-short-slug, e.g. 003-password-reset
     ├── feature.md             the request, as given by the user
@@ -144,6 +145,12 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
    into the archive). Exit ≠ 0 → one line with its stderr and "the rules stay in `factory/rules/`
    and apply; retrying at the next run", then go on. A feature closed without merge touches
    nothing: its rules file exists only in its own branch.
+2c. Digest reminder (every run except `status`): threshold = `digest_every` of `config.md` (missing
+   or not an integer ≥ 0 → 10; `0` → no reminder, skip this step). Count the distinct ids with a
+   log line `→ merged` (Grep on `board.md` and `archive.md`) dated after the `Date:` line of
+   `<main>/factory/digest.md` (all of them if the file is missing). Count ≥ threshold → tell the
+   user in one line, in their language: the number of features, the date of the last digest or
+   "never", and "run `/devflow:digest`". It never blocks: go on.
 3. Pick the feature to work on. Active = state `interview`, `spec`, `spec-review`, `build`,
    `review` or `approve`.
    - An id not in the board (full, or `NNN`) is looked up in the table of
