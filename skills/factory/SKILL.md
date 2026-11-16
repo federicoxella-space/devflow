@@ -148,7 +148,8 @@ refer to this rule, in every mode. If `<dir>` does not exist when a feature is r
 2c. Digest reminder (every run except `status`): threshold = `digest_every` of `config.md` (missing
    or not an integer ≥ 0 → 10; `0` → no reminder, skip this step). Count the distinct ids with a
    log line `→ merged` (Grep on `board.md` and `archive.md`) dated after the `Date:` line of
-   `<main>/factory/digest.md` (all of them if the file is missing). Count ≥ threshold → tell the
+   `<main>/factory/digest.md`. The value must match `^[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2})?$`;
+   any other value, or a missing file, counts as "never": all the ids count. Count ≥ threshold → tell the
    user in one line, in their language: the number of features, the date of the last digest or
    "never", and "run `/devflow:digest`". It never blocks: go on.
 3. Pick the feature to work on. Active = state `interview`, `spec`, `spec-review`, `build`,

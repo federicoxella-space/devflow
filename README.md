@@ -51,7 +51,8 @@ Run once in each repo you want to use the factory in.
   `worktree_setup`, the command that prepares a new worktree (e.g. `npm ci`).
 - Writes `secrets_scan: auto` and, if neither gitleaks nor trufflehog is installed, suggests
   installing one.
-- Writes an empty `budget_tokens` (see **Token usage and budget** below).
+- Writes an empty `budget_tokens` (see **Token usage and budget** below) and `digest_every: 10`
+  (see `/devflow:digest` below).
 - Optionally enables **automatic releases** (GitHub and GitLab, see below).
 - Drafts the **project playbook**: conventions, patterns, reusable code and the Definition of
   Done. You review it before it is written.
@@ -377,6 +378,9 @@ status checks to pass" and add `checks` and `pr-title`.
 - `init-go`: a Go repo gets the `go build`, `go vet` and `go test` commands.
 - `init-unknown-stack`: a Lua repo is named and init asks for the commands instead of guessing.
 - `init-empty-repo`: an empty repo starts the stack interview and gets no commands.
+- `init-python-uv`: a Python repo with uv gets the `uv` commands, with a type check if configured.
+- `init-gradle-lint`, `init-maven-lint`: Gradle and Maven repos get the lint of the plugins they
+  configure.
 - `factory-pr-open-merged`: a `pr-open` change already merged on the remote is cleaned up and set to
   `merged`.
 - `factory-resume-interview`: a feature in `interview` asks one new question, not the answered ones.
@@ -385,7 +389,7 @@ status checks to pass" and add `checks` and `pr-title`.
   it, a rule with no evidence gets none, and the digest says there are no feature folders.
 
 The evals use real sessions, so they cost tokens and need your Claude credentials: run them only
-locally, never in CI, and run them before you change `init`, `factory` or `spec-checker`. On Linux,
+locally, never in CI, and run them before you change `init`, `factory`, `digest` or `spec-checker`. On Linux,
 macOS or WSL2 run all of them:
 
 ```bash
