@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.32.0 — 2026-11-16
+- feat(skills): add rules digest skill (#56)
+
 ## v0.31.0 — 2026-11-16
 - feat(init): propose lint for maven and gradle, type check for python (#55)
 
