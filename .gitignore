@@ -6,5 +6,6 @@ factory/*
 !factory/backlog.md
 !factory/rules/
 !factory/roadmap.md
+!factory/digest.md
 .claude/settings.json
 evals/results/

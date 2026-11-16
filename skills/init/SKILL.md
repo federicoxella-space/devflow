@@ -22,16 +22,17 @@ file.
 `git rev-parse --show-toplevel` must succeed. Then:
 - no `factory/config.md` → run every step below;
 - `factory/config.md` present, no `factory/playbook.md` → run only steps 3 and 4 (add the
-  `!factory/playbook.md`, `!factory/backlog.md`, `!factory/rules/` and `!factory/roadmap.md` lines
-  to `.gitignore` if missing);
+  `!factory/playbook.md`, `!factory/backlog.md`, `!factory/rules/`, `!factory/roadmap.md` and
+  `!factory/digest.md` lines to `.gitignore` if missing);
 - both present → ask what to redo, with AskUserQuestion `multiSelect`: **Config**, **Forge**,
   **Release**, **Playbook** (none selected = nothing). Config = steps 1, 1a and 2. Forge = only step 1b, then update the forge
   fields of `factory/config.md`; Release = only step 1c, which also updates the release files after
   a plugin update. Before redoing the playbook, warn that it holds rules the user approved and
   offer to keep them in the new draft. A `config.md` without `forge` works as `github`, without
-  `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty, without `implementer_model` as `sonnet / medium`, without
-  `escalation_model` as `opus / medium`, without `secrets_scan` as `auto`, without `budget_tokens` as no limit: nothing
-  to migrate.
+  `release` as `off`, without `workspace` as `ask`, without `worktree_setup` as empty, without
+  `implementer_model` as `sonnet / medium`, without `escalation_model` as `opus / medium`, without
+  `secrets_scan` as `auto`, without `budget_tokens` as no limit, without `digest_every` as 10:
+  nothing to migrate.
   Never touch an existing `factory/board.md`.
 
 ## 1. Stack and commands
@@ -219,6 +220,7 @@ workspace: ask         # ask | branch | worktree — where a new feature runs
 worktree_setup: ""     # worktree only: command run in a new worktree, e.g. npm ci (empty = none)
 secrets_scan: auto     # auto | gitleaks | trufflehog | off — secrets scanner run before each commit
 budget_tokens: ""        # optional: token limit per run (empty or 0 = none)
+digest_every: 10         # merged features between two rules digest reminders (0 = off)
 ---
 Notes for every agent: conventions, folders not to touch, how to log in on the dev server, ...
 
@@ -282,6 +284,7 @@ factory/*
 !factory/backlog.md
 !factory/rules/
 !factory/roadmap.md
+!factory/digest.md
 ```
 
 ## 5. Hand-over

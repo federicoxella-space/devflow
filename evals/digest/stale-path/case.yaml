@@ -1,0 +1,23 @@
+schema_version: "1.1"
+name: digest-stale-path
+runs: 1
+tags: [digest, shell]
+context:
+  scaffold_script: scaffold.sh
+execution:
+  prompt: /devflow:digest
+  max_turns: 40
+  timeout_seconds: 900
+  allowed_tools: [Read, Glob, Grep, Skill, Bash]
+graders:
+  - name: stale-path-proposal
+    type: llm
+    criteria: |
+      The final message lists the proposals of a rules digest for the project playbook, which has
+      two rules: one citing `src/legacy/old.ts` (the file does not exist) and one citing
+      `src/app.ts` (the file exists, nothing else says anything about the rule).
+      PASS if the message proposes to remove or modify the rule about `src/legacy/old.ts`, makes no
+      proposal for the rule about `src/app.ts` (it is kept or has no evidence), and says that there
+      are no local feature folders.
+      FAIL if it proposes nothing for the `src/legacy/old.ts` rule, proposes to remove or promote
+      the `src/app.ts` rule, or does not mention the missing feature folders.
