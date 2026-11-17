@@ -3,19 +3,18 @@
 ## Conventions
 - Skills, agents, forges, README and CHANGELOG are written in English; code comments in `hooks/` are in Italian.
 - Skills and agents are imperative markdown prompts, short paragraphs, wrapped at ~100 columns: follow `skills/factory/SKILL.md` and `agents/implementer.md`.
-- Mod logic lives in pure modules (`hooks/board.ts`, `flow.ts`, `feature.ts`, `attention.ts`, `svg.ts`); only `hooks/register.tsx` talks to the engine (`claude-code` hooks, atoms, panes).
+- Mod logic lives in pure modules (`hooks/board.ts`, `flow.ts`, `feature.ts`, `attention.ts`, `svg.ts`, `guard.ts`, `restore.ts`, `i18n.ts`, `palette.ts`); only `hooks/register.tsx` talks to the engine (`claude-code` hooks, atoms, panes).
 - Shared types go in `types/index.d.ts`, not in the modules.
 - Every pure module has a `<name>.test.ts` next to it, using `claude-code/testing` (`hooks/board.test.ts`).
 - User-facing pane texts go through `hooks/i18n.ts`: add every new key to both `en` and `it`.
 - The plugin version, `CHANGELOG.md` and tags are written only by `.github/workflows/release.yml`.
-- Agents that run git or project commands use the `workdir` they receive (`git -C <workdir>`), never the implicit cwd: worktree features do not run in the main checkout.
-- Placeholders derived from feature ids or user text (`<path>`, `<kind>/<id>`) are quoted in every shell command the skills prescribe.
+- Every git or project command of a feature, whether the factory skill prescribes it or an agent runs it, uses an explicit `git -C "<dir>"` (the `workdir` an agent receives), never the session's implicit cwd: worktree features do not run in the main checkout.
+- In every shell command a skill prescribes, every placeholder taken from an id, a name, user text or a board/archive cell (`<path>`, `<kind>/<id>`, `<slug>`, branch, PR) goes in single quotes, with `'` written `'\''`: `skills/factory/references/workspace.md:8` left `<slug>` unquoted, and validation inside the script cannot stop an expansion that happens before the script runs.
 - Run state that must survive a resume goes in `$.store` under a key with the session id; `$.state` covers only a hot reload.
 - A test rewritten because behaviour changed replaces each removed assertion with an equivalent one, so coverage is not lost silently.
 - In forge commands the PR title is passed in single quotes or from a file, never inside double quotes: a title derived from user text may contain `$(...)` or backticks.
 - Every new agent in `agents/` that the pane must show is added to `phaseOfAgent` in `hooks/flow.ts` with a test.
 - Tests with multi-line prompt strings build them with `[...].join('\n')`, never a literal line break inside quotes.
-- Every git command the factory skill prescribes for a feature uses an explicit `git -C "<dir>"`, never the session cwd: once a session can live in a worktree, commands without `-C` run in the wrong checkout.
 - Git `--format=%(...)` arguments in skill commands are single-quoted: bash rejects an unquoted `%(refname:short)`.
 - When the factory skill states a general rule for a mode (workdir, checkout), per-step text refers to that rule instead of restating a narrower condition.
 - External tools started by `.mcp.json` are pinned to an exact version (never `latest` or a range), and that version is cited in the README.
@@ -35,14 +34,12 @@
 - When a guard rule moves from substring to token matching, its tests cover every argument syntax of the target shells (`-x=v`, `--x v`, PowerShell `-X:v`): in `ca98a5a` `Set-Content -Path:factory/board.md` stopped being caught.
 - A hand-written parser of agent input runs in linear time: failed scans are cached or move the cursor past the scanned part, and a test with long malformed input bounds the time; in `3a215fd` unclosed delimiters made `closeParen`/`closeDouble` exponential and hung the synchronous hook.
 - Timing tests use a wide margin or a step counter instead of a tight threshold in ms: a 200 ms wall-clock limit in `hooks/guard.test.ts` risks false failures on a slow CI.
-- A synchronous hook that parses agent input sets a maximum input length and, above it, falls back to a defined result (deny or plain-text check): after `4543d7d` the guard's worst case is still quadratic and nothing bounds the command length.
-- Shell scripts in `skills/` avoid GNU-only options (`stat -c`, `date -d`, `sed -i`, `mv -T`) and `flock`: they run in Git Bash, Linux and macOS; the `board.sh` lock expiry had to use an epoch written in the lock instead of the mtime.
+- A synchronous hook that parses agent input sets a maximum input length and, above it, falls back to a defined result (deny or plain-text check): `hooks/guard.ts` caps it with `MAX_LEN`, added because after `4543d7d` the worst case was still quadratic.
+- Shell scripts in `skills/` run on Git Bash, Linux and macOS bash 3.2: no GNU-only options (`stat -c`, `date -d`, `sed -i`, `mv -T`), no `flock`, `mapfile`, associative arrays, `${x,,}` or `EPOCHSECONDS`; `skills/factory/scripts/board.sh` uses an epoch written in the lock, `$SECONDS` and `date +%s`.
 - Every new `test-*.sh` gets its own step in `.github/workflows/ci.yml`: CI lists the scripts one by one, so a test not added there never runs on PRs.
-- Shell scripts in `skills/` run on macOS bash 3.2: no `mapfile`, associative arrays, `${x,,}` or `EPOCHSECONDS`; `skills/factory/scripts/board.sh` uses `$SECONDS` and `date +%s`.
 - When a skill prescribes shell escaping for user text, it quotes the exact idiom in a code span (`'\''` for a single quote) and the review compares it with the spec: in 017 r1 `skills/factory/SKILL.md:76` said `'''`, which reopened command injection through feature titles.
 - In shell lock code, prepare every value before the atomic `mkdir` and read files with the shell's built-in `read` instead of `$(cat)`: in Git Bash starting a process takes tens of ms, and a `date` call between `mkdir` and the `owner` write in `skills/factory/scripts/board.sh` let two sessions hold the lock at once.
 - A loop that waits on a lock checks its time limit on every path that retries, `continue` included: in 017 r3 the retries at `skills/factory/scripts/board.sh:210,214` skipped the `BOARD_LOCK_WAIT` check, so the promised 10 s limit held only on the main path.
-- In a shell command a skill prescribes, every placeholder taken from a name or from text goes in single quotes, not only the title: `skills/factory/references/workspace.md:8` left `<slug>` unquoted, and validation inside the script cannot stop an expansion that happens before the script runs.
 - Decisions with permanent effects (PR title → version and tag) are made by an agent on opus and approved by the user, never by an agent on haiku: in `agents/committer.md` (haiku) step 6 picked the title type that `next-version.sh` turns into a release.
 - A frontmatter field that a forge command uses is validated against the quoting that command actually uses: `skills/factory/references/spec-check.md` forbade only `'` while `skills/factory/forges/*.md` passed `"<title>"`, so `$(...)` still got through.
 - A compatibility exception for files written before a rule ("skip if the field is missing") applies only to files that existed before the run, never to files an agent has just produced: in 018 r1 the skip for a missing `pr_title` in `skills/factory/references/spec-check.md` also cancelled the presence check on new specs.
@@ -53,12 +50,12 @@
 - Before `git worktree remove` on a feature's worktree, the plan shows any ignored files that will be deleted (`git status --porcelain --ignored`): in `skills/factory/references/abandon.md` and `references/pr-state.md` "clean" ignores ignored files, and removing the worktree without `--force` still deletes them (such as a local `.env`).
 - A `board.sh` command that writes two files writes the destination first, then the source, and a rerun after an interruption never duplicates lines (`archive`: archive, then board).
 - Shell and awk parsers of `board.md`/`archive.md` match headings with a trailing `[ \t\r]*`, so CRLF files still work.
-- A skill command whose placeholder is read from a board or archive cell (branch, PR) quotes it like user text: single quotes, `'` written `'\''`.
 - When a pane layout formula is generalised from a fixed count to n, a test pins the coordinates of the old case: in `hooks/svg.ts` the metrics width went from `(W-70)/4` to a formula that gives different values for 4, and a test that only counted the `rect` elements did not catch the regression.
 - Parsers on the pane render path aggregate with `reduce`, never `Math.max(...array)` over file lines: `hooks/feature.ts` spread every `usage.md` row as arguments, which throws on very large files despite the "never throws" contract.
 - A guard rule that protects a folder also covers the folder path itself, without a trailing `/`, both relative and under a root: `normPath` drops the trailing `/` and `underFactory` in `hooks/guard.ts` only matches `<root>/factory/...`, so without a dedicated case a `Write` on `F:/devflow/factory/rules` escaped the check.
 - An awk script that reads two files with `FNR == NR` handles an empty first file (check `FILENAME` or load it in `BEGIN`): in `skills/factory/scripts/rules.sh` an empty playbook makes the rule file be parsed as the playbook.
-- Scripts that read files out of a git tree checked out from the base branch only process regular blobs (mode `100644`) and skip symlinks: `skills/factory/scripts/rules.sh` reads `factory/rules/*.md` from the checkout, so a symlink merged through a PR would make it read a local file and push that file's content.- A skill that commits by itself on the base branch (`plan`, `rules.sh`) commits only its own files, only with an empty stage, and with fixed commit messages that contain no user text: a direct commit could otherwise include changes the user had already staged, or injectable text.
+- Scripts that read files out of a git tree checked out from the base branch only process regular blobs (mode `100644`) and skip symlinks: `skills/factory/scripts/rules.sh` reads `factory/rules/*.md` from the checkout, so a symlink merged through a PR would make it read a local file and push that file's content.
+- A skill that commits by itself on the base branch (`plan`, `rules.sh`) commits only its own files, only with an empty stage, and with fixed commit messages that contain no user text: a direct commit could otherwise include changes the user had already staged, or injectable text.
 - A skill that commits a file under `factory/` first adds its `!factory/<file>` line to `.gitignore` and only then checks `git status --porcelain`: in 028 r1 `skills/plan/SKILL.md` step 8 checked the status first, so an ignored `roadmap.md` in projects that predate the line was never committed.
 - Values passed to awk, sed or grep programs in a shell script arrive through `ENVIRON` or variables and are compared for equality, never interpolated into the program or used as a regex: `skills/factory/scripts/board.sh` (`move`, `has_row`) does this, and it prevents injection or partial matches with user-supplied ids.
 ## Patterns
@@ -81,7 +78,6 @@
 - Board-level selection helpers (`featureOfArg`, `soleActive`, `bindFeature`) live in `hooks/board.ts`, not in `register.tsx`.
 ## Don'ts
 - Do not touch `vault/`, `.superpowers/`, `node_modules/`, `.claude/`.
-- Do not edit the version in `.claude-plugin/plugin.json` or `CHANGELOG.md` by hand.
 - Do not add a `package.json` or runtime dependencies to the mod.
 - Do not change `skills/init/release/*` without keeping `.github/scripts/release.sh` in line where they share logic.
 ## Definition of Done
